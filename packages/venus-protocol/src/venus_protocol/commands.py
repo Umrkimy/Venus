@@ -4,7 +4,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, field_validator
 
-
 class OpenApplicationCommand(BaseModel):
     command_id: UUID
     device_id: str
@@ -21,3 +20,9 @@ class OpenApplicationCommand(BaseModel):
             raise ValueError("expires_at must be in the future")
 
         return value
+
+
+class CommandResult(BaseModel):
+    command_id: UUID
+    status: Literal["succeeded", "failed", "denied"]
+    detail: str | None = None
