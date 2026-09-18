@@ -6,6 +6,7 @@ skills/venus-mentor/
 
 #python virtual environments
 apps/core/.venv/
+apps/node/.venv/
 
 # Python bytecode cache
 __pycache__/
