@@ -9,3 +9,12 @@ def test_health():
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+def test_chat():
+    response = client.post("/chat", json={"message": "hello"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "reply": "Fake Venus: hello",
+        "provider": "fake",
+    }
