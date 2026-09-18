@@ -18,3 +18,8 @@ def test_chat():
         "reply": "Fake Venus: hello",
         "provider": "fake",
     }
+
+def test_chat_rejects_blank_message():
+    response = client.post("/chat", json={"message": "   "})
+
+    assert response.status_code == 422
