@@ -1,10 +1,10 @@
 import pytest
 from pydantic import ValidationError
 from datetime import datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from venus_protocol.commands import OpenApplicationCommand
+from venus_protocol.commands import OpenApplicationCommand, CommandResult
 
 
 def test_open_application_command_accepts_spotify():
@@ -48,3 +48,13 @@ def test_open_application_command_rejects_invalid_application_id():
             application_id="brave",
             expires_at=datetime.now(ZoneInfo("Asia/Kuala_Lumpur")) + timedelta(minutes=5),
         )
+
+
+def test_command_result_accepts_succeeded_status():
+    result = CommandResult(
+        command_id=uuid4(),
+        status="succeeded",
+        detail="Fake executor accepted Spotify",
+    )
+
+    assert result.status == "succeeded"
