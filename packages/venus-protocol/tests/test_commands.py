@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from venus_protocol.commands import OpenApplicationCommand, CommandResult
+from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand
 
 
 def test_open_application_command_accepts_spotify():

@@ -2,8 +2,9 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from venus_node.executor import NodeExecutor, execute_fake, execute_payload
-from venus_protocol.commands import OpenApplicationCommand
+from venus_node.executor import NodeExecutor, execute_fake
+from venus_node.repositories.command_records import CommandRecordRepository
+from venus_protocol.schemas.commands import OpenApplicationCommand
 
 
 def test_execute_fake_returns_success_for_spotify():
@@ -21,10 +22,14 @@ def test_execute_fake_returns_success_for_spotify():
     assert result.detail == "Fake executor accepted spotify"
 
 
-def test_execute_payload_denies_invalid_command_with_valid_id():
+def test_execute_payload_denies_invalid_command_with_valid_id(tmp_path):
     command_id = uuid4()
+    executor = NodeExecutor(
+        device_id="laptop-1",
+        command_records=CommandRecordRepository(tmp_path / "node.db"),
+    )
 
-    result = execute_payload(
+    result = executor.execute_payload(
         {
             "command_id": str(command_id),
             "device_id": "laptop-1",
@@ -32,8 +37,7 @@ def test_execute_payload_denies_invalid_command_with_valid_id():
             "expires_at": datetime.now(
                 ZoneInfo("Asia/Kuala_Lumpur")
             ) + timedelta(minutes=5),
-        },
-        node_device_id="laptop-1",
+        }
     )
 
     assert result is not None
@@ -42,19 +46,24 @@ def test_execute_payload_denies_invalid_command_with_valid_id():
     assert result.detail == "Invalid command"
 
 
-def test_execute_payload_discards_invalid_command_id():
-    result = execute_payload(
-        {"command_id": "not-a-uuid"},
-        node_device_id="laptop-1",
+def test_execute_payload_discards_invalid_command_id(tmp_path):
+    executor = NodeExecutor(
+        device_id="laptop-1",
+        command_records=CommandRecordRepository(tmp_path / "node.db"),
     )
+    result = executor.execute_payload({"command_id": "not-a-uuid"})
 
     assert result is None
 
 
-def test_execute_payload_targeting_another_device():
+def test_execute_payload_targeting_another_device(tmp_path):
     command_id = uuid4()
+    executor = NodeExecutor(
+        device_id="laptop-2",
+        command_records=CommandRecordRepository(tmp_path / "node.db"),
+    )
 
-    result = execute_payload(
+    result = executor.execute_payload(
         {
             "command_id": str(command_id),
             "device_id": "laptop-1",
@@ -62,8 +71,7 @@ def test_execute_payload_targeting_another_device():
             "expires_at": datetime.now(
                 ZoneInfo("Asia/Kuala_Lumpur")
             ) + timedelta(minutes=5),
-        },
-        node_device_id="laptop-2",
+        }
     )
 
     assert result is not None
@@ -71,9 +79,13 @@ def test_execute_payload_targeting_another_device():
     assert result.detail == "Command targets another device"
 
 
-def test_executor_denies_duplicate_command_id():
-    executor = NodeExecutor(device_id="laptop-1")
+def test_executor_denies_duplicate_command_id_after_restart(tmp_path):
     command_id = uuid4()
+    database_path = tmp_path / "node.db"
+    first_executor = NodeExecutor(
+        device_id="laptop-1",
+        command_records=CommandRecordRepository(database_path),
+    )
 
     payload = {
         "command_id": str(command_id),
@@ -84,8 +96,12 @@ def test_executor_denies_duplicate_command_id():
         ) + timedelta(minutes=5),
     }
 
-    first_result = executor.execute_payload(payload)
-    second_result = executor.execute_payload(payload)
+    first_result = first_executor.execute_payload(payload)
+    second_executor = NodeExecutor(
+        device_id="laptop-1",
+        command_records=CommandRecordRepository(database_path),
+    )
+    second_result = second_executor.execute_payload(payload)
 
     assert first_result is not None
     assert first_result.status == "succeeded"
