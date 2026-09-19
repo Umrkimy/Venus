@@ -15,6 +15,8 @@ def test_create_node_executor_uses_private_settings_and_windows_launcher(
     env_file.write_text(
         "VENUS_NODE_DEVICE_ID=laptop-1\n"
         "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
+        "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
+        "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
     )
     database_path = tmp_path / "node.db"
     started_targets: list[str] = []

@@ -49,6 +49,8 @@ def test_launch_configured_spotify_uses_validated_private_target():
     settings = NodeSettings(
         device_id="laptop-1",
         spotify_target="spotify:",
+        core_dev_token="test-node-token",
+        core_url="ws://core.test/nodes/connect",
     )
     launched_targets: list[str] = []
 
