@@ -1,6 +1,9 @@
 import logging
 from datetime import datetime, timezone
+from collections.abc import Callable
 from uuid import UUID
+
+from sqlalchemy.exc import SQLAlchemyError
 
 from pydantic import ValidationError
 from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand
@@ -24,9 +27,11 @@ class NodeExecutor:
         self,
         device_id: str,
         command_records: CommandRecordRepository,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self.device_id = device_id
         self.command_records = command_records
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def execute_payload(self, payload: dict[str, object]) -> CommandResult | None:
         try:
@@ -50,24 +55,45 @@ class NodeExecutor:
                 status="denied",
                 detail="Command targets another device",
             )
-
-        if self.command_records.has_command(command.command_id):
+        try:
+            claimed = self.command_records.record_command(
+                CommandRecord(
+                    command_id=command.command_id,
+                    device_id=command.device_id,
+                    status="in_progress",
+                    detail=None,
+                    created_at=datetime.now(timezone.utc),
+                    completed_at=None,
+                )
+            )
+        except (OSError, SQLAlchemyError):
+            logger.exception("Unable to record command %s", command.command_id)
+            return CommandResult(
+                command_id=command.command_id,
+                status="failed",
+                detail="Unable to record command",
+            )
+        if not claimed:
             return CommandResult(
                 command_id=command.command_id,
                 status="denied",
                 detail="Duplicate command",
             )
 
-        self.command_records.record_command(
-            CommandRecord(
+        execution_time = self.clock()
+        if command.expires_at <= execution_time:
+            result = CommandResult(
                 command_id=command.command_id,
-                device_id=command.device_id,
-                status="in_progress",
-                detail=None,
-                created_at=datetime.now(timezone.utc),
-                completed_at=None,
+                status="denied",
+                detail="Command expired before execution",
             )
-        )
+            self.command_records.complete_command(
+                command.command_id,
+                status=result.status,
+                detail=result.detail,
+                completed_at=execution_time,
+            )
+            return result
 
         try:
             result = execute_fake(command)

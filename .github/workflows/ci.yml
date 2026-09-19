@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install Core dependencies
+        shell: pwsh
+        run: |
+          python -m venv apps/core/.venv
+          .\apps\core\.venv\Scripts\python.exe -m pip install -r apps/core/requirements.txt
+          .\apps\core\.venv\Scripts\python.exe -m pip install -r apps/core/requirements-dev.txt
+
+      - name: Install Node dependencies
+        shell: pwsh
+        run: |
+          python -m venv apps/node/.venv
+          .\apps\node\.venv\Scripts\python.exe -m pip install -r apps/node/requirements.txt
+          .\apps\node\.venv\Scripts\python.exe -m pip install -r apps/node/requirements-dev.txt
+
+      - name: Test Core
+        shell: pwsh
+        working-directory: apps/core
+        run: .\.venv\Scripts\python.exe -m pytest
+
+      - name: Test Node
+        shell: pwsh
+        working-directory: apps/node
+        run: .\.venv\Scripts\python.exe -m pytest
+
+      - name: Test shared protocol
+        shell: pwsh
+        run: .\apps\node\.venv\Scripts\python.exe -m pytest packages/venus-protocol/tests

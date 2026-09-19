@@ -58,3 +58,28 @@ def test_command_result_accepts_succeeded_status():
     )
 
     assert result.status == "succeeded"
+
+
+def test_open_application_command_rejects_unknown_field():
+    with pytest.raises(ValidationError):
+        OpenApplicationCommand(
+            command_id=uuid4(),
+            device_id="laptop-1",
+            application_id="spotify",
+            expires_at=datetime.now(
+                ZoneInfo("Asia/Kuala_Lumpur")
+            ) + timedelta(minutes=5),
+            executable_path="C:/unsafe.exe",
+        )
+
+
+def test_open_application_command_rejects_blank_device_id():
+    with pytest.raises(ValidationError):
+        OpenApplicationCommand(
+            command_id=uuid4(),
+            device_id="   ",
+            application_id="spotify",
+            expires_at=datetime.now(
+                ZoneInfo("Asia/Kuala_Lumpur")
+            ) + timedelta(minutes=5),
+        )

@@ -28,7 +28,7 @@ def test_record_command_makes_command_findable(tmp_path):
         completed_at=None,
     )
 
-    repository.record_command(command)
+    assert repository.record_command(command) is True
 
     second_repository = CommandRecordRepository(database_path)
     assert second_repository.has_command(command.command_id) is True
