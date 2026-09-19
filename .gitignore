@@ -8,6 +8,9 @@ skills/venus-mentor/
 apps/core/.venv/
 apps/node/.venv/
 
+#Private Files
+apps/node/.env
+
 # Python bytecode cache
 __pycache__/
 
