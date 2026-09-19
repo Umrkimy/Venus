@@ -3,3 +3,4 @@
 tzdata==2026.4
 SQLAlchemy==2.0.54
 python-dotenv==1.2.2
+websockets==17.1
