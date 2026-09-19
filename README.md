@@ -30,16 +30,18 @@ from the repository root in PowerShell:
 
 ```powershell
 py -3.11 -m venv apps/core/.venv
-py -3.11 -m venv apps/node/.venv
-
 .\apps\core\.venv\Scripts\python.exe -m pip install -r apps/core/requirements.txt
 .\apps\core\.venv\Scripts\python.exe -m pip install -r apps/core/requirements-dev.txt
-.\apps\node\.venv\Scripts\python.exe -m pip install -r apps/node/requirements.txt
-.\apps\node\.venv\Scripts\python.exe -m pip install -r apps/node/requirements-dev.txt
+
+Push-Location apps/node
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+Pop-Location
 ```
 
-Both application requirement files install the local `venus-protocol` package
-in editable mode.
+The Node installs the local `venus-protocol` package in editable mode. Core
+does not depend on that package yet.
 
 ## Run Core
 
