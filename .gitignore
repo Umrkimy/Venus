@@ -11,6 +11,9 @@ apps/node/.venv/
 #Private Files
 apps/node/.env
 
+#sqlite command history
+apps/node/data/
+
 # Python bytecode cache
 __pycache__/
 

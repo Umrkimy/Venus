@@ -3,9 +3,12 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock
 from uuid import uuid4
 from zoneinfo import ZoneInfo
+
 import pytest
 
 from venus_node.executor import NodeExecutor, execute_fake
+from venus_node.config import NodeSettings
+from venus_node.launcher import create_spotify_command_executor
 from venus_node.repositories.command_records import CommandRecordRepository
 from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand
 from venus_node.models.command_record import CommandRecord
@@ -453,3 +456,108 @@ def test_executor_does_not_report_result_when_completion_storage_fails(
     assert replay_result.status == "denied"
     assert replay_result.detail == "Duplicate command"
     assert fake_call_count == 1
+
+
+def test_executor_uses_injected_command_executor(tmp_path):
+    command_id = uuid4()
+    executed_command_ids = []
+
+    def recording_executor(command: OpenApplicationCommand) -> CommandResult:
+        executed_command_ids.append(command.command_id)
+
+        return CommandResult(
+            command_id=command.command_id,
+            status="succeeded",
+            detail="Recording executor accepted spotify",
+        )
+
+    executor = NodeExecutor(
+        device_id="laptop-1",
+        command_records=CommandRecordRepository(tmp_path / "node.db"),
+        command_executor=recording_executor,
+    )
+
+    result = executor.execute_payload(
+        {
+            "command_id": str(command_id),
+            "device_id": "laptop-1",
+            "application_id": "spotify",
+            "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
+            + timedelta(minutes=5),
+        }
+    )
+
+    assert result is not None
+    assert result.status == "succeeded"
+    assert executed_command_ids == [command_id]
+
+
+def test_executor_runs_configured_spotify_launcher(tmp_path):
+    command_id = uuid4()
+    launched_targets: list[str] = []
+    command_executor = create_spotify_command_executor(
+        settings=NodeSettings(
+            device_id="laptop-1",
+            spotify_target="spotify:",
+        ),
+        start_target=launched_targets.append,
+    )
+    executor = NodeExecutor(
+        device_id="laptop-1",
+        command_records=CommandRecordRepository(tmp_path / "node.db"),
+        command_executor=command_executor,
+    )
+
+    result = executor.execute_payload(
+        {
+            "command_id": str(command_id),
+            "device_id": "laptop-1",
+            "application_id": "spotify",
+            "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
+            + timedelta(minutes=5),
+        }
+    )
+
+    assert result is not None
+    assert result.status == "succeeded"
+    assert launched_targets == ["spotify:"]
+
+
+def test_executor_records_failed_result_when_spotify_launch_fails(tmp_path):
+    command_id = uuid4()
+
+    def failing_start_target(target: str) -> None:
+        raise OSError("Windows failure")
+
+    repository = CommandRecordRepository(tmp_path / "node.db")
+    command_executor = create_spotify_command_executor(
+        settings=NodeSettings(
+            device_id="laptop-1",
+            spotify_target="spotify:",
+        ),
+        start_target=failing_start_target,
+    )
+    executor = NodeExecutor(
+        device_id="laptop-1",
+        command_records=repository,
+        command_executor=command_executor,
+    )
+
+    result = executor.execute_payload(
+        {
+            "command_id": str(command_id),
+            "device_id": "laptop-1",
+            "application_id": "spotify",
+            "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
+            + timedelta(minutes=5),
+        }
+    )
+
+    assert result is not None
+    assert result.status == "failed"
+    assert result.detail == "Command execution failed"
+
+    record = repository.get_command(command_id)
+    assert record is not None
+    assert record.status == "failed"
+    assert record.completed_at is not None
