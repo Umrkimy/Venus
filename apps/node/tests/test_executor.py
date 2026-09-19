@@ -499,6 +499,8 @@ def test_executor_runs_configured_spotify_launcher(tmp_path):
         settings=NodeSettings(
             device_id="laptop-1",
             spotify_target="spotify:",
+            core_dev_token="test-node-token",
+            core_url="ws://core.test/nodes/connect",
         ),
         start_target=launched_targets.append,
     )
@@ -534,6 +536,8 @@ def test_executor_records_failed_result_when_spotify_launch_fails(tmp_path):
         settings=NodeSettings(
             device_id="laptop-1",
             spotify_target="spotify:",
+            core_dev_token="test-node-token",
+            core_url="ws://core.test/nodes/connect",
         ),
         start_target=failing_start_target,
     )

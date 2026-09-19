@@ -10,6 +10,8 @@ def test_run_spotify_sends_local_spotify_command(tmp_path, monkeypatch):
     env_file.write_text(
         "VENUS_NODE_DEVICE_ID=laptop-1\n"
         "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
+        "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
+        "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
     )
     database_path = tmp_path / "node.db"
     received_payloads = []

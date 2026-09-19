@@ -9,6 +9,7 @@ apps/core/.venv/
 apps/node/.venv/
 
 #Private Files
+apps/core/.env
 apps/node/.env
 
 #sqlite command history
