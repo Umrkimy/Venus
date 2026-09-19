@@ -21,17 +21,18 @@ def execute_fake(command: OpenApplicationCommand) -> CommandResult:
         detail=f"Fake executor accepted {command.application_id}",
     )
 
-
 class NodeExecutor:
     def __init__(
         self,
         device_id: str,
         command_records: CommandRecordRepository,
         clock: Callable[[], datetime] | None = None,
+        command_executor: Callable[[OpenApplicationCommand], CommandResult] | None = None,
     ) -> None:
         self.device_id = device_id
         self.command_records = command_records
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self.command_executor = command_executor or execute_fake
 
     def execute_payload(self, payload: dict[str, object]) -> CommandResult | None:
         try:
@@ -96,7 +97,7 @@ class NodeExecutor:
             return result
 
         try:
-            result = execute_fake(command)
+            result = self.command_executor(command)
         except Exception:
             result = CommandResult(
                 command_id=command.command_id,
