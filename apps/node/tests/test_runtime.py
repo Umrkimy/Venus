@@ -4,7 +4,10 @@ from zoneinfo import ZoneInfo
 
 import venus_node.runtime as runtime
 
-from venus_node.runtime import create_node_executor
+from venus_node.runtime import (
+    create_fake_node_executor,
+    create_node_executor,
+)
 
 
 def test_create_node_executor_uses_private_settings_and_windows_launcher(
@@ -45,3 +48,45 @@ def test_create_node_executor_uses_private_settings_and_windows_launcher(
     assert result is not None
     assert result.status == "succeeded"
     assert started_targets == ["spotify:"]
+
+
+def test_create_fake_node_executor_does_not_launch_windows_target(
+    tmp_path,
+    monkeypatch,
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "VENUS_NODE_DEVICE_ID=laptop-1\n"
+        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
+        "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
+        "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
+    )
+    database_path = tmp_path / "node.db"
+
+    def unexpected_windows_launch(target: str) -> None:
+        raise AssertionError("Fake executor must not launch Windows")
+
+    monkeypatch.setattr(
+        runtime,
+        "start_windows_target",
+        unexpected_windows_launch,
+    )
+
+    executor = create_fake_node_executor(
+        env_file=env_file,
+        database_path=database_path,
+    )
+
+    result = executor.execute_payload(
+        {
+            "command_id": str(uuid4()),
+            "device_id": "laptop-1",
+            "application_id": "spotify",
+            "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
+            + timedelta(minutes=5),
+        },
+    )
+
+    assert result is not None
+    assert result.status == "succeeded"
+    assert result.detail == "Fake executor accepted spotify"
