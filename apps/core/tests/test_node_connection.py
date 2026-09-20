@@ -6,6 +6,11 @@ from starlette.websockets import WebSocketDisconnect
 from config import CoreSettings, get_settings
 from main import app
 
+from connection_registry import (
+    NodeConnectionRegistry,
+    get_connection_registry,
+)
+
 TEST_NODE_TOKEN = "test-node-token"
 
 
@@ -74,3 +79,108 @@ def test_node_connection_rejects_malformed_hello_json():
             websocket.receive_json()
 
     assert error.value.code == status.WS_1008_POLICY_VIOLATION
+
+
+def test_node_connection_rejects_message_after_hello():
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "laptop-1"})
+
+        assert websocket.receive_json() == {"device_id": "laptop-1"}
+
+        websocket.send_json({"command": "open spotify"})
+
+        with pytest.raises(WebSocketDisconnect) as error:
+            websocket.receive_json()
+
+    assert error.value.code == status.WS_1008_POLICY_VIOLATION
+
+
+def test_node_connection_rejects_binary_message_after_hello():
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "laptop-1"})
+
+        assert websocket.receive_json() == {"device_id": "laptop-1"}
+
+        websocket.send_bytes(b"not-a-command")
+
+        with pytest.raises(WebSocketDisconnect) as error:
+            websocket.receive_json()
+
+    assert error.value.code == status.WS_1008_POLICY_VIOLATION
+
+
+def test_node_connection_replaces_existing_device_connection():
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as old_connection:
+        old_connection.send_json({"device_id": "PC-Umar"})
+
+        assert old_connection.receive_json() == {"device_id": "PC-Umar"}
+
+        with client.websocket_connect(
+            "/nodes/connect",
+            headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+        ) as new_connection:
+            new_connection.send_json({"device_id": "PC-Umar"})
+
+            assert new_connection.receive_json() == {
+                "device_id": "PC-Umar",
+            }
+
+            with pytest.raises(WebSocketDisconnect) as error:
+                old_connection.receive_json()
+
+    assert error.value.code == status.WS_1000_NORMAL_CLOSURE
+
+
+def test_node_connection_unregisters_disconnected_device():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: registry
+    )
+
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+
+    assert registry.get("PC-Umar") is None
+
+
+def test_node_connection_status_tracks_connection_lifecycle():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: registry
+    )
+
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+
+        response = client.get("/nodes/PC-Umar/connection")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "device_id": "PC-Umar",
+            "connected": True,
+        }
+
+    response = client.get("/nodes/PC-Umar/connection")
+
+    assert response.json() == {
+        "device_id": "PC-Umar",
+        "connected": False,
+    }

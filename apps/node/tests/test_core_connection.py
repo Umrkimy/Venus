@@ -14,31 +14,49 @@ def test_connect_to_core_sends_authenticated_hello(monkeypatch):
         core_url="ws://core.test/nodes/connect",
     )
     sent_messages: list[str] = []
+    confirmed_device_ids: list[str] = []
     connection_arguments = {}
 
+    def record_connection(hello: NodeHello) -> None:
+        confirmed_device_ids.append(hello.device_id)
+
     class FakeWebSocket:
+        def __init__(self):
+            self.wait_closed_called = False
+
         async def send(self, message: str):
             sent_messages.append(message)
 
         async def recv(self) -> str:
             return NodeHello(device_id="laptop-1").model_dump_json()
 
+        async def wait_closed(self) -> None:
+            self.wait_closed_called = True
+
     class FakeConnection:
+        def __init__(self):
+            self.websocket = FakeWebSocket()
+
         async def __aenter__(self):
-            return FakeWebSocket()
+            return self.websocket
 
         async def __aexit__(self, exc_type, exc_value, traceback):
             return False
 
+    fake_connection = FakeConnection()
+
     def fake_connect(url: str, additional_headers: dict[str, str]):
         connection_arguments["url"] = url
         connection_arguments["headers"] = additional_headers
-        return FakeConnection()
+        return fake_connection
 
     monkeypatch.setattr(core_connection, "connect", fake_connect)
 
     confirmed_hello = asyncio.run(
-        core_connection.connect_to_core(settings),
+        core_connection.connect_to_core(
+            settings,
+            on_connected=record_connection,
+        ),
     )
 
     assert connection_arguments == {
@@ -47,3 +65,5 @@ def test_connect_to_core_sends_authenticated_hello(monkeypatch):
     }
     assert NodeHello.model_validate_json(sent_messages[0]).device_id == "laptop-1"
     assert confirmed_hello.device_id == "laptop-1"
+    assert confirmed_device_ids == ["laptop-1"]
+    assert fake_connection.websocket.wait_closed_called is True
