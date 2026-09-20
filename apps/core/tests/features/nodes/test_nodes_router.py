@@ -23,6 +23,7 @@ from venus_protocol.schemas.commands import (
 )
 
 TEST_NODE_TOKEN = "test-node-token"
+TEST_OWNER_TOKEN = "test-owner-token"
 
 
 client = TestClient(app)
@@ -32,6 +33,7 @@ client = TestClient(app)
 def override_node_settings():
     app.dependency_overrides[get_settings] = lambda: CoreSettings(
         dev_node_token=TEST_NODE_TOKEN,
+        dev_owner_token=TEST_OWNER_TOKEN,
     )
     yield
     app.dependency_overrides.clear()
@@ -231,7 +233,10 @@ def test_node_connection_records_command_result():
         websocket.send_json({"device_id": "PC-Umar"})
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
-        response = client.post("/nodes/PC-Umar/commands/fake")
+        response = client.post(
+            "/nodes/PC-Umar/commands/fake",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
         command = OpenApplicationCommand.model_validate(response.json())
         assert websocket.receive_json() == response.json()
         result = CommandResult(
@@ -274,11 +279,35 @@ def test_node_connection_rejects_unsolicited_result():
 
 
 def test_fake_command_rejects_disconnected_node():
-    response = client.post("/nodes/PC-Umar/commands/fake")
+    response = client.post(
+        "/nodes/PC-Umar/commands/fake",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
 
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json() == {
         "detail": "Node is not connected",
+    }
+
+
+def test_fake_command_rejects_missing_owner_token():
+    response = client.post("/nodes/PC-Umar/commands/fake")
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {
+        "detail": "Invalid development owner token",
+    }
+
+
+def test_fake_command_rejects_invalid_owner_token():
+    response = client.post(
+        "/nodes/PC-Umar/commands/fake",
+        headers={"Authorization": "Bearer invalid-owner-token"},
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {
+        "detail": "Invalid development owner token",
     }
 
 
@@ -299,7 +328,10 @@ def test_fake_commands_share_connected_node_session():
         websocket.send_json({"device_id": "PC-Umar"})
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
-        first_response = client.post("/nodes/PC-Umar/commands/fake")
+        first_response = client.post(
+            "/nodes/PC-Umar/commands/fake",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
 
         assert first_response.status_code == 200
 
@@ -318,7 +350,10 @@ def test_fake_commands_share_connected_node_session():
         )
         websocket.send_json(first_result.model_dump(mode="json"))
 
-        second_response = client.post("/nodes/PC-Umar/commands/fake")
+        second_response = client.post(
+            "/nodes/PC-Umar/commands/fake",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
 
         assert second_response.status_code == 200
 
