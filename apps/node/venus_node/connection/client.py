@@ -5,6 +5,7 @@ from collections.abc import Callable
 from venus_protocol.schemas.commands import CommandResult
 
 from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosedError
 
 from venus_node.config import NodeSettings
 from venus_node.connection.messages import receive_and_execute_command
@@ -66,7 +67,7 @@ async def keep_connected(
                 on_connected,
                 execute_payload,
             )
-        except OSError:
+        except (OSError, ConnectionClosedError):
             if on_retry is not None:
                 on_retry()
 
