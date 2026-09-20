@@ -1,9 +1,11 @@
+import asyncio
 from collections.abc import Callable
 
 from websockets.asyncio.client import connect
 
 from venus_node.config import NodeSettings
 from venus_protocol.schemas.connections import NodeHello
+
 
 async def connect_to_core(
     settings: NodeSettings,
@@ -32,3 +34,18 @@ async def connect_to_core(
         await websocket.wait_closed()
 
     return confirmed_hello
+
+
+async def keep_connected(
+    settings: NodeSettings,
+    on_connected: Callable[[NodeHello], None] | None = None,
+    on_retry: Callable[[], None] | None = None,
+) -> None:
+    while True:
+        try:
+            await connect_to_core(settings, on_connected)
+        except OSError:
+            if on_retry is not None:
+                on_retry()
+
+        await asyncio.sleep(1)
