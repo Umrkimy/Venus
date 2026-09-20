@@ -67,7 +67,9 @@ async def connect_node(
     try:
         hello_payload = await websocket.receive_json()
         hello = NodeHello.model_validate(hello_payload)
-    except (JSONDecodeError, ValidationError):
+    except WebSocketDisconnect:
+        return
+    except (JSONDecodeError, KeyError, ValidationError):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -76,23 +78,25 @@ async def connect_node(
     try:
         await websocket.send_json(hello.model_dump())
 
-        try:
-            result_payload = await websocket.receive_json()
-            result = CommandResult.model_validate(result_payload)
-        except WebSocketDisconnect:
-            return
-        except (JSONDecodeError, KeyError, ValidationError):
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
+        while True:
+            try:
+                result_payload = await websocket.receive_json()
+                result = CommandResult.model_validate(result_payload)
+            except WebSocketDisconnect:
+                return
+            except (JSONDecodeError, KeyError, ValidationError):
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
 
-        accepted = result_registry.accept_result(
-            result,
-            hello.device_id,
-            websocket,
-        )
+            accepted = result_registry.accept_result(
+                result,
+                hello.device_id,
+                websocket,
+            )
 
-        if not accepted:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            if not accepted:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
     finally:
         await registry.unregister(hello.device_id, websocket)
 
