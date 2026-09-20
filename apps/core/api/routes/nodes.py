@@ -1,19 +1,31 @@
 import hmac
 from json import JSONDecodeError
 from typing import Annotated
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, WebSocket, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 from pydantic import ValidationError
+from starlette.websockets import WebSocketDisconnect
 
+from venus_protocol.schemas.commands import (
+    CommandResult,
+    OpenApplicationCommand,
+)
+from venus_protocol.schemas.connections import NodeHello
+
+from command_result_registry import (
+    CommandResultRegistry,
+    get_command_result_registry,
+)
 from connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
 )
 from config import CoreSettings, get_settings
-from venus_protocol.schemas.connections import NodeHello
+
 
 router = APIRouter()
-
 
 @router.get("/nodes/{device_id}/connection")
 async def get_node_connection_status(
@@ -37,6 +49,10 @@ async def connect_node(
         NodeConnectionRegistry,
         Depends(get_connection_registry),
     ],
+    result_registry: Annotated[
+        CommandResultRegistry,
+        Depends(get_command_result_registry),
+    ],
 ):
     authorization = websocket.headers.get("authorization", "")
     expected_authorization = f"Bearer {settings.dev_node_token}"
@@ -59,11 +75,43 @@ async def connect_node(
     try:
         await websocket.send_json(hello.model_dump())
 
-        message = await websocket.receive()
-
-        if message["type"] == "websocket.disconnect":
+        try:
+            result_payload = await websocket.receive_json()
+            result = CommandResult.model_validate(result_payload)
+        except WebSocketDisconnect:
+            return
+        except (JSONDecodeError, KeyError, ValidationError):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        result_registry.record(result)
     finally:
         await registry.unregister(hello.device_id, websocket)
+
+
+@router.post("/nodes/{device_id}/commands/fake")
+async def send_fake_command(
+    device_id: str,
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
+):
+    websocket = registry.get(device_id)
+
+    if websocket is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Node is not connected",
+        )
+
+    command = OpenApplicationCommand(
+        command_id=uuid4(),
+        device_id=device_id,
+        application_id="spotify",
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+    )
+
+    await websocket.send_json(command.model_dump(mode="json"))
+
+    return command.model_dump(mode="json")

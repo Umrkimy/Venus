@@ -3,16 +3,22 @@ from pathlib import Path
 
 from venus_node.config import load_settings
 from venus_node.core_connection import keep_connected
+from venus_node.runtime import create_fake_node_executor
 from venus_protocol.schemas.connections import NodeHello
 
 
 def run_connect(env_file: Path) -> None:
     settings = load_settings(env_file)
+    database_path = env_file.parent / "data" / "node.db"
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    executor = create_fake_node_executor(env_file, database_path)
+
     asyncio.run(
         keep_connected(
             settings,
             on_connected=print_connected,
             on_retry=print_retry,
+            execute_payload=executor.execute_payload,
         ),
     )
 
