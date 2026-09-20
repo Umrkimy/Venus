@@ -32,11 +32,7 @@ async def receive_and_execute_command(
         CommandResult | None,
     ],
 ) -> CommandResult | None:
-    try:
-        message = await websocket.recv()
-    except ConnectionClosedOK:
-        # Core can stop while Node is waiting, so reconnect normally.
-        return None
+    message = await websocket.recv()
 
     result = execute_command_message(message, execute_payload)
 
@@ -44,3 +40,18 @@ async def receive_and_execute_command(
         await websocket.send(result.model_dump_json())
 
     return result
+
+
+async def receive_and_execute_commands(
+    websocket,
+    execute_payload: Callable[
+        [dict[str, object]],
+        CommandResult | None,
+    ],
+) -> None:
+    try:
+        while True:
+            await receive_and_execute_command(websocket, execute_payload)
+    except ConnectionClosedOK:
+        # Core can stop while Node is waiting, so reconnect normally.
+        return
