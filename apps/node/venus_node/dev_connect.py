@@ -2,17 +2,27 @@ import asyncio
 from pathlib import Path
 
 from venus_node.config import load_settings
-from venus_node.core_connection import connect_to_core
+from venus_node.core_connection import keep_connected
 from venus_protocol.schemas.connections import NodeHello
 
 
-def run_connect(env_file: Path) -> NodeHello:
+def run_connect(env_file: Path) -> None:
     settings = load_settings(env_file)
-    return asyncio.run(connect_to_core(settings, print_connected))
+    asyncio.run(
+        keep_connected(
+            settings,
+            on_connected=print_connected,
+            on_retry=print_retry,
+        ),
+    )
 
 
 def print_connected(hello: NodeHello) -> None:
     print(f"Core confirmed Node: {hello.device_id}")
+
+
+def print_retry() -> None:
+    print("Core unavailable; retrying in 1 second")
 
 
 def main():
