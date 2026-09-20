@@ -8,7 +8,7 @@ from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosedError
 
 from venus_node.config import NodeSettings
-from venus_node.connection.messages import receive_and_execute_command
+from venus_node.connection.messages import receive_and_execute_commands
 from venus_protocol.schemas.connections import NodeHello
 
 
@@ -43,7 +43,7 @@ async def connect_to_core(
         if execute_payload is None:
             await websocket.wait_closed()
         else:
-            await receive_and_execute_command(
+            await receive_and_execute_commands(
                 websocket,
                 execute_payload,
             )

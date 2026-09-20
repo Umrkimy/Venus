@@ -2,7 +2,7 @@ import json
 import asyncio
 import pytest
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import venus_node.connection.client as core_connection
 import venus_node.connection.messages as messages
@@ -11,6 +11,7 @@ from venus_node.config import NodeSettings
 from venus_protocol.schemas.commands import CommandResult
 from venus_protocol.schemas.connections import NodeHello
 from websockets.exceptions import ConnectionClosedError
+from websockets.exceptions import ConnectionClosedOK
 
 
 def test_connect_to_core_sends_authenticated_hello(monkeypatch):
@@ -299,33 +300,32 @@ def test_receive_and_execute_command_sends_result():
     assert sent_messages == [expected_result.model_dump_json()]
 
 
-def test_connect_to_core_executes_received_command(monkeypatch):
+def test_connect_to_core_executes_multiple_received_commands(monkeypatch):
     settings = NodeSettings(
         device_id="laptop-1",
         spotify_target="spotify:",
         core_dev_token="test-node-token",
         core_url="ws://core.test/nodes/connect",
     )
-    command_id = uuid4()
+    command_ids = [uuid4(), uuid4()]
     sent_messages: list[str] = []
     received_payloads: list[dict[str, object]] = []
-    expected_result = CommandResult(
-        command_id=command_id,
-        status="succeeded",
-        detail="Fake command completed",
-    )
 
     class FakeWebSocket:
         def __init__(self):
             self.messages = [
                 NodeHello(device_id="laptop-1").model_dump_json(),
-                json.dumps({"command_id": str(command_id)}),
+                json.dumps({"command_id": str(command_ids[0])}),
+                json.dumps({"command_id": str(command_ids[1])}),
             ]
 
         async def send(self, message: str) -> None:
             sent_messages.append(message)
 
         async def recv(self) -> str:
+            if not self.messages:
+                raise ConnectionClosedOK(None, None)
+
             return self.messages.pop(0)
 
     class FakeConnection:
@@ -342,7 +342,10 @@ def test_connect_to_core_executes_received_command(monkeypatch):
         payload: dict[str, object],
     ) -> CommandResult:
         received_payloads.append(payload)
-        return expected_result
+        return CommandResult(
+            command_id=UUID(str(payload["command_id"])),
+            status="succeeded",
+        )
 
     monkeypatch.setattr(core_connection, "connect", fake_connect)
 
@@ -354,5 +357,9 @@ def test_connect_to_core_executes_received_command(monkeypatch):
     )
 
     assert confirmed_hello.device_id == "laptop-1"
-    assert received_payloads == [{"command_id": str(command_id)}]
-    assert sent_messages[1] == expected_result.model_dump_json()
+    assert received_payloads == [
+        {"command_id": str(command_ids[0])},
+        {"command_id": str(command_ids[1])},
+    ]
+    assert CommandResult.model_validate_json(sent_messages[1]).command_id == command_ids[0]
+    assert CommandResult.model_validate_json(sent_messages[2]).command_id == command_ids[1]

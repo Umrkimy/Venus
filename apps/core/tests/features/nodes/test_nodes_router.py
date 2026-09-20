@@ -92,6 +92,27 @@ def test_node_connection_rejects_malformed_hello_json():
     assert error.value.code == status.WS_1008_POLICY_VIOLATION
 
 
+def test_node_connection_rejects_binary_hello():
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_bytes(b"not-a-hello")
+
+        with pytest.raises(WebSocketDisconnect) as error:
+            websocket.receive_json()
+
+    assert error.value.code == status.WS_1008_POLICY_VIOLATION
+
+
+def test_node_connection_handles_disconnect_before_hello():
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ):
+        pass
+
+
 def test_node_connection_rejects_message_after_hello():
     with client.websocket_connect(
         "/nodes/connect",
@@ -261,7 +282,7 @@ def test_fake_command_rejects_disconnected_node():
     }
 
 
-def test_fake_command_sends_to_connected_node():
+def test_fake_commands_share_connected_node_session():
     connection_registry = NodeConnectionRegistry()
     result_registry = CommandResultRegistry()
     app.dependency_overrides[get_connection_registry] = (
@@ -278,23 +299,43 @@ def test_fake_command_sends_to_connected_node():
         websocket.send_json({"device_id": "PC-Umar"})
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
-        response = client.post("/nodes/PC-Umar/commands/fake")
+        first_response = client.post("/nodes/PC-Umar/commands/fake")
 
-        assert response.status_code == 200
+        assert first_response.status_code == 200
 
-        command = OpenApplicationCommand.model_validate(
-            response.json(),
+        first_command = OpenApplicationCommand.model_validate(
+            first_response.json(),
         )
 
-        assert command.device_id == "PC-Umar"
-        assert command.application_id == "spotify"
-        assert websocket.receive_json() == response.json()
+        assert first_command.device_id == "PC-Umar"
+        assert first_command.application_id == "spotify"
+        assert websocket.receive_json() == first_response.json()
 
-        result = CommandResult(
-            command_id=command.command_id,
+        first_result = CommandResult(
+            command_id=first_command.command_id,
             status="succeeded",
             detail="Fake command completed",
         )
-        websocket.send_json(result.model_dump(mode="json"))
+        websocket.send_json(first_result.model_dump(mode="json"))
 
-    assert result_registry.get(command.command_id) == result
+        second_response = client.post("/nodes/PC-Umar/commands/fake")
+
+        assert second_response.status_code == 200
+
+        second_command = OpenApplicationCommand.model_validate(
+            second_response.json(),
+        )
+
+        assert second_command.device_id == "PC-Umar"
+        assert second_command.application_id == "spotify"
+        assert websocket.receive_json() == second_response.json()
+
+        second_result = CommandResult(
+            command_id=second_command.command_id,
+            status="succeeded",
+            detail="Second fake command completed",
+        )
+        websocket.send_json(second_result.model_dump(mode="json"))
+
+    assert result_registry.get(first_command.command_id) == first_result
+    assert result_registry.get(second_command.command_id) == second_result
