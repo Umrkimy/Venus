@@ -13,7 +13,10 @@ def test_run_connect_uses_private_settings(tmp_path, monkeypatch):
     )
     received_settings = []
 
-    async def fake_connect_to_core(settings):
+    async def fake_connect_to_core(
+        settings,
+        on_connected=None,
+    ):
         received_settings.append(settings)
         return NodeHello(device_id=settings.device_id)
 
