@@ -12,23 +12,41 @@ def test_run_connect_uses_private_settings(tmp_path, monkeypatch):
     received_settings = []
     received_callbacks = []
 
+    class FakeExecutor:
+        def execute_payload(self, payload):
+            return None
+
+    fake_executor = FakeExecutor()
+
     async def fake_keep_connected(
         settings,
         on_connected=None,
         on_retry=None,
+        execute_payload=None,
     ) -> None:
         received_settings.append(settings)
-        received_callbacks.append((on_connected, on_retry))
+        received_callbacks.append(
+            (on_connected, on_retry, execute_payload),
+        )
 
     monkeypatch.setattr(
         dev_connect,
         "keep_connected",
         fake_keep_connected,
     )
+    monkeypatch.setattr(
+        dev_connect,
+        "create_fake_node_executor",
+        lambda env_file, database_path: fake_executor,
+    )
 
     dev_connect.run_connect(env_file)
 
     assert received_settings[0].core_url == "ws://core.test/nodes/connect"
     assert received_callbacks == [
-        (dev_connect.print_connected, dev_connect.print_retry),
+        (
+            dev_connect.print_connected,
+            dev_connect.print_retry,
+            fake_executor.execute_payload,
+        ),
     ]
