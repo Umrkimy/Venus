@@ -4,7 +4,7 @@ from json import JSONDecodeError
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, status
 from pydantic import ValidationError
 from starlette.websockets import WebSocketDisconnect
 
@@ -104,6 +104,8 @@ async def connect_node(
 @router.post("/nodes/{device_id}/commands/fake")
 async def send_fake_command(
     device_id: str,
+    request: Request,
+    settings: Annotated[CoreSettings, Depends(get_settings)],
     registry: Annotated[
         NodeConnectionRegistry,
         Depends(get_connection_registry),
@@ -113,6 +115,16 @@ async def send_fake_command(
         Depends(get_command_result_registry),
     ],
 ):
+    authorization = request.headers.get("authorization", "")
+    expected_authorization = f"Bearer {settings.dev_owner_token}"
+
+    if not hmac.compare_digest(authorization, expected_authorization):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid development owner token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     websocket = registry.get(device_id)
 
     if websocket is None:
