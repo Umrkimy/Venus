@@ -27,6 +27,7 @@ def override_settings():
     app.dependency_overrides[get_settings] = lambda: CoreSettings(
         dev_node_token="test-node-token",
         dev_owner_token=TEST_OWNER_TOKEN,
+        database_url="postgresql+psycopg://venus:test-password@127.0.0.1:5432/venus",
     )
     yield
     app.dependency_overrides.clear()

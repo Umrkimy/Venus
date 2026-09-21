@@ -71,4 +71,5 @@ async def keep_connected(
             if on_retry is not None:
                 on_retry()
 
+        # Local connections can drop normally, so wait briefly before reconnecting.
         await asyncio.sleep(1)

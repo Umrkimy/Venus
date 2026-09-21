@@ -8,6 +8,7 @@ from dotenv import dotenv_values
 class CoreSettings:
     dev_node_token: str
     dev_owner_token: str
+    database_url: str
 
 def get_settings() -> CoreSettings:
     core_directory = Path(__file__).resolve().parent
@@ -18,6 +19,7 @@ def load_settings(env_file: Path) -> CoreSettings:
     values = dotenv_values(env_file)
     node_token = values.get("VENUS_CORE_DEV_NODE_TOKEN", "")
     owner_token = values.get("VENUS_CORE_DEV_OWNER_TOKEN", "")
+    database_url = values.get("VENUS_CORE_DATABASE_URL", "")
 
     if not node_token or not node_token.strip():
         raise ValueError("VENUS_CORE_DEV_NODE_TOKEN is required")
@@ -25,7 +27,11 @@ def load_settings(env_file: Path) -> CoreSettings:
     if not owner_token or not owner_token.strip():
         raise ValueError("VENUS_CORE_DEV_OWNER_TOKEN is required")
 
+    if not database_url or not database_url.strip():
+        raise ValueError("VENUS_CORE_DATABASE_URL is required")
+
     return CoreSettings(
         dev_node_token=node_token,
         dev_owner_token=owner_token,
+        database_url=database_url,
     )

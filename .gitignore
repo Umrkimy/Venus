@@ -11,6 +11,7 @@ apps/node/.venv/
 #Private Files
 apps/core/.env
 apps/node/.env
+/.env
 
 #sqlite command history
 apps/node/data/
