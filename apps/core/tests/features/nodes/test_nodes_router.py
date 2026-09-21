@@ -3,6 +3,8 @@ from uuid import uuid4
 
 from fastapi import status
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from starlette.websockets import WebSocketDisconnect
 
 from config import CoreSettings, get_settings
@@ -12,10 +14,14 @@ from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
 )
+from features.commands.dependencies import get_command_record_repository
+from features.commands.models.command_record import CommandRecord
+from features.commands.repository import CommandRecordRepository
 from features.nodes.connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
 )
+from storage.base import Base
 
 from venus_protocol.schemas.commands import (
     CommandResult,
@@ -30,10 +36,26 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def override_node_settings():
+def command_records():
+    engine = create_engine(
+        "sqlite+pysqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    yield CommandRecordRepository(engine)
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def override_node_settings(command_records: CommandRecordRepository):
     app.dependency_overrides[get_settings] = lambda: CoreSettings(
         dev_node_token=TEST_NODE_TOKEN,
         dev_owner_token=TEST_OWNER_TOKEN,
+        database_url="postgresql+psycopg://venus:test-password@127.0.0.1:5432/venus",
+    )
+    app.dependency_overrides[get_command_record_repository] = (
+        lambda: command_records
     )
     yield
     app.dependency_overrides.clear()
@@ -248,6 +270,30 @@ def test_node_connection_records_command_result():
         websocket.send_json(result.model_dump(mode="json"))
 
     assert result_registry.get(command.command_id) == result
+
+
+def test_fake_command_is_saved_before_dispatch(
+    command_records: CommandRecordRepository,
+):
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+
+        response = client.post(
+            "/nodes/PC-Umar/commands/fake",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        command = OpenApplicationCommand.model_validate(response.json())
+        stored_record = command_records.get(command.command_id)
+
+        assert stored_record is not None
+        assert stored_record.device_id == "PC-Umar"
+        assert stored_record.application_id == "spotify"
+        assert stored_record.state == "pending"
+        assert websocket.receive_json() == response.json()
 
 
 def test_node_connection_rejects_unsolicited_result():

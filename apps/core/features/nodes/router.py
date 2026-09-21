@@ -18,6 +18,9 @@ from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
 )
+from features.commands.dependencies import get_command_record_repository
+from features.commands.models.command_record import CommandRecord
+from features.commands.repository import CommandRecordRepository
 from features.nodes.connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
@@ -114,6 +117,10 @@ async def send_fake_command(
         CommandResultRegistry,
         Depends(get_command_result_registry),
     ],
+    command_records: Annotated[
+        CommandRecordRepository,
+        Depends(get_command_record_repository),
+    ],
 ):
     authorization = request.headers.get("authorization", "")
     expected_authorization = f"Bearer {settings.dev_owner_token}"
@@ -140,6 +147,15 @@ async def send_fake_command(
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
 
+    # Save first so a sent command always has a durable Core record.
+    command_records.create(
+        CommandRecord(
+            command_id=command.command_id,
+            device_id=command.device_id,
+            application_id=command.application_id,
+            expires_at=command.expires_at,
+        )
+    )
     result_registry.expect(command, websocket)
     await websocket.send_json(command.model_dump(mode="json"))
 

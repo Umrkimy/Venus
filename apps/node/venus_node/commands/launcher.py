@@ -30,6 +30,7 @@ def create_spotify_command_executor(
     settings: NodeSettings,
     start_target: Callable[[str], None],
 ) -> Callable[[OpenApplicationCommand], CommandResult]:
+    # Keep real Windows launching outside WebSocket transport until it is approved.
     def execute(command: OpenApplicationCommand) -> CommandResult:
         launch_configured_spotify(
             settings=settings,
