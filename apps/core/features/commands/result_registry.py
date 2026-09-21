@@ -60,6 +60,18 @@ class CommandResultRegistry:
     def get(self, command_id: UUID) -> CommandResult | None:
         return self._results.get(command_id)
 
+    def is_pending(self, command_id: UUID) -> bool:
+        pending_command = self._pending_commands.get(command_id)
+        return pending_command is not None and pending_command.state == "pending"
+
+    def is_expired(self, command_id: UUID) -> bool:
+        pending_command = self._pending_commands.get(command_id)
+        return (
+            pending_command is not None
+            and pending_command.state == "pending"
+            and pending_command.expires_at <= datetime.now(timezone.utc)
+        )
+
 
 command_result_registry = CommandResultRegistry()
 
