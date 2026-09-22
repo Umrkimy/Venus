@@ -56,6 +56,10 @@ async def connect_node(
         CommandResultRegistry,
         Depends(get_command_result_registry),
     ],
+    command_records: Annotated[
+        CommandRecordRepository,
+        Depends(get_command_record_repository),
+    ],
 ):
     authorization = websocket.headers.get("authorization", "")
     expected_authorization = f"Bearer {settings.dev_node_token}"
@@ -100,6 +104,13 @@ async def connect_node(
             if not accepted:
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                 return
+
+            command_records.complete(
+                command_id=result.command_id,
+                state=result.status,
+                detail=result.detail,
+                completed_at=datetime.now(timezone.utc),
+            )
     finally:
         await registry.unregister(hello.device_id, websocket)
 
