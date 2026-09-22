@@ -242,7 +242,8 @@ def test_node_connection_status_tracks_connection_lifecycle():
     }
 
 
-def test_node_connection_records_command_result():
+
+def test_node_connection_records_command_result(command_records: CommandRecordRepository):
     result_registry = CommandResultRegistry()
     app.dependency_overrides[get_command_result_registry] = (
         lambda: result_registry
@@ -271,6 +272,12 @@ def test_node_connection_records_command_result():
 
     assert result_registry.get(command.command_id) == result
 
+    stored_record = command_records.get(command.command_id)
+
+    assert stored_record is not None
+    assert stored_record.state == "succeeded"
+    assert stored_record.detail == "Fake command completed"
+    assert stored_record.completed_at is not None
 
 def test_fake_command_is_saved_before_dispatch(
     command_records: CommandRecordRepository,
@@ -292,7 +299,7 @@ def test_fake_command_is_saved_before_dispatch(
         assert stored_record is not None
         assert stored_record.device_id == "PC-Umar"
         assert stored_record.application_id == "spotify"
-        assert stored_record.state == "pending"
+        assert stored_record.state == "dispatched"
         assert websocket.receive_json() == response.json()
 
 
@@ -420,3 +427,47 @@ def test_fake_commands_share_connected_node_session():
 
     assert result_registry.get(first_command.command_id) == first_result
     assert result_registry.get(second_command.command_id) == second_result
+
+
+def test_node_connection_rejects_wrong_result_without_completing_record(
+    command_records: CommandRecordRepository,
+):
+    result_registry = CommandResultRegistry()
+    app.dependency_overrides[get_command_result_registry] = (
+        lambda: result_registry
+    )
+
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+
+        response = client.post(
+            "/nodes/PC-Umar/commands/fake",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        command = OpenApplicationCommand.model_validate(response.json())
+        assert websocket.receive_json() == response.json()
+
+        wrong_result = CommandResult(
+            # Use a valid but unissued ID to exercise Core's ownership check.
+            command_id=uuid4(),
+            status="succeeded",
+            detail="Node reported a result for a different command",
+        )
+        websocket.send_json(wrong_result.model_dump(mode="json"))
+
+        with pytest.raises(WebSocketDisconnect) as error:
+            websocket.receive_json()
+
+    assert error.value.code == status.WS_1008_POLICY_VIOLATION
+    assert result_registry.get(wrong_result.command_id) is None
+
+    stored_record = command_records.get(command.command_id)
+
+    assert stored_record is not None
+    assert stored_record.state == "dispatched"
+    assert stored_record.detail is None
+    assert stored_record.completed_at is None

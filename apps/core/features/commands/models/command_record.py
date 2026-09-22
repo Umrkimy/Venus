@@ -18,6 +18,14 @@ class CommandRecord(Base):
     application_id: Mapped[str] = mapped_column(String(100))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     state: Mapped[str] = mapped_column(String(20))
+    detail: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     def __init__(
         self,
@@ -30,4 +38,6 @@ class CommandRecord(Base):
         self.device_id = device_id
         self.application_id = application_id
         self.expires_at = expires_at
-        self.state = "pending"
+        self.state = "dispatched"
+        self.detail = None
+        self.completed_at = None
