@@ -7,16 +7,16 @@ from venus_protocol.schemas.commands import CommandResult, OpenApplicationComman
 
 
 @dataclass
-class PendingCommand:
+class DispatchedCommand:
     device_id: str
     websocket: WebSocket
     expires_at: datetime
-    state: str = "pending"
+    state: str = "dispatched"
 
 
 class CommandResultRegistry:
     def __init__(self) -> None:
-        self._pending_commands: dict[UUID, PendingCommand] = {}
+        self._dispatched_commands: dict[UUID, DispatchedCommand] = {}
         self._results: dict[UUID, CommandResult] = {}
 
     def expect(
@@ -24,7 +24,7 @@ class CommandResultRegistry:
         command: OpenApplicationCommand,
         websocket: WebSocket,
     ) -> None:
-        self._pending_commands[command.command_id] = PendingCommand(
+        self._dispatched_commands[command.command_id] = DispatchedCommand(
             device_id=command.device_id,
             websocket=websocket,
             expires_at=command.expires_at,
@@ -36,40 +36,43 @@ class CommandResultRegistry:
         device_id: str,
         websocket: WebSocket,
     ) -> bool:
-        pending_command = self._pending_commands.get(result.command_id)
+        dispatched_command = self._dispatched_commands.get(result.command_id)
 
-        if pending_command is None:
+        if dispatched_command is None:
             return False
 
-        if pending_command.device_id != device_id:
+        if dispatched_command.device_id != device_id:
             return False
 
-        if pending_command.websocket is not websocket:
+        if dispatched_command.websocket is not websocket:
             return False
 
-        if pending_command.expires_at <= datetime.now(timezone.utc):
+        if dispatched_command.expires_at <= datetime.now(timezone.utc):
             return False
 
-        if pending_command.state != "pending":
+        if dispatched_command.state != "dispatched":
             return False
 
-        pending_command.state = "completed"
+        dispatched_command.state = "completed"
         self._results[result.command_id] = result
         return True
 
     def get(self, command_id: UUID) -> CommandResult | None:
         return self._results.get(command_id)
 
-    def is_pending(self, command_id: UUID) -> bool:
-        pending_command = self._pending_commands.get(command_id)
-        return pending_command is not None and pending_command.state == "pending"
+    def is_dispatched(self, command_id: UUID) -> bool:
+        dispatched_command = self._dispatched_commands.get(command_id)
+        return (
+            dispatched_command is not None
+            and dispatched_command.state == "dispatched"
+        )
 
     def is_expired(self, command_id: UUID) -> bool:
-        pending_command = self._pending_commands.get(command_id)
+        dispatched_command = self._dispatched_commands.get(command_id)
         return (
-            pending_command is not None
-            and pending_command.state == "pending"
-            and pending_command.expires_at <= datetime.now(timezone.utc)
+            dispatched_command is not None
+            and dispatched_command.state == "dispatched"
+            and dispatched_command.expires_at <= datetime.now(timezone.utc)
         )
 
 
