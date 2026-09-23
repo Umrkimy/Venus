@@ -350,7 +350,7 @@ def test_get_command_result_returns_not_found_for_dispatched_stored_command(
     }
 
 
-def test_get_command_status_returns_dispatched_stored_command_after_restart(
+def test_get_command_status_returns_awaiting_approval_stored_command_after_restart(
     command_records: CommandRecordRepository,
 ):
     result_registry = CommandResultRegistry()
@@ -376,7 +376,7 @@ def test_get_command_status_returns_dispatched_stored_command_after_restart(
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
         "command_id": str(command_id),
-        "status": "dispatched",
+        "status": "awaiting_approval",
     }
 
 

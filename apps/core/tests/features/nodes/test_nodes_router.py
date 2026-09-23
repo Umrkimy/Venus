@@ -1,9 +1,11 @@
 import pytest
 from uuid import uuid4
+from datetime import datetime, timezone, timedelta
 
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import StaticPool
 from starlette.websockets import WebSocketDisconnect
 
@@ -30,6 +32,54 @@ from venus_protocol.schemas.commands import (
 
 TEST_NODE_TOKEN = "test-node-token"
 TEST_OWNER_TOKEN = "test-owner-token"
+
+
+def test_result_storage_failure_does_not_publish_success(
+    command_records: CommandRecordRepository, monkeypatch,
+):
+    results = CommandResultRegistry()
+    connections = NodeConnectionRegistry()
+    app.dependency_overrides[get_command_result_registry] = lambda: results
+    app.dependency_overrides[get_connection_registry] = lambda: connections
+
+    def fail_completion(*args, **kwargs):
+        raise SQLAlchemyError("Injected database failure")
+
+    monkeypatch.setattr(command_records, "complete", fail_completion)
+    owner_headers = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+        proposal = client.post(
+            "/nodes/PC-Umar/commands/fake", headers=owner_headers,
+        ).json()
+        command = OpenApplicationCommand.model_validate(proposal)
+        approval = client.post(
+            f"/commands/{command.command_id}/approval",
+            json={"approved": True}, headers=owner_headers,
+        )
+        assert approval.status_code == 200
+        assert websocket.receive_json() == proposal
+        websocket.send_json({
+            "command_id": str(command.command_id), "status": "succeeded",
+        })
+        with pytest.raises(WebSocketDisconnect) as error:
+            websocket.receive_json()
+        assert error.value.code == status.WS_1011_INTERNAL_ERROR
+
+    assert results.get(command.command_id) is None
+    stored = command_records.get(command.command_id)
+    assert stored is not None
+    assert stored.state == "dispatched"
+    assert stored.completed_at is None
+    response = client.get(
+        f"/commands/{command.command_id}/result", headers=owner_headers,
+    )
+    assert response.status_code == 404
+    assert connections.get("PC-Umar") is None
 
 
 client = TestClient(app)
@@ -261,7 +311,14 @@ def test_node_connection_records_command_result(command_records: CommandRecordRe
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
         command = OpenApplicationCommand.model_validate(response.json())
-        assert websocket.receive_json() == response.json()
+        approval = client.post(
+            f"/commands/{command.command_id}/approval",
+            json={"approved": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        assert approval.status_code == 200
+        assert websocket.receive_json() == approval.json()
+        assert command_records.get(command.command_id).state == "dispatched"
         result = CommandResult(
             command_id=command.command_id,
             status="succeeded",
@@ -279,28 +336,20 @@ def test_node_connection_records_command_result(command_records: CommandRecordRe
     assert stored_record.detail == "Fake command completed"
     assert stored_record.completed_at is not None
 
-def test_fake_command_is_saved_before_dispatch(
+def test_fake_command_creates_awaiting_approval_record(
     command_records: CommandRecordRepository,
 ):
-    with client.websocket_connect(
-        "/nodes/connect",
-        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
-    ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
-        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+    response = client.post(
+        "/nodes/PC-Umar/commands/fake",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+    command = OpenApplicationCommand.model_validate(response.json())
+    stored_record = command_records.get(command.command_id)
 
-        response = client.post(
-            "/nodes/PC-Umar/commands/fake",
-            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
-        )
-        command = OpenApplicationCommand.model_validate(response.json())
-        stored_record = command_records.get(command.command_id)
-
-        assert stored_record is not None
-        assert stored_record.device_id == "PC-Umar"
-        assert stored_record.application_id == "spotify"
-        assert stored_record.state == "dispatched"
-        assert websocket.receive_json() == response.json()
+    assert stored_record is not None
+    assert stored_record.device_id == "PC-Umar"
+    assert stored_record.application_id == "spotify"
+    assert stored_record.state == "awaiting_approval"
 
 
 def test_node_connection_rejects_unsolicited_result():
@@ -331,15 +380,73 @@ def test_node_connection_rejects_unsolicited_result():
     assert result_registry.get(command_id) is None
 
 
-def test_fake_command_rejects_disconnected_node():
+def test_fake_command_creates_proposal_for_disconnected_node():
     response = client.post(
         "/nodes/PC-Umar/commands/fake",
         headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
     )
 
-    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.status_code == status.HTTP_200_OK
+
+
+def test_owner_denial_completes_proposal_without_dispatch(
+    command_records: CommandRecordRepository,
+):
+    proposal_response = client.post(
+        "/nodes/PC-Umar/commands/fake",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+    command = OpenApplicationCommand.model_validate(proposal_response.json())
+
+    denial_response = client.post(
+        f"/commands/{command.command_id}/approval",
+        json={"approved": False},
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert denial_response.status_code == status.HTTP_200_OK
+    assert denial_response.json() == {
+        "command_id": str(command.command_id),
+        "status": "denied",
+    }
+
+    stored_record = command_records.get(command.command_id)
+
+    assert stored_record is not None
+    assert stored_record.state == "denied"
+    assert stored_record.detail == "Owner denied command"
+    assert stored_record.completed_at is not None
+
+
+def test_approval_rejects_disconnected_node_without_dispatch(
+    command_records: CommandRecordRepository,
+):
+    proposal_response = client.post(
+        "/nodes/PC-Umar/commands/fake",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+    command = OpenApplicationCommand.model_validate(proposal_response.json())
+
+    approval_response = client.post(
+        f"/commands/{command.command_id}/approval",
+        json={"approved": True},
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert approval_response.status_code == status.HTTP_409_CONFLICT
+    assert approval_response.json() == {"detail": "Node is not connected"}
+    assert command_records.get(command.command_id).state == "awaiting_approval"
+
+
+def test_approval_rejects_missing_owner_token():
+    response = client.post(
+        f"/commands/{uuid4()}/approval",
+        json={"approved": True},
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Node is not connected",
+        "detail": "Invalid development owner token",
     }
 
 
@@ -394,7 +501,13 @@ def test_fake_commands_share_connected_node_session():
 
         assert first_command.device_id == "PC-Umar"
         assert first_command.application_id == "spotify"
-        assert websocket.receive_json() == first_response.json()
+        first_approval = client.post(
+            f"/commands/{first_command.command_id}/approval",
+            json={"approved": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        assert first_approval.status_code == 200
+        assert websocket.receive_json() == first_approval.json()
 
         first_result = CommandResult(
             command_id=first_command.command_id,
@@ -416,7 +529,13 @@ def test_fake_commands_share_connected_node_session():
 
         assert second_command.device_id == "PC-Umar"
         assert second_command.application_id == "spotify"
-        assert websocket.receive_json() == second_response.json()
+        second_approval = client.post(
+            f"/commands/{second_command.command_id}/approval",
+            json={"approved": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        assert second_approval.status_code == 200
+        assert websocket.receive_json() == second_approval.json()
 
         second_result = CommandResult(
             command_id=second_command.command_id,
@@ -449,7 +568,13 @@ def test_node_connection_rejects_wrong_result_without_completing_record(
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
         command = OpenApplicationCommand.model_validate(response.json())
-        assert websocket.receive_json() == response.json()
+        approval = client.post(
+            f"/commands/{command.command_id}/approval",
+            json={"approved": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        assert approval.status_code == 200
+        assert websocket.receive_json() == approval.json()
 
         wrong_result = CommandResult(
             # Use a valid but unissued ID to exercise Core's ownership check.
@@ -471,3 +596,203 @@ def test_node_connection_rejects_wrong_result_without_completing_record(
     assert stored_record.state == "dispatched"
     assert stored_record.detail is None
     assert stored_record.completed_at is None
+
+
+def test_approval_rejects_repeated_decision():
+    connection_registry = NodeConnectionRegistry()
+    result_registry = CommandResultRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: connection_registry
+    )
+    app.dependency_overrides[get_command_result_registry] = (
+        lambda: result_registry
+    )
+
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+
+        proposal_response = client.post(
+            "/nodes/PC-Umar/commands/fake",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        command = OpenApplicationCommand.model_validate(
+            proposal_response.json(),
+        )
+
+        first_approval = client.post(
+            f"/commands/{command.command_id}/approval",
+            json={"approved": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+        assert first_approval.status_code == status.HTTP_200_OK
+        assert websocket.receive_json() == first_approval.json()
+
+        second_approval = client.post(
+            f"/commands/{command.command_id}/approval",
+            json={"approved": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+        assert second_approval.status_code == status.HTTP_409_CONFLICT
+        assert second_approval.json() == {
+            "detail": "Command is not awaiting approval",
+        }
+
+
+def test_approval_rejects_approval_after_denial(
+    command_records: CommandRecordRepository,
+):
+    connection_registry = NodeConnectionRegistry()
+    result_registry = CommandResultRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: connection_registry
+    )
+    app.dependency_overrides[get_command_result_registry] = (
+        lambda: result_registry
+    )
+
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+
+        proposal_response = client.post(
+            "/nodes/PC-Umar/commands/fake",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        command = OpenApplicationCommand.model_validate(
+            proposal_response.json(),
+        )
+
+        first_approval = client.post(
+            f"/commands/{command.command_id}/approval",
+            json={"approved": False},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+        assert first_approval.status_code == status.HTTP_200_OK
+
+        second_approval = client.post(
+            f"/commands/{command.command_id}/approval",
+            json={"approved": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+        assert second_approval.status_code == status.HTTP_409_CONFLICT
+        assert second_approval.json() == {
+            "detail": "Command is not awaiting approval",
+        }
+        stored_record = command_records.get(command.command_id)
+        assert stored_record is not None
+        assert stored_record.state == "denied"
+
+
+def test_approval_rejects_unknown_command():
+    unknown_command_id = uuid4()
+
+    response = client.post(
+        f"/commands/{unknown_command_id}/approval",
+        json={"approved": True},
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Command not found"}
+
+
+def test_approval_rejects_expired_proposal(
+    command_records: CommandRecordRepository,
+):
+    command_id = uuid4()
+    command_records.create(
+        CommandRecord(
+            command_id=command_id,
+            device_id="PC-Umar",
+            application_id="spotify",
+            expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+    )
+
+    response = client.post(
+        f"/commands/{command_id}/approval",
+        json={"approved": True},
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json() == {"detail": "Command has expired"}
+
+    stored_record = command_records.get(command_id)
+    assert stored_record is not None
+    assert stored_record.state == "awaiting_approval"
+
+
+@pytest.mark.parametrize("approved", [True, False])
+def test_approval_rejects_expiry_between_read_and_decision(
+    command_records: CommandRecordRepository, monkeypatch, approved: bool,
+):
+    connections = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = lambda: connections
+    decide = command_records.decide_approval
+
+    def decide_at_expiry(command_id, *, approved, decided_at):
+        stored = command_records.get(command_id)
+        assert stored is not None
+        return decide(
+            command_id, approved=approved,
+            decided_at=stored.expires_at.replace(tzinfo=timezone.utc),
+        )
+
+    monkeypatch.setattr(command_records, "decide_approval", decide_at_expiry)
+    owner_headers = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+        proposal = client.post(
+            "/nodes/PC-Umar/commands/fake", headers=owner_headers,
+        ).json()
+        command = OpenApplicationCommand.model_validate(proposal)
+        response = client.post(
+            f"/commands/{command.command_id}/approval",
+            json={"approved": approved}, headers=owner_headers,
+        )
+        assert response.status_code == 409
+        assert response.json() == {"detail": "Command has expired"}
+    stored = command_records.get(command.command_id)
+    assert stored is not None
+    assert stored.state == "awaiting_approval"
+
+
+def test_approval_rejects_string_decision(
+    command_records: CommandRecordRepository
+):
+    command_id = uuid4()
+    command_records.create(
+        CommandRecord(
+            command_id=command_id,
+            device_id="PC-Umar",
+            application_id="spotify",
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        )
+    )
+
+    response = client.post(
+        f"/commands/{command_id}/approval",
+        json={"approved": "no"},
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    stored_record = command_records.get(command_id)
+    assert stored_record is not None
+    assert stored_record.state == "awaiting_approval"

@@ -33,11 +33,12 @@ class CommandRecord(Base):
         device_id: str,
         application_id: str,
         expires_at: datetime,
+        state: str = "awaiting_approval",
     ) -> None:
         self.command_id = command_id
         self.device_id = device_id
         self.application_id = application_id
         self.expires_at = expires_at
-        self.state = "dispatched"
+        self.state = state
         self.detail = None
         self.completed_at = None

@@ -70,7 +70,7 @@ async def get_command_status(
             expires_at = expires_at.replace(tzinfo=timezone.utc)
 
         if (
-            record.state == "dispatched"
+            record.state in {"awaiting_approval", "dispatched"}
             and expires_at <= datetime.now(timezone.utc)
         ):
             return {
