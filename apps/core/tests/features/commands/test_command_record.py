@@ -4,7 +4,7 @@ from uuid import uuid4
 from features.commands.models.command_record import CommandRecord
 
 
-def test_new_command_record_starts_dispatched():
+def test_new_command_record_starts_awaiting_approval():
     record = CommandRecord(
         command_id=uuid4(),
         device_id="laptop-1",
@@ -12,7 +12,7 @@ def test_new_command_record_starts_dispatched():
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
 
-    assert record.state == "dispatched"
+    assert record.state == "awaiting_approval"
 
 
 def test_new_command_record_has_no_result_yet():
