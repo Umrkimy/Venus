@@ -291,7 +291,7 @@ def test_get_command_status_returns_not_found_for_unknown_command():
     }
 
 
-def test_get_command_status_returns_expired_for_overdue_command():
+def test_get_command_status_returns_unknown_for_overdue_dispatched_command():
     result_registry = CommandResultRegistry()
     app.dependency_overrides[get_command_result_registry] = (
         lambda: result_registry
@@ -317,7 +317,7 @@ def test_get_command_status_returns_expired_for_overdue_command():
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
         "command_id": str(command_id),
-        "status": "expired",
+        "status": "unknown",
     }
 
 
@@ -407,6 +407,37 @@ def test_get_command_status_returns_expired_stored_command_after_restart(
     assert response.json() == {
         "command_id": str(command_id),
         "status": "expired",
+    }
+
+
+def test_dispatched_command_without_result_reports_unknown(
+    command_records: CommandRecordRepository,
+):
+    result_registry = CommandResultRegistry()
+    app.dependency_overrides[get_command_result_registry] = (
+        lambda: result_registry
+    )
+
+    command_id = uuid4()
+    command_records.create(
+        CommandRecord(
+            command_id=command_id,
+            device_id="PC-Umar",
+            application_id="spotify",
+            state="dispatched",
+            expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+        )
+    )
+
+    response = client.get(
+        f"/commands/{command_id}",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "command_id": str(command_id),
+        "status": "unknown",
     }
 
 
