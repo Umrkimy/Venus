@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections.abc import Callable
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -35,6 +36,8 @@ class CommandResultRegistry:
         result: CommandResult,
         device_id: str,
         websocket: WebSocket,
+        *,
+        persist: Callable[[CommandResult], None] | None = None,
     ) -> bool:
         dispatched_command = self._dispatched_commands.get(result.command_id)
 
@@ -52,6 +55,11 @@ class CommandResultRegistry:
 
         if dispatched_command.state != "dispatched":
             return False
+
+        # Publish only after durable storage succeeds. This synchronous section
+        # must not yield between validating ownership and publishing the result.
+        if persist is not None:
+            persist(result)
 
         dispatched_command.state = "completed"
         self._results[result.command_id] = result
