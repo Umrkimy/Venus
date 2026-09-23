@@ -51,7 +51,7 @@ async def get_command_status(
     if result_registry.is_expired(command_id):
         return {
             "command_id": str(command_id),
-            "status": "expired",
+            "status": "unknown",
         }
 
     if result_registry.is_dispatched(command_id):
@@ -69,14 +69,17 @@ async def get_command_status(
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
 
-        if (
-            record.state in {"awaiting_approval", "dispatched"}
-            and expires_at <= datetime.now(timezone.utc)
-        ):
-            return {
-                "command_id": str(record.command_id),
-                "status": "expired",
-            }
+        if expires_at <= datetime.now(timezone.utc):
+            if record.state == "awaiting_approval":
+                return {
+                    "command_id": str(record.command_id),
+                    "status": "expired",
+                }
+            if record.state == "dispatched":
+                return {
+                    "command_id": str(record.command_id),
+                    "status": "unknown",
+                }
 
         response = {
             "command_id": str(record.command_id),
