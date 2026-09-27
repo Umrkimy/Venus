@@ -2,7 +2,10 @@ import asyncio
 from pathlib import Path
 
 from venus_node.config import load_settings
-from venus_node.commands.factory import create_fake_node_executor
+from venus_node.commands.factory import (
+    create_fake_node_executor,
+    create_node_executor,
+)
 from venus_node.connection.client import keep_connected
 from venus_protocol.schemas.connections import NodeHello
 
@@ -11,7 +14,11 @@ def run_connect(env_file: Path) -> None:
     settings = load_settings(env_file)
     database_path = env_file.parent / "data" / "node.db"
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    executor = create_fake_node_executor(env_file, database_path)
+    if settings.real_actions:
+        print("Real actions enabled: approved commands will open apps")
+        executor = create_node_executor(env_file, database_path)
+    else:
+        executor = create_fake_node_executor(env_file, database_path)
 
     asyncio.run(
         keep_connected(

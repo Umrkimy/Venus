@@ -64,3 +64,49 @@ def test_load_settings_rejects_missing_core_url(tmp_path: Path):
         match="VENUS_NODE_CORE_URL is required",
     ):
         load_settings(env_file)
+
+
+def test_load_settings_defaults_real_actions_to_false(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "VENUS_NODE_DEVICE_ID=laptop-1\n"
+        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
+        "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
+        "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
+    )
+
+    settings = load_settings(env_file)
+
+    assert settings.real_actions is False
+
+
+def test_load_settings_reads_real_actions_true(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "VENUS_NODE_DEVICE_ID=laptop-1\n"
+        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
+        "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
+        "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
+        "VENUS_NODE_REAL_ACTIONS=true\n"
+    )
+
+    settings = load_settings(env_file)
+
+    assert settings.real_actions is True
+
+
+def test_load_settings_rejects_invalid_real_actions(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "VENUS_NODE_DEVICE_ID=laptop-1\n"
+        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
+        "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
+        "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
+        "VENUS_NODE_REAL_ACTIONS=invalid_value\n"
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="VENUS_NODE_REAL_ACTIONS must be true or false",
+    ):
+        load_settings(env_file)
