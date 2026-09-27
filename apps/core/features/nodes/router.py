@@ -21,7 +21,11 @@ from features.commands.result_registry import (
 )
 from features.commands.dependencies import get_command_record_repository
 from features.commands.models.command_record import CommandRecord
-from features.commands.repository import ApprovalExpiredError, CommandRecordRepository
+from features.commands.repository import (
+    ApprovalExpiredError,
+    CommandNotDispatchedError,
+    CommandRecordRepository,
+)
 from features.commands.schemas import ApprovalDecision
 from features.nodes.connection_registry import (
     NodeConnectionRegistry,
@@ -109,7 +113,7 @@ async def connect_node(
                         completed_at=datetime.now(timezone.utc),
                     ),
                 )
-            except (SQLAlchemyError, LookupError):
+            except (SQLAlchemyError, LookupError, CommandNotDispatchedError):
                 # No confirmed result is published and no command is replayed.
                 # Core's later timeout/recovery policy owns the unknown outcome.
                 await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
