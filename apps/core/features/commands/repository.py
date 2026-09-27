@@ -12,6 +12,10 @@ class ApprovalExpiredError(ValueError):
     """The proposal was expired at the time of the approval decision."""
 
 
+class CommandNotDispatchedError(ValueError):
+    """The command is no longer waiting for a Node result."""
+
+
 class CommandRecordRepository:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
@@ -34,14 +38,27 @@ class CommandRecordRepository:
         completed_at: datetime,
     ) -> None:
         with Session(self.engine) as session:
-            record = session.get(CommandRecord, command_id)
+            result = session.execute(
+                update(CommandRecord)
+                .where(CommandRecord.command_id == command_id)
+                .where(CommandRecord.state == "dispatched")
+                .values(
+                    state=state,
+                    detail=detail,
+                    completed_at=completed_at,
+                )
+            )
 
-            if record is None:
-                raise LookupError("Cannot complete an unrecorded command")
+            if result.rowcount != 1:
+                record = session.get(CommandRecord, command_id)
 
-            record.state = state
-            record.detail = detail
-            record.completed_at = completed_at
+                if record is None:
+                    raise LookupError("Cannot complete an unrecorded command")
+
+                raise CommandNotDispatchedError(
+                    "The command is no longer waiting for a Node result"
+                )
+
             session.commit()
 
     def decide_approval(
@@ -76,3 +93,37 @@ class CommandRecordRepository:
             record = session.get(CommandRecord, command_id)
             assert record is not None
             return record
+
+    def mark_overdue_dispatched_unknown(
+        self,
+        command_id: UUID,
+        *,
+        checked_at: datetime,
+    ) -> bool:
+        with Session(self.engine) as session:
+            result = session.execute(
+                update(CommandRecord)
+                .where(CommandRecord.command_id == command_id)
+                .where(CommandRecord.state == "dispatched")
+                .where(CommandRecord.expires_at <= checked_at)
+                .values(state="unknown", completed_at=checked_at)
+            )
+            if result.rowcount != 1:
+                return False
+            session.commit()
+            return True
+
+    def mark_all_dispatched_unknown(self, *, checked_at: datetime) -> int:
+        with Session(self.engine) as session:
+            result = session.execute(
+                update(CommandRecord)
+                .where(CommandRecord.state == "dispatched")
+                .values(
+                    state="unknown",
+                    completed_at=checked_at,
+                    detail="Core restarted before a result arrived",
+                )
+            )
+
+            session.commit()
+            return result.rowcount
