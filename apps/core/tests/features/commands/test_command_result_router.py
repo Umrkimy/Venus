@@ -198,6 +198,7 @@ def test_get_command_status_returns_stored_result_after_restart(
             command_id=command_id,
             device_id="PC-Umar",
             application_id="spotify",
+            state="dispatched",
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
         )
     )
@@ -235,6 +236,7 @@ def test_get_command_result_returns_stored_result_after_restart(
             command_id=command_id,
             device_id="PC-Umar",
             application_id="spotify",
+            state="dispatched",
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
         )
     )
@@ -291,7 +293,9 @@ def test_get_command_status_returns_not_found_for_unknown_command():
     }
 
 
-def test_get_command_status_returns_unknown_for_overdue_dispatched_command():
+def test_get_command_status_returns_unknown_for_overdue_dispatched_command(
+    command_records: CommandRecordRepository,
+):
     result_registry = CommandResultRegistry()
     app.dependency_overrides[get_command_result_registry] = (
         lambda: result_registry
@@ -305,8 +309,16 @@ def test_get_command_status_returns_unknown_for_overdue_dispatched_command():
     )
 
     result_registry.expect(command, object())
-    result_registry._dispatched_commands[command_id].expires_at = (
-        datetime.now(timezone.utc) - timedelta(seconds=1)
+    expired_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    result_registry._dispatched_commands[command_id].expires_at = expired_at
+    command_records.create(
+        CommandRecord(
+            command_id=command_id,
+            device_id=command.device_id,
+            application_id=command.application_id,
+            state="dispatched",
+            expires_at=expired_at,
+        )
     )
 
     response = client.get(
@@ -319,6 +331,10 @@ def test_get_command_status_returns_unknown_for_overdue_dispatched_command():
         "command_id": str(command_id),
         "status": "unknown",
     }
+    stored = command_records.get(command_id)
+    assert stored is not None
+    assert stored.state == "unknown"
+    assert stored.completed_at is not None
 
 
 def test_get_command_result_returns_not_found_for_dispatched_stored_command(
@@ -338,6 +354,42 @@ def test_get_command_result_returns_not_found_for_dispatched_stored_command(
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
         )
     )
+
+    response = client.get(
+        f"/commands/{command_id}/result",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": "Command result not found",
+    }
+
+
+def test_get_command_result_returns_not_found_for_unknown_outcome(
+    command_records: CommandRecordRepository,
+):
+    result_registry = CommandResultRegistry()
+    app.dependency_overrides[get_command_result_registry] = (
+        lambda: result_registry
+    )
+
+    command_id = uuid4()
+    command_records.create(
+        CommandRecord(
+            command_id=command_id,
+            device_id="PC-Umar",
+            application_id="spotify",
+            state="dispatched",
+            expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+        )
+    )
+
+    changed = command_records.mark_overdue_dispatched_unknown(
+        command_id,
+        checked_at=datetime.now(timezone.utc),
+    )
+    assert changed is True
 
     response = client.get(
         f"/commands/{command_id}/result",
@@ -439,6 +491,10 @@ def test_dispatched_command_without_result_reports_unknown(
         "command_id": str(command_id),
         "status": "unknown",
     }
+    stored_record = command_records.get(command_id)
+    assert stored_record is not None
+    assert stored_record.state == "unknown"
+    assert stored_record.completed_at is not None
 
 
 def test_get_command_status_keeps_completed_stored_command_succeeded_after_expiry(
@@ -455,6 +511,7 @@ def test_get_command_status_keeps_completed_stored_command_succeeded_after_expir
             command_id=command_id,
             device_id="PC-Umar",
             application_id="spotify",
+            state="dispatched",
             expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
         )
     )

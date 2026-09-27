@@ -49,6 +49,10 @@ async def get_command_status(
         return result.model_dump(mode="json")
 
     if result_registry.is_expired(command_id):
+        command_records.mark_overdue_dispatched_unknown(
+            command_id,
+            checked_at=datetime.now(timezone.utc),
+        )
         return {
             "command_id": str(command_id),
             "status": "unknown",
@@ -76,10 +80,16 @@ async def get_command_status(
                     "status": "expired",
                 }
             if record.state == "dispatched":
-                return {
-                    "command_id": str(record.command_id),
-                    "status": "unknown",
-                }
+                command_records.mark_overdue_dispatched_unknown(
+                    command_id,
+                    checked_at=datetime.now(timezone.utc),
+                )
+                record = command_records.get(command_id)
+                if record is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Command not found",
+                    )
 
         response = {
             "command_id": str(record.command_id),
@@ -127,7 +137,11 @@ async def get_command_result(
 
     record = command_records.get(command_id)
 
-    if record is not None and record.completed_at is not None:
+    if (
+        record is not None
+        and record.completed_at is not None
+        and record.state in ("succeeded", "failed", "denied")
+    ):
         return CommandResult(
             command_id=record.command_id,
             status=record.state,
