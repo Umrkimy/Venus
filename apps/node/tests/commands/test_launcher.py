@@ -1,4 +1,9 @@
+from datetime import datetime, timedelta, timezone
+
+from uuid import uuid4
 import pytest
+
+from venus_protocol.schemas.commands import OpenApplicationCommand
 
 import venus_node.commands.launcher as launcher
 
@@ -60,3 +65,29 @@ def test_launch_configured_spotify_uses_validated_private_target():
     )
 
     assert launched_targets == ["spotify:"]
+
+
+def test_spotify_command_executor_denies_other_application():
+    started_targets: list[str] = []
+    settings = NodeSettings(
+        device_id="laptop-1",
+        spotify_target="spotify:",
+        core_dev_token="test-node-token",
+        core_url="ws://core.test/nodes/connect",
+    )
+    executor = launcher.create_spotify_command_executor(
+        settings=settings,
+        start_target=started_targets.append,
+    )
+    command = OpenApplicationCommand.model_construct(
+        command_id=uuid4(),
+        device_id="laptop-1",
+        application_id="discord",
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+    )
+
+    result = executor(command)
+
+    assert result.status == "denied"
+    assert result.detail == "Unsupported application"
+    assert started_targets == []
