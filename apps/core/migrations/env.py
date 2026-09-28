@@ -7,6 +7,8 @@ from alembic import context
 
 from config import get_settings
 from features.commands.models.command_record import CommandRecord
+from features.auth.models.owner_account import OwnerAccount
+from features.auth.models.owner_session import OwnerSession
 from storage.base import Base
 
 # this is the Alembic Config object, which provides
