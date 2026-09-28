@@ -16,6 +16,8 @@ from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
 )
+from features.auth.dependencies import get_auth_repository
+from features.auth.repository import AuthRepository
 from features.commands.dependencies import get_command_record_repository
 from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
@@ -93,6 +95,8 @@ def command_records():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
+    auth_repository = AuthRepository(engine)
+    app.dependency_overrides[get_auth_repository] = lambda: auth_repository
     yield CommandRecordRepository(engine)
     engine.dispose()
 
@@ -276,7 +280,10 @@ def test_node_connection_status_tracks_connection_lifecycle():
         websocket.send_json({"device_id": "PC-Umar"})
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
-        response = client.get("/nodes/PC-Umar/connection")
+        response = client.get(
+            "/nodes/PC-Umar/connection",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
 
         assert response.status_code == 200
         assert response.json() == {
@@ -284,7 +291,10 @@ def test_node_connection_status_tracks_connection_lifecycle():
             "connected": True,
         }
 
-    response = client.get("/nodes/PC-Umar/connection")
+    response = client.get(
+        "/nodes/PC-Umar/connection",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
 
     assert response.json() == {
         "device_id": "PC-Umar",
@@ -446,7 +456,7 @@ def test_approval_rejects_missing_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
@@ -455,7 +465,7 @@ def test_fake_command_rejects_missing_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
@@ -467,7 +477,7 @@ def test_fake_command_rejects_invalid_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
@@ -796,3 +806,10 @@ def test_approval_rejects_string_decision(
     stored_record = command_records.get(command_id)
     assert stored_record is not None
     assert stored_record.state == "awaiting_approval"
+
+
+def test_connection_status_rejects_missing_owner_token():
+    response = client.get("/nodes/PC-Umar/connection")
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "Not authenticated"}

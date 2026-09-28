@@ -4,7 +4,7 @@ from json import JSONDecodeError
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.websockets import WebSocketDisconnect
@@ -15,6 +15,7 @@ from venus_protocol.schemas.commands import (
 )
 from venus_protocol.schemas.connections import NodeHello
 
+from features.auth.dependencies import require_owner
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -36,7 +37,7 @@ from config import CoreSettings, get_settings
 
 router = APIRouter()
 
-@router.get("/nodes/{device_id}/connection")
+@router.get("/nodes/{device_id}/connection", dependencies=[Depends(require_owner)])
 async def get_node_connection_status(
     device_id: str,
     registry: Annotated[
@@ -127,26 +128,14 @@ async def connect_node(
         await registry.unregister(hello.device_id, websocket)
 
 
-@router.post("/nodes/{device_id}/commands/fake")
+@router.post("/nodes/{device_id}/commands/fake", dependencies=[Depends(require_owner)])
 async def send_fake_command(
     device_id: str,
-    request: Request,
-    settings: Annotated[CoreSettings, Depends(get_settings)],
     command_records: Annotated[
         CommandRecordRepository,
         Depends(get_command_record_repository),
     ],
 ):
-    authorization = request.headers.get("authorization", "")
-    expected_authorization = f"Bearer {settings.dev_owner_token}"
-
-    if not hmac.compare_digest(authorization, expected_authorization):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid development owner token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     command = OpenApplicationCommand(
         command_id=uuid4(),
         device_id=device_id,
@@ -165,12 +154,10 @@ async def send_fake_command(
     return command.model_dump(mode="json")
 
 
-@router.post("/commands/{command_id}/approval")
+@router.post("/commands/{command_id}/approval", dependencies=[Depends(require_owner)])
 async def decide_command_approval(
     command_id: UUID,
     decision: ApprovalDecision,
-    request: Request,
-    settings: Annotated[CoreSettings, Depends(get_settings)],
     registry: Annotated[
         NodeConnectionRegistry,
         Depends(get_connection_registry),
@@ -184,16 +171,6 @@ async def decide_command_approval(
         Depends(get_command_record_repository),
     ],
 ):
-    authorization = request.headers.get("authorization", "")
-    expected_authorization = f"Bearer {settings.dev_owner_token}"
-
-    if not hmac.compare_digest(authorization, expected_authorization):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid development owner token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     record = command_records.get(command_id)
 
     if record is None:
