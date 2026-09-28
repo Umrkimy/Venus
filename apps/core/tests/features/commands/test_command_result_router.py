@@ -14,6 +14,8 @@ from venus_protocol.schemas.commands import (
     OpenApplicationCommand,
 )
 from config import CoreSettings, get_settings
+from features.auth.dependencies import get_auth_repository
+from features.auth.repository import AuthRepository
 from features.commands.dependencies import get_command_record_repository
 from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
@@ -42,6 +44,8 @@ def command_records():
     app.dependency_overrides[get_command_record_repository] = (
         lambda: repository
     )
+    auth_repository = AuthRepository(engine)
+    app.dependency_overrides[get_auth_repository] = lambda: auth_repository
 
     yield repository
 
@@ -118,7 +122,7 @@ def test_get_command_result_rejects_missing_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
@@ -265,7 +269,7 @@ def test_get_command_status_rejects_missing_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
@@ -277,7 +281,7 @@ def test_get_command_status_rejects_invalid_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
