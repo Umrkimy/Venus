@@ -16,6 +16,8 @@ from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
 )
+from features.auth.dependencies import get_auth_repository
+from features.auth.repository import AuthRepository
 from features.commands.dependencies import get_command_record_repository
 from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
@@ -93,6 +95,8 @@ def command_records():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
+    auth_repository = AuthRepository(engine)
+    app.dependency_overrides[get_auth_repository] = lambda: auth_repository
     yield CommandRecordRepository(engine)
     engine.dispose()
 
