@@ -1,11 +1,10 @@
 from datetime import datetime, timezone
-import hmac
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from config import CoreSettings, get_settings
+from features.auth.dependencies import require_owner
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -19,11 +18,9 @@ from venus_protocol.schemas.commands import CommandResult
 router = APIRouter()
 
 
-@router.get("/commands/{command_id}")
+@router.get("/commands/{command_id}", dependencies=[Depends(require_owner)])
 async def get_command_status(
     command_id: UUID,
-    request: Request,
-    settings: Annotated[CoreSettings, Depends(get_settings)],
     result_registry: Annotated[
         CommandResultRegistry,
         Depends(get_command_result_registry),
@@ -33,16 +30,6 @@ async def get_command_status(
         Depends(get_command_record_repository),
     ],
 ):
-    authorization = request.headers.get("authorization", "")
-    expected_authorization = f"Bearer {settings.dev_owner_token}"
-
-    if not hmac.compare_digest(authorization, expected_authorization):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid development owner token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     result = result_registry.get(command_id)
 
     if result is not None:
@@ -106,11 +93,9 @@ async def get_command_status(
     )
 
 
-@router.get("/commands/{command_id}/result")
+@router.get("/commands/{command_id}/result", dependencies=[Depends(require_owner)])
 async def get_command_result(
     command_id: UUID,
-    request: Request,
-    settings: Annotated[CoreSettings, Depends(get_settings)],
     result_registry: Annotated[
         CommandResultRegistry,
         Depends(get_command_result_registry),
@@ -120,16 +105,6 @@ async def get_command_result(
         Depends(get_command_record_repository),
     ],
 ):
-    authorization = request.headers.get("authorization", "")
-    expected_authorization = f"Bearer {settings.dev_owner_token}"
-
-    if not hmac.compare_digest(authorization, expected_authorization):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid development owner token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     result = result_registry.get(command_id)
 
     if result is not None:

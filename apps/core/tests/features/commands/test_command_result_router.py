@@ -118,7 +118,7 @@ def test_get_command_result_rejects_missing_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
@@ -265,7 +265,7 @@ def test_get_command_status_rejects_missing_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
@@ -277,7 +277,7 @@ def test_get_command_status_rejects_invalid_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
-        "detail": "Invalid development owner token",
+        "detail": "Not authenticated",
     }
 
 
