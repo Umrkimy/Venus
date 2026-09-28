@@ -1,0 +1,34 @@
+from datetime import datetime, timezone
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.engine import Engine
+
+from features.auth.models.owner_account import OwnerAccount
+from features.auth.repository import AuthRepository
+from storage.database import get_database_engine
+
+SESSION_COOKIE_NAME = "venus_session"
+
+def get_auth_repository(
+    engine: Annotated[Engine, Depends(get_database_engine)]
+) -> AuthRepository:
+    return AuthRepository(engine)
+
+
+def get_current_owner(
+    request: Request,
+    repository: Annotated[AuthRepository, Depends(get_auth_repository)],
+) -> OwnerAccount:
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    owner = None
+    if token is not None:
+        owner = repository.get_owner_for_session(token, datetime.now(timezone.utc))
+    if owner is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not logged in")
+    return owner
+    
+    
+
+
+
