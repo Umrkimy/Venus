@@ -25,6 +25,9 @@ class NodeConnectionRegistry:
     def get(self, device_id: str) -> WebSocket | None:
         return self._connections.get(device_id)
 
+    def connected_device_ids(self) -> list[str]:
+        return sorted(self._connections)
+
     async def unregister(
         self,
         device_id: str,
