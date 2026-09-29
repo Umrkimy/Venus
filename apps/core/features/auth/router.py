@@ -9,29 +9,48 @@ from features.auth.dependencies import (
     get_current_owner,
 )
 from features.auth.models.owner_account import OwnerAccount
-from features.auth.passwords import verify_password
+from features.auth.passwords import hash_password, verify_password
+from features.auth.rate_limit import LoginRateLimiter, get_login_rate_limiter
 from features.auth.repository import SESSION_LIFETIME, AuthRepository
 from features.auth.schemas import LoginRequest, OwnerResponse
 
 
 router = APIRouter(prefix="/auth")
 
+_DUMMY_HASH = hash_password("venus-dummy-password")
+
 
 @router.post("/login")
 def login(
     body: LoginRequest,
+    request: Request,
     response: Response,
     repository: Annotated[AuthRepository, Depends(get_auth_repository)],
+    limiter: Annotated[LoginRateLimiter, Depends(get_login_rate_limiter)],
 ) -> OwnerResponse:
-    owner = repository.get_owner_by_username(body.username)
+    now = datetime.now(timezone.utc)
+    client_key = request.client.host if request.client else "unknown"
 
-    if owner is None or not verify_password(body.password, owner.password_hash):
+    if limiter.is_blocked(client_key, now):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts",
+        )
+
+    owner = repository.get_owner_by_username(body.username)
+    password_hash_value = owner.password_hash if owner else _DUMMY_HASH
+    password_ok = verify_password(body.password, password_hash_value)
+
+    if owner is None or not password_ok:
+        limiter.record_failure(client_key, now)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
-    token = repository.create_session(owner.account_id, datetime.now(timezone.utc))
+    limiter.reset(client_key)
+    repository.delete_expired_sessions(owner.account_id, now)
+    token = repository.create_session(owner.account_id, now)
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,

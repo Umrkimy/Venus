@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -90,3 +90,13 @@ class AuthRepository:
             if owner_session is not None:
                 session.delete(owner_session)
                 session.commit()
+
+    def delete_expired_sessions(self, account_id: UUID, now: datetime) -> None:
+        with Session(self._engine) as session:
+            session.execute(
+                delete(OwnerSession).where(
+                    OwnerSession.account_id == account_id,
+                    OwnerSession.expires_at <= now,
+                )
+            )
+            session.commit()

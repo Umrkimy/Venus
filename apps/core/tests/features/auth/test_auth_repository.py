@@ -56,6 +56,25 @@ def test_create_session_stores_hash_not_raw_token():
         engine.dispose()
 
 
+def test_delete_expired_sessions_keeps_live_sessions():
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    repository = AuthRepository(engine)
+    now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+    owner = repository.create_owner("umar", hash_password("pw"), now)
+    repository.create_session(owner.account_id, now - SESSION_LIFETIME)
+    live_token = repository.create_session(owner.account_id, now)
+
+    try:
+        repository.delete_expired_sessions(owner.account_id, now)
+
+        with Session(engine) as db_session:
+            stored = db_session.query(OwnerSession.token_hash).all()
+        assert [row.token_hash for row in stored] == [hash_token(live_token)]
+    finally:
+        engine.dispose()
+
+
 def test_has_owner_is_false_until_owner_created():
     engine = create_database_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
