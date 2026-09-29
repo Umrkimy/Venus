@@ -22,14 +22,15 @@ developer command is the only path that asks Windows to launch it.
 The explicit local developer command can request Windows to open Spotify using
 the Node's private `spotify:` target. It bypasses future confirmation policy
 and does not prove Spotify is healthy after Windows accepts the launch request.
-No other Windows application is allowlisted yet. There is no web UI,
-production owner authentication/enrollment flow, paid AI provider, or internet
-exposure.
+No other Windows application is allowlisted yet. A minimal Next.js web UI in
+`apps/web` can sign the owner in and out through Core. There is no paid AI
+provider or internet exposure.
 
 ## Requirements
 
 - Windows
 - Python 3.11+
+- Node.js 22+ (for the web UI)
 
 ## Local setup
 
@@ -91,6 +92,21 @@ Set-Location apps/core
 ```
 
 Open `http://127.0.0.1:8000/docs` to try the fake Core endpoints.
+
+## Run the web UI
+
+Start Core first. Then install and start the web app:
+
+```powershell
+Set-Location apps/web
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000/login`. The web app forwards `/api/*` to Core, so
+the browser only talks to one origin and the session cookie works without
+CORS. Core defaults to `http://127.0.0.1:8000`; to point elsewhere, copy
+`apps/web/.env.example` to `apps/web/.env.local` and set `CORE_URL`.
 
 ## Run the authenticated fake Node connection
 
