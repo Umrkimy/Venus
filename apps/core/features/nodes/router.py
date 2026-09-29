@@ -37,6 +37,16 @@ from config import CoreSettings, get_settings
 
 router = APIRouter()
 
+@router.get("/nodes", dependencies=[Depends(require_owner)])
+async def list_connected_nodes(
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
+):
+    return {"device_ids": registry.connected_device_ids()}
+
+
 @router.get("/nodes/{device_id}/connection", dependencies=[Depends(require_owner)])
 async def get_node_connection_status(
     device_id: str,

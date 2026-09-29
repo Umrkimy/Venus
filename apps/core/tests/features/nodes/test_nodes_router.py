@@ -813,3 +813,47 @@ def test_connection_status_rejects_missing_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "Not authenticated"}
+
+
+def test_list_nodes_rejects_missing_owner_token():
+    response = client.get("/nodes")
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "Not authenticated"}
+
+
+def test_list_nodes_shows_connected_node():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: registry
+    )
+
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json({"device_id": "PC-Umar"})
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+
+        response = client.get(
+            "/nodes",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"device_ids": ["PC-Umar"]}
+
+
+def test_list_nodes_empty_when_none_connected():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: registry
+    )
+
+    response = client.get(
+        "/nodes",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"device_ids": []}
