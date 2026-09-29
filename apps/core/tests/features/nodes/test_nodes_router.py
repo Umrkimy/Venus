@@ -34,6 +34,7 @@ from venus_protocol.schemas.commands import (
 
 TEST_NODE_TOKEN = "test-node-token"
 TEST_OWNER_TOKEN = "test-owner-token"
+OPEN_SPOTIFY = {"application_id": "spotify"}
 
 
 def test_result_storage_failure_does_not_publish_success(
@@ -56,7 +57,8 @@ def test_result_storage_failure_does_not_publish_success(
         websocket.send_json({"device_id": "PC-Umar"})
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
         proposal = client.post(
-            "/nodes/PC-Umar/commands/fake", headers=owner_headers,
+            "/nodes/PC-Umar/commands", headers=owner_headers,
+            json=OPEN_SPOTIFY,
         ).json()
         command = OpenApplicationCommand.model_validate(proposal)
         approval = client.post(
@@ -317,7 +319,8 @@ def test_node_connection_records_command_result(command_records: CommandRecordRe
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         response = client.post(
-            "/nodes/PC-Umar/commands/fake",
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
         command = OpenApplicationCommand.model_validate(response.json())
@@ -346,11 +349,12 @@ def test_node_connection_records_command_result(command_records: CommandRecordRe
     assert stored_record.detail == "Fake command completed"
     assert stored_record.completed_at is not None
 
-def test_fake_command_creates_awaiting_approval_record(
+def test_propose_command_creates_awaiting_approval_record(
     command_records: CommandRecordRepository,
 ):
     response = client.post(
-        "/nodes/PC-Umar/commands/fake",
+        "/nodes/PC-Umar/commands",
+        json=OPEN_SPOTIFY,
         headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
     )
     command = OpenApplicationCommand.model_validate(response.json())
@@ -390,9 +394,10 @@ def test_node_connection_rejects_unsolicited_result():
     assert result_registry.get(command_id) is None
 
 
-def test_fake_command_creates_proposal_for_disconnected_node():
+def test_propose_command_creates_proposal_for_disconnected_node():
     response = client.post(
-        "/nodes/PC-Umar/commands/fake",
+        "/nodes/PC-Umar/commands",
+        json=OPEN_SPOTIFY,
         headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
     )
 
@@ -403,7 +408,8 @@ def test_owner_denial_completes_proposal_without_dispatch(
     command_records: CommandRecordRepository,
 ):
     proposal_response = client.post(
-        "/nodes/PC-Umar/commands/fake",
+        "/nodes/PC-Umar/commands",
+        json=OPEN_SPOTIFY,
         headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
     )
     command = OpenApplicationCommand.model_validate(proposal_response.json())
@@ -432,7 +438,8 @@ def test_approval_rejects_disconnected_node_without_dispatch(
     command_records: CommandRecordRepository,
 ):
     proposal_response = client.post(
-        "/nodes/PC-Umar/commands/fake",
+        "/nodes/PC-Umar/commands",
+        json=OPEN_SPOTIFY,
         headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
     )
     command = OpenApplicationCommand.model_validate(proposal_response.json())
@@ -460,8 +467,18 @@ def test_approval_rejects_missing_owner_token():
     }
 
 
-def test_fake_command_rejects_missing_owner_token():
-    response = client.post("/nodes/PC-Umar/commands/fake")
+def test_propose_command_rejects_unknown_application():
+    response = client.post(
+        "/nodes/PC-Umar/commands",
+        json={"application_id": "cmd"},
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_propose_command_rejects_missing_owner_token():
+    response = client.post("/nodes/PC-Umar/commands", json=OPEN_SPOTIFY)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {
@@ -469,9 +486,10 @@ def test_fake_command_rejects_missing_owner_token():
     }
 
 
-def test_fake_command_rejects_invalid_owner_token():
+def test_propose_command_rejects_invalid_owner_token():
     response = client.post(
-        "/nodes/PC-Umar/commands/fake",
+        "/nodes/PC-Umar/commands",
+        json=OPEN_SPOTIFY,
         headers={"Authorization": "Bearer invalid-owner-token"},
     )
 
@@ -481,7 +499,7 @@ def test_fake_command_rejects_invalid_owner_token():
     }
 
 
-def test_fake_commands_share_connected_node_session():
+def test_proposed_commands_share_connected_node_session():
     connection_registry = NodeConnectionRegistry()
     result_registry = CommandResultRegistry()
     app.dependency_overrides[get_connection_registry] = (
@@ -499,7 +517,8 @@ def test_fake_commands_share_connected_node_session():
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         first_response = client.post(
-            "/nodes/PC-Umar/commands/fake",
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
@@ -527,7 +546,8 @@ def test_fake_commands_share_connected_node_session():
         websocket.send_json(first_result.model_dump(mode="json"))
 
         second_response = client.post(
-            "/nodes/PC-Umar/commands/fake",
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
@@ -574,7 +594,8 @@ def test_node_connection_rejects_wrong_result_without_completing_record(
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         response = client.post(
-            "/nodes/PC-Umar/commands/fake",
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
         command = OpenApplicationCommand.model_validate(response.json())
@@ -626,7 +647,8 @@ def test_approval_rejects_repeated_decision():
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         proposal_response = client.post(
-            "/nodes/PC-Umar/commands/fake",
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
         command = OpenApplicationCommand.model_validate(
@@ -674,7 +696,8 @@ def test_approval_rejects_approval_after_denial(
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         proposal_response = client.post(
-            "/nodes/PC-Umar/commands/fake",
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
         command = OpenApplicationCommand.model_validate(
@@ -769,7 +792,8 @@ def test_approval_rejects_expiry_between_read_and_decision(
         websocket.send_json({"device_id": "PC-Umar"})
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
         proposal = client.post(
-            "/nodes/PC-Umar/commands/fake", headers=owner_headers,
+            "/nodes/PC-Umar/commands", headers=owner_headers,
+            json=OPEN_SPOTIFY,
         ).json()
         command = OpenApplicationCommand.model_validate(proposal)
         response = client.post(

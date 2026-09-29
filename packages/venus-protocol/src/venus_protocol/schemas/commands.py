@@ -5,12 +5,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
+# Applications a Node may open. Add new ones here.
+ApplicationId = Literal["spotify"]
+
+
 class OpenApplicationCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     command_id: UUID
     device_id: str
-    application_id: Literal["spotify"]
+    application_id: ApplicationId
     expires_at: datetime
 
     @field_validator("device_id")
