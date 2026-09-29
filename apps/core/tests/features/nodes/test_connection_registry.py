@@ -3,6 +3,7 @@ import asyncio
 from fastapi import status
 
 from features.nodes.connection_registry import NodeConnectionRegistry
+from venus_protocol.schemas.connections import NodeApp
 
 
 def test_register_replaces_existing_connection():
@@ -55,3 +56,28 @@ def test_unregister_keeps_newer_replacement():
     )
 
     assert registry.get("PC-Umar") is new_websocket
+
+
+def test_unregister_removes_apps():
+    class FakeWebSocket:
+        async def close(self, code: int):
+            pass
+
+    async def register_then_unregister():
+        registry = NodeConnectionRegistry()
+        websocket = FakeWebSocket()
+
+        await registry.register(
+            "PC-Umar",
+            websocket,
+            [NodeApp(name="Spotify", app_id="spotify")],
+        )
+        apps_while_connected = registry.apps_for("PC-Umar")
+        await registry.unregister("PC-Umar", websocket)
+
+        return registry, apps_while_connected
+
+    registry, apps_while_connected = asyncio.run(register_then_unregister())
+
+    assert apps_while_connected == [NodeApp(name="Spotify", app_id="spotify")]
+    assert registry.apps_for("PC-Umar") is None

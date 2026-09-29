@@ -6,6 +6,7 @@ from venus_node.commands.factory import (
     create_fake_node_executor,
     create_node_executor,
 )
+from venus_node.commands.start_apps import StartApp, read_start_apps, run_powershell
 from venus_node.connection.client import keep_connected
 from venus_protocol.schemas.connections import NodeHello
 
@@ -26,6 +27,7 @@ def run_connect(env_file: Path) -> None:
             on_connected=print_connected,
             on_retry=print_retry,
             execute_payload=executor.execute_payload,
+            list_apps=list_reported_apps,
         ),
     )
 
@@ -36,6 +38,11 @@ def print_connected(hello: NodeHello) -> None:
 
 def print_retry() -> None:
     print("Core unavailable; retrying in 1 second")
+
+
+def list_reported_apps() -> list[StartApp]:
+    # Temporary: the web sends "spotify" until the app picker replaces it
+    return [StartApp(name="Spotify", app_id="spotify"), *read_start_apps(run_powershell)]
 
 
 def main() -> None:

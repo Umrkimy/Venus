@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 import pytest
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
@@ -35,6 +37,11 @@ from venus_protocol.schemas.commands import (
 TEST_NODE_TOKEN = "test-node-token"
 TEST_OWNER_TOKEN = "test-owner-token"
 OPEN_SPOTIFY = {"application_id": "spotify"}
+# The Node reports the apps this PC can open; Core only accepts those
+PC_UMAR_HELLO = {
+    "device_id": "PC-Umar",
+    "apps": [{"name": "Spotify", "app_id": "spotify"}],
+}
 
 
 def test_result_storage_failure_does_not_publish_success(
@@ -54,7 +61,7 @@ def test_result_storage_failure_does_not_publish_success(
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
         proposal = client.post(
             "/nodes/PC-Umar/commands", headers=owner_headers,
@@ -87,6 +94,17 @@ def test_result_storage_failure_does_not_publish_success(
 
 
 client = TestClient(app)
+
+
+@contextmanager
+def connected_pc_umar():
+    with client.websocket_connect(
+        "/nodes/connect",
+        headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+    ) as websocket:
+        websocket.send_json(PC_UMAR_HELLO)
+        assert websocket.receive_json() == {"device_id": "PC-Umar"}
+        yield websocket
 
 
 @pytest.fixture(autouse=True)
@@ -232,7 +250,7 @@ def test_node_connection_replaces_existing_device_connection():
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as old_connection:
-        old_connection.send_json({"device_id": "PC-Umar"})
+        old_connection.send_json(PC_UMAR_HELLO)
 
         assert old_connection.receive_json() == {"device_id": "PC-Umar"}
 
@@ -240,7 +258,7 @@ def test_node_connection_replaces_existing_device_connection():
             "/nodes/connect",
             headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
         ) as new_connection:
-            new_connection.send_json({"device_id": "PC-Umar"})
+            new_connection.send_json(PC_UMAR_HELLO)
 
             assert new_connection.receive_json() == {
                 "device_id": "PC-Umar",
@@ -262,7 +280,7 @@ def test_node_connection_unregisters_disconnected_device():
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
 
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
@@ -279,7 +297,7 @@ def test_node_connection_status_tracks_connection_lifecycle():
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         response = client.get(
@@ -315,7 +333,7 @@ def test_node_connection_records_command_result(command_records: CommandRecordRe
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         response = client.post(
@@ -352,11 +370,12 @@ def test_node_connection_records_command_result(command_records: CommandRecordRe
 def test_propose_command_creates_awaiting_approval_record(
     command_records: CommandRecordRepository,
 ):
-    response = client.post(
-        "/nodes/PC-Umar/commands",
-        json=OPEN_SPOTIFY,
-        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
-    )
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
     command = OpenApplicationCommand.model_validate(response.json())
     stored_record = command_records.get(command.command_id)
 
@@ -386,7 +405,7 @@ def test_node_connection_rejects_unsolicited_result():
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         websocket.send_json(unsolicited_result.model_dump(mode="json"))
@@ -394,24 +413,31 @@ def test_node_connection_rejects_unsolicited_result():
     assert result_registry.get(command_id) is None
 
 
-def test_propose_command_creates_proposal_for_disconnected_node():
+def test_propose_command_rejects_disconnected_node():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: registry
+    )
+
     response = client.post(
         "/nodes/PC-Umar/commands",
         json=OPEN_SPOTIFY,
         headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
     )
 
-    assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json() == {"detail": "Node is not connected"}
 
 
 def test_owner_denial_completes_proposal_without_dispatch(
     command_records: CommandRecordRepository,
 ):
-    proposal_response = client.post(
-        "/nodes/PC-Umar/commands",
-        json=OPEN_SPOTIFY,
-        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
-    )
+    with connected_pc_umar():
+        proposal_response = client.post(
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
     command = OpenApplicationCommand.model_validate(proposal_response.json())
 
     denial_response = client.post(
@@ -437,11 +463,12 @@ def test_owner_denial_completes_proposal_without_dispatch(
 def test_approval_rejects_disconnected_node_without_dispatch(
     command_records: CommandRecordRepository,
 ):
-    proposal_response = client.post(
-        "/nodes/PC-Umar/commands",
-        json=OPEN_SPOTIFY,
-        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
-    )
+    with connected_pc_umar():
+        proposal_response = client.post(
+            "/nodes/PC-Umar/commands",
+            json=OPEN_SPOTIFY,
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
     command = OpenApplicationCommand.model_validate(proposal_response.json())
 
     approval_response = client.post(
@@ -475,6 +502,18 @@ def test_propose_command_rejects_blank_application():
     )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_propose_command_rejects_app_not_on_node():
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands",
+            json={"application_id": "notepad-id"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "Application is not on this PC"}
 
 
 def test_propose_command_rejects_missing_owner_token():
@@ -513,7 +552,7 @@ def test_proposed_commands_share_connected_node_session():
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         first_response = client.post(
@@ -590,7 +629,7 @@ def test_node_connection_rejects_wrong_result_without_completing_record(
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         response = client.post(
@@ -643,7 +682,7 @@ def test_approval_rejects_repeated_decision():
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         proposal_response = client.post(
@@ -692,7 +731,7 @@ def test_approval_rejects_approval_after_denial(
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         proposal_response = client.post(
@@ -789,7 +828,7 @@ def test_approval_rejects_expiry_between_read_and_decision(
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
         proposal = client.post(
             "/nodes/PC-Umar/commands", headers=owner_headers,
@@ -856,7 +895,7 @@ def test_list_nodes_shows_connected_node():
         "/nodes/connect",
         headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
     ) as websocket:
-        websocket.send_json({"device_id": "PC-Umar"})
+        websocket.send_json(PC_UMAR_HELLO)
         assert websocket.receive_json() == {"device_id": "PC-Umar"}
 
         response = client.get(
@@ -881,3 +920,44 @@ def test_list_nodes_empty_when_none_connected():
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"device_ids": []}
+
+
+def test_list_node_apps_returns_reported_apps():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: registry
+    )
+
+    with connected_pc_umar():
+        response = client.get(
+            "/nodes/PC-Umar/apps",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "device_id": "PC-Umar",
+        "apps": [{"name": "Spotify", "app_id": "spotify"}],
+    }
+
+
+def test_list_node_apps_rejects_disconnected_node():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = (
+        lambda: registry
+    )
+
+    response = client.get(
+        "/nodes/PC-Umar/apps",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Node is not connected"}
+
+
+def test_list_node_apps_rejects_missing_owner_token():
+    response = client.get("/nodes/PC-Umar/apps")
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "Not authenticated"}
