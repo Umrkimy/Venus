@@ -41,8 +41,7 @@ def print_retry() -> None:
 
 
 def list_reported_apps() -> list[StartApp]:
-    # Temporary: the web sends "spotify" until the app picker replaces it
-    return [StartApp(name="Spotify", app_id="spotify"), *read_start_apps(run_powershell)]
+    return read_start_apps(run_powershell)
 
 
 def main() -> None:

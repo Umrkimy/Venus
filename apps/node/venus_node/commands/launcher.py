@@ -16,15 +16,6 @@ def create_application_command_executor(
     list_apps: Callable[[], list[StartApp]],
 ) -> Callable[[OpenApplicationCommand], CommandResult]:
     def execute(command: OpenApplicationCommand) -> CommandResult:
-        # Temporary: the web sends "spotify" until the app picker replaces it
-        if command.application_id == "spotify":
-            start_target(settings.spotify_target)
-            return CommandResult(
-                command_id=command.command_id,
-                status="succeeded",
-                detail="Launch requested",
-            )
-
         # Read the list each time so newly installed apps work right away
         listed_ids = {app.app_id for app in list_apps()}
         if command.application_id not in listed_ids:

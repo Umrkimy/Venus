@@ -9,6 +9,7 @@ import pytest
 from venus_node.commands.executor import NodeExecutor, execute_fake
 from venus_node.config import NodeSettings
 from venus_node.commands.launcher import create_application_command_executor
+from venus_node.commands.start_apps import StartApp
 from venus_node.storage.repositories.command_records import CommandRecordRepository
 from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand
 from venus_node.storage.models.command_record import CommandRecord
@@ -492,18 +493,17 @@ def test_executor_uses_injected_command_executor(tmp_path):
     assert executed_command_ids == [command_id]
 
 
-def test_executor_runs_configured_spotify_launcher(tmp_path):
+def test_executor_launches_listed_app_through_apps_folder(tmp_path):
     command_id = uuid4()
     launched_targets: list[str] = []
     command_executor = create_application_command_executor(
         settings=NodeSettings(
             device_id="laptop-1",
-            spotify_target="spotify:",
             core_dev_token="test-node-token",
             core_url="ws://core.test/nodes/connect",
         ),
         start_target=launched_targets.append,
-        list_apps=lambda: [],
+        list_apps=lambda: [StartApp(name="Notepad", app_id="notepad-id")],
     )
     executor = NodeExecutor(
         device_id="laptop-1",
@@ -515,7 +515,7 @@ def test_executor_runs_configured_spotify_launcher(tmp_path):
         {
             "command_id": str(command_id),
             "device_id": "laptop-1",
-            "application_id": "spotify",
+            "application_id": "notepad-id",
             "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
             + timedelta(minutes=5),
         }
@@ -523,10 +523,10 @@ def test_executor_runs_configured_spotify_launcher(tmp_path):
 
     assert result is not None
     assert result.status == "succeeded"
-    assert launched_targets == ["spotify:"]
+    assert launched_targets == ["shell:AppsFolder\\notepad-id"]
 
 
-def test_executor_records_failed_result_when_spotify_launch_fails(tmp_path):
+def test_executor_records_failed_result_when_app_launch_fails(tmp_path):
     command_id = uuid4()
 
     def failing_start_target(target: str) -> None:
@@ -536,12 +536,11 @@ def test_executor_records_failed_result_when_spotify_launch_fails(tmp_path):
     command_executor = create_application_command_executor(
         settings=NodeSettings(
             device_id="laptop-1",
-            spotify_target="spotify:",
             core_dev_token="test-node-token",
             core_url="ws://core.test/nodes/connect",
         ),
         start_target=failing_start_target,
-        list_apps=lambda: [],
+        list_apps=lambda: [StartApp(name="Notepad", app_id="notepad-id")],
     )
     executor = NodeExecutor(
         device_id="laptop-1",
@@ -553,7 +552,7 @@ def test_executor_records_failed_result_when_spotify_launch_fails(tmp_path):
         {
             "command_id": str(command_id),
             "device_id": "laptop-1",
-            "application_id": "spotify",
+            "application_id": "notepad-id",
             "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
             + timedelta(minutes=5),
         }

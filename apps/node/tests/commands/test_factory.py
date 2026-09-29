@@ -8,6 +8,7 @@ from venus_node.commands.factory import (
     create_fake_node_executor,
     create_node_executor,
 )
+from venus_node.commands.start_apps import StartApp
 
 
 def test_create_node_executor_uses_private_settings_and_windows_launcher(
@@ -17,7 +18,6 @@ def test_create_node_executor_uses_private_settings_and_windows_launcher(
     env_file = tmp_path / ".env"
     env_file.write_text(
         "VENUS_NODE_DEVICE_ID=laptop-1\n"
-        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
         "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
         "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
     )
@@ -29,6 +29,11 @@ def test_create_node_executor_uses_private_settings_and_windows_launcher(
         "start_windows_target",
         started_targets.append,
     )
+    monkeypatch.setattr(
+        runtime,
+        "read_start_apps",
+        lambda run_powershell: [StartApp(name="Notepad", app_id="notepad-id")],
+    )
 
     executor = create_node_executor(
         env_file=env_file,
@@ -39,7 +44,7 @@ def test_create_node_executor_uses_private_settings_and_windows_launcher(
         {
             "command_id": str(uuid4()),
             "device_id": "laptop-1",
-            "application_id": "spotify",
+            "application_id": "notepad-id",
             "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
             + timedelta(minutes=5),
         }
@@ -47,7 +52,7 @@ def test_create_node_executor_uses_private_settings_and_windows_launcher(
 
     assert result is not None
     assert result.status == "succeeded"
-    assert started_targets == ["spotify:"]
+    assert started_targets == ["shell:AppsFolder\\notepad-id"]
 
 
 def test_create_fake_node_executor_does_not_launch_windows_target(
@@ -57,7 +62,6 @@ def test_create_fake_node_executor_does_not_launch_windows_target(
     env_file = tmp_path / ".env"
     env_file.write_text(
         "VENUS_NODE_DEVICE_ID=laptop-1\n"
-        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
         "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
         "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
     )

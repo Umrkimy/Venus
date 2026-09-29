@@ -45,7 +45,6 @@ def test_start_windows_target_windows_failure_is_not_hidden(monkeypatch):
 def make_settings() -> NodeSettings:
     return NodeSettings(
         device_id="laptop-1",
-        spotify_target="spotify:",
         core_dev_token="test-node-token",
         core_url="ws://core.test/nodes/connect",
     )
