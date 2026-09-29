@@ -75,7 +75,8 @@ export default function NodeCommands() {
 
   async function propose(deviceId: string) {
     const data = await post(
-      `/api/nodes/${encodeURIComponent(deviceId)}/commands/open-spotify`,
+      `/api/nodes/${encodeURIComponent(deviceId)}/commands`,
+      { application_id: "spotify" },
     );
     if (data) setCommandId(data.command_id);
   }

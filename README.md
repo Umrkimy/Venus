@@ -121,13 +121,14 @@ Set-Location apps/node
 The Node prints `Core confirmed Node: ...` after the authenticated hello.
 
 With Core and Node running, use the web UI, or a third PowerShell window, to
-propose an Open Spotify command. Replace the placeholder with the value in
+propose a command (today only `spotify` is allowed). Replace the placeholder with the value in
 `apps/core/.env`:
 
 ```powershell
 $headers = @{ Authorization = "Bearer your-development-owner-token" }
 Invoke-RestMethod -Method Post -Headers $headers `
-  http://127.0.0.1:8000/nodes/your-device-id/commands/open-spotify
+  -ContentType "application/json" -Body '{"application_id": "spotify"}' `
+  http://127.0.0.1:8000/nodes/your-device-id/commands
 ```
 
 This creates a proposal that waits for approval. Approve it with
