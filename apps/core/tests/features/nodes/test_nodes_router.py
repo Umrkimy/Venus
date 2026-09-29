@@ -467,10 +467,10 @@ def test_approval_rejects_missing_owner_token():
     }
 
 
-def test_propose_command_rejects_unknown_application():
+def test_propose_command_rejects_blank_application():
     response = client.post(
         "/nodes/PC-Umar/commands",
-        json={"application_id": "cmd"},
+        json={"application_id": "   "},
         headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
     )
 

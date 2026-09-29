@@ -1,12 +1,16 @@
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
 
-# Applications a Node may open. Add new ones here.
-ApplicationId = Literal["spotify"]
+# A Start menu AppID. The Node checks it against the PC's Start menu list.
+# Max 100 matches Core's command_records column; raise both together.
+ApplicationId = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+]
 
 
 class OpenApplicationCommand(BaseModel):

@@ -8,7 +8,7 @@ import pytest
 
 from venus_node.commands.executor import NodeExecutor, execute_fake
 from venus_node.config import NodeSettings
-from venus_node.commands.launcher import create_spotify_command_executor
+from venus_node.commands.launcher import create_application_command_executor
 from venus_node.storage.repositories.command_records import CommandRecordRepository
 from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand
 from venus_node.storage.models.command_record import CommandRecord
@@ -50,7 +50,7 @@ def test_execute_payload_denies_invalid_command_with_valid_id(tmp_path):
         {
             "command_id": str(command_id),
             "device_id": "laptop-1",
-            "application_id": "brave",
+            "application_id": "   ",
             "expires_at": datetime.now(
                 ZoneInfo("Asia/Kuala_Lumpur")
             ) + timedelta(minutes=5),
@@ -495,7 +495,7 @@ def test_executor_uses_injected_command_executor(tmp_path):
 def test_executor_runs_configured_spotify_launcher(tmp_path):
     command_id = uuid4()
     launched_targets: list[str] = []
-    command_executor = create_spotify_command_executor(
+    command_executor = create_application_command_executor(
         settings=NodeSettings(
             device_id="laptop-1",
             spotify_target="spotify:",
@@ -503,6 +503,7 @@ def test_executor_runs_configured_spotify_launcher(tmp_path):
             core_url="ws://core.test/nodes/connect",
         ),
         start_target=launched_targets.append,
+        list_apps=lambda: [],
     )
     executor = NodeExecutor(
         device_id="laptop-1",
@@ -532,7 +533,7 @@ def test_executor_records_failed_result_when_spotify_launch_fails(tmp_path):
         raise OSError("Windows failure")
 
     repository = CommandRecordRepository(tmp_path / "node.db")
-    command_executor = create_spotify_command_executor(
+    command_executor = create_application_command_executor(
         settings=NodeSettings(
             device_id="laptop-1",
             spotify_target="spotify:",
@@ -540,6 +541,7 @@ def test_executor_records_failed_result_when_spotify_launch_fails(tmp_path):
             core_url="ws://core.test/nodes/connect",
         ),
         start_target=failing_start_target,
+        list_apps=lambda: [],
     )
     executor = NodeExecutor(
         device_id="laptop-1",
