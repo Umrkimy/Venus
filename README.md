@@ -15,9 +15,10 @@ This is an early local-only learning build. The repository currently includes:
   a Node restart.
 
 Core and Node also have an authenticated local WebSocket connection. Core can
-send typed fake commands to a connected Node, and the Node returns typed fake
-results. The connection path never launches Spotify; the separate `dev_run`
-developer command is the only path that asks Windows to launch it.
+propose an Open Spotify command for a Node; after the owner approves it, Core
+sends it to the connected Node and the Node returns a typed result. The Node
+launches Spotify only when `VENUS_NODE_REAL_ACTIONS=true` is set in
+`apps/node/.env` (default `false`, which records a fake result).
 
 The explicit local developer command can request Windows to open Spotify using
 the Node's private `spotify:` target. It bypasses future confirmation policy
@@ -119,17 +120,20 @@ Set-Location apps/node
 
 The Node prints `Core confirmed Node: ...` after the authenticated hello.
 
-With Core and Node running, a third PowerShell window can request a fake
-command. Replace the placeholder with the value in `apps/core/.env`:
+With Core and Node running, use the web UI, or a third PowerShell window, to
+propose an Open Spotify command. Replace the placeholder with the value in
+`apps/core/.env`:
 
 ```powershell
 $headers = @{ Authorization = "Bearer your-development-owner-token" }
 Invoke-RestMethod -Method Post -Headers $headers `
-  http://127.0.0.1:8000/nodes/your-device-id/commands/fake
+  http://127.0.0.1:8000/nodes/your-device-id/commands/open-spotify
 ```
 
-This exercises typed transport and fake SQLite command records. It does not
-launch Spotify.
+This creates a proposal that waits for approval. Approve it with
+`POST /commands/{command_id}/approval` and the body `{"approved": true}`.
+With real actions off, the Node records a fake result and does not launch
+Spotify.
 
 ## Run the local Spotify developer command
 

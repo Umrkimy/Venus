@@ -138,8 +138,8 @@ async def connect_node(
         await registry.unregister(hello.device_id, websocket)
 
 
-@router.post("/nodes/{device_id}/commands/fake", dependencies=[Depends(require_owner)])
-async def send_fake_command(
+@router.post("/nodes/{device_id}/commands/open-spotify", dependencies=[Depends(require_owner)])
+async def propose_open_spotify(
     device_id: str,
     command_records: Annotated[
         CommandRecordRepository,
