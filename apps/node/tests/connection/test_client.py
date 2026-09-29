@@ -18,7 +18,6 @@ from websockets.exceptions import ConnectionClosedOK
 def test_connect_to_core_sends_authenticated_hello(monkeypatch):
     settings = NodeSettings(
         device_id="laptop-1",
-        spotify_target="spotify:",
         core_dev_token="test-node-token",
         core_url="ws://core.test/nodes/connect",
     )
@@ -81,7 +80,6 @@ def test_connect_to_core_sends_authenticated_hello(monkeypatch):
 def test_keep_connected_retries_after_network_failure(monkeypatch):
     settings = NodeSettings(
         device_id="laptop-1",
-        spotify_target="spotify:",
         core_dev_token="test-node-token",
         core_url="ws://core.test/nodes/connect",
     )
@@ -131,7 +129,6 @@ def test_keep_connected_retries_after_network_failure(monkeypatch):
 def test_keep_connected_retries_after_abnormal_disconnect(monkeypatch):
     settings = NodeSettings(
         device_id="laptop-1",
-        spotify_target="spotify:",
         core_dev_token="test-node-token",
         core_url="ws://core.test/nodes/connect",
     )
@@ -181,7 +178,6 @@ def test_keep_connected_retries_after_abnormal_disconnect(monkeypatch):
 def test_keep_connected_retries_after_core_disconnect(monkeypatch):
     settings = NodeSettings(
         device_id="laptop-1",
-        spotify_target="spotify:",
         core_dev_token="test-node-token",
         core_url="ws://core.test/nodes/connect",
     )
@@ -307,7 +303,6 @@ def test_receive_and_execute_command_sends_result():
 def test_connect_to_core_executes_multiple_received_commands(monkeypatch):
     settings = NodeSettings(
         device_id="laptop-1",
-        spotify_target="spotify:",
         core_dev_token="test-node-token",
         core_url="ws://core.test/nodes/connect",
     )
@@ -372,7 +367,6 @@ def test_connect_to_core_executes_multiple_received_commands(monkeypatch):
 def test_connect_to_core_sends_apps_in_hello(monkeypatch):
     settings = NodeSettings(
         device_id="laptop-1",
-        spotify_target="spotify:",
         core_dev_token="test-node-token",
         core_url="ws://core.test/nodes/connect",
     )

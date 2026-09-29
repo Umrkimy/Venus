@@ -5,11 +5,10 @@ import venus_node.cli.dev_run as dev_run
 from venus_protocol.schemas.commands import CommandResult
 
 
-def test_run_spotify_sends_local_spotify_command(tmp_path, monkeypatch):
+def test_run_app_sends_local_command_for_given_app_id(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text(
         "VENUS_NODE_DEVICE_ID=laptop-1\n"
-        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
         "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
         "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
     )
@@ -23,7 +22,7 @@ def test_run_spotify_sends_local_spotify_command(tmp_path, monkeypatch):
             return CommandResult(
                 command_id=UUID(str(payload["command_id"])),
                 status="succeeded",
-                detail="Fake Spotify launch",
+                detail="Fake app launch",
             )
 
     monkeypatch.setattr(
@@ -32,13 +31,14 @@ def test_run_spotify_sends_local_spotify_command(tmp_path, monkeypatch):
         lambda env_file, database_path: FakeNodeExecutor(),
     )
 
-    result = dev_run.run_spotify(
+    result = dev_run.run_app(
         env_file=env_file,
         database_path=database_path,
+        app_id="notepad-id",
     )
 
     assert result.status == "succeeded"
     assert len(received_payloads) == 1
     assert received_payloads[0]["device_id"] == "laptop-1"
-    assert received_payloads[0]["application_id"] == "spotify"
+    assert received_payloads[0]["application_id"] == "notepad-id"
     UUID(str(received_payloads[0]["command_id"]))

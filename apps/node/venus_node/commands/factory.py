@@ -36,7 +36,7 @@ def create_fake_node_executor(
     settings = load_settings(env_file)
     command_records = CommandRecordRepository(database_path)
 
-    # Keep WebSocket commands fake; only dev_run can open Spotify.
+    # Keep WebSocket commands fake; only real executors open apps.
     return NodeExecutor(
         device_id=settings.device_id,
         command_records=command_records,
