@@ -61,6 +61,25 @@ async def get_node_connection_status(
     }
 
 
+@router.get("/nodes/{device_id}/apps", dependencies=[Depends(require_owner)])
+async def list_node_apps(
+    device_id: str,
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
+):
+    apps = registry.apps_for(device_id)
+
+    if apps is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node is not connected",
+        )
+
+    return {"device_id": device_id, "apps": [app.model_dump() for app in apps]}
+
+
 @router.websocket("/nodes/connect")
 async def connect_node(
     websocket: WebSocket,
@@ -97,10 +116,11 @@ async def connect_node(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await registry.register(hello.device_id, websocket)
+    await registry.register(hello.device_id, websocket, hello.apps)
 
     try:
-        await websocket.send_json(hello.model_dump())
+        # Confirm the device only; echoing hundreds of apps back is useless
+        await websocket.send_json({"device_id": hello.device_id})
 
         while True:
             try:
@@ -146,7 +166,26 @@ async def propose_command(
         CommandRecordRepository,
         Depends(get_command_record_repository),
     ],
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
 ):
+    apps = registry.apps_for(device_id)
+
+    if apps is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Node is not connected",
+        )
+
+    # Only apps this PC reported can be proposed
+    if request.application_id not in {app.app_id for app in apps}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Application is not on this PC",
+        )
+
     command = OpenApplicationCommand(
         command_id=uuid4(),
         device_id=device_id,

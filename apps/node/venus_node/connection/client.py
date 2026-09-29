@@ -9,7 +9,8 @@ from websockets.exceptions import ConnectionClosedError
 
 from venus_node.config import NodeSettings
 from venus_node.connection.messages import receive_and_execute_commands
-from venus_protocol.schemas.connections import NodeHello
+from venus_node.commands.start_apps import StartApp
+from venus_protocol.schemas.connections import NodeApp, NodeHello
 
 
 async def connect_to_core(
@@ -19,8 +20,12 @@ async def connect_to_core(
         [dict[str, object]],
         CommandResult | None,
     ] | None = None,
+    list_apps: Callable[[], list[StartApp]] | None = None,
 ) -> NodeHello:
-    hello = NodeHello(device_id=settings.device_id)
+    apps = [] if list_apps is None else [
+        NodeApp(name=app.name, app_id=app.app_id) for app in list_apps()
+    ]
+    hello = NodeHello(device_id=settings.device_id, apps=apps)
     headers = {
         "Authorization": f"Bearer {settings.core_dev_token}",
     }
@@ -59,6 +64,7 @@ async def keep_connected(
         [dict[str, object]],
         CommandResult | None,
     ] | None = None,
+    list_apps: Callable[[], list[StartApp]] | None = None,
 ) -> None:
     while True:
         try:
@@ -66,6 +72,7 @@ async def keep_connected(
                 settings,
                 on_connected,
                 execute_payload,
+                list_apps=list_apps,
             )
         except (OSError, ConnectionClosedError):
             if on_retry is not None:

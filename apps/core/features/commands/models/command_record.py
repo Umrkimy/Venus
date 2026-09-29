@@ -15,7 +15,7 @@ class CommandRecord(Base):
         primary_key=True,
     )
     device_id: Mapped[str] = mapped_column(String(100))
-    application_id: Mapped[str] = mapped_column(String(100))
+    application_id: Mapped[str] = mapped_column(String(512))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     state: Mapped[str] = mapped_column(String(20))
     detail: Mapped[str | None] = mapped_column(
