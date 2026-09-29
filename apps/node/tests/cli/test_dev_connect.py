@@ -23,6 +23,7 @@ def test_run_connect_uses_private_settings(tmp_path, monkeypatch):
         on_connected=None,
         on_retry=None,
         execute_payload=None,
+        list_apps=None,
     ) -> None:
         received_settings.append(settings)
         received_callbacks.append(
@@ -69,7 +70,7 @@ def test_run_connect_uses_real_executor_when_enabled(tmp_path, monkeypatch):
 
     real_executor = RealExecutor()
 
-    async def fake_keep_connected(settings, on_connected=None, on_retry=None, execute_payload=None):
+    async def fake_keep_connected(settings, on_connected=None, on_retry=None, execute_payload=None, list_apps=None):
         received_payload_handlers.append(execute_payload)
 
     def fail_fake_factory(env_file, database_path):
@@ -100,7 +101,7 @@ def test_run_connect_uses_fake_executor_by_default(tmp_path, monkeypatch):
 
     fake_executor = FakeExecutor()
 
-    async def fake_keep_connected(settings, on_connected=None, on_retry=None, execute_payload=None):
+    async def fake_keep_connected(settings, on_connected=None, on_retry=None, execute_payload=None, list_apps=None):
         received_payload_handlers.append(execute_payload)
 
     def fail_real_factory(env_file, database_path):

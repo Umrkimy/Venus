@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from venus_protocol.schemas.connections import NodeHello
+from venus_protocol.schemas.connections import NodeApp, NodeHello
 
 
 def test_node_hello_accepts_device_id():
@@ -18,3 +18,18 @@ def test_node_hello_rejects_blank_device_id():
 def test_node_hello_rejects_unknown_field():
     with pytest.raises(ValidationError):
         NodeHello(device_id="laptop-1", command="open spotify")
+
+
+def test_node_hello_accepts_apps():
+    hello = NodeHello(
+        device_id="laptop-1",
+        apps=[NodeApp(name="Notepad", app_id="Microsoft.WindowsNotepad_8wekyb3d8bbwe!App")],
+    )
+
+    assert hello.apps[0].app_id == "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"
+
+
+def test_node_hello_defaults_to_no_apps():
+    hello = NodeHello(device_id="laptop-1")
+
+    assert hello.apps == []
