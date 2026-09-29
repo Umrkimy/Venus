@@ -27,7 +27,7 @@ from features.commands.repository import (
     CommandNotDispatchedError,
     CommandRecordRepository,
 )
-from features.commands.schemas import ApprovalDecision
+from features.commands.schemas import ApprovalDecision, ProposeCommandRequest
 from features.nodes.connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
@@ -138,9 +138,10 @@ async def connect_node(
         await registry.unregister(hello.device_id, websocket)
 
 
-@router.post("/nodes/{device_id}/commands/fake", dependencies=[Depends(require_owner)])
-async def send_fake_command(
+@router.post("/nodes/{device_id}/commands", dependencies=[Depends(require_owner)])
+async def propose_command(
     device_id: str,
+    request: ProposeCommandRequest,
     command_records: Annotated[
         CommandRecordRepository,
         Depends(get_command_record_repository),
@@ -149,7 +150,7 @@ async def send_fake_command(
     command = OpenApplicationCommand(
         command_id=uuid4(),
         device_id=device_id,
-        application_id="spotify",
+        application_id=request.application_id,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
 
