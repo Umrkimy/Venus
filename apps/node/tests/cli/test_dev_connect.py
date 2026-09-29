@@ -5,7 +5,6 @@ def test_run_connect_uses_private_settings(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text(
         "VENUS_NODE_DEVICE_ID=laptop-1\n"
-        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
         "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
         "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
     )
@@ -57,7 +56,6 @@ def test_run_connect_uses_real_executor_when_enabled(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text(
         "VENUS_NODE_DEVICE_ID=laptop-1\n"
-        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
         "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
         "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
         "VENUS_NODE_REAL_ACTIONS=true\n"
@@ -89,7 +87,6 @@ def test_run_connect_uses_fake_executor_by_default(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text(
         "VENUS_NODE_DEVICE_ID=laptop-1\n"
-        "VENUS_NODE_SPOTIFY_TARGET=spotify:\n"
         "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
         "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
     )

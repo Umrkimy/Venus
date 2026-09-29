@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from uuid import uuid4
@@ -8,9 +9,10 @@ from venus_node.commands.factory import create_node_executor
 from venus_protocol.schemas.commands import CommandResult
 
 
-def run_spotify(
+def run_app(
     env_file: Path,
     database_path: Path,
+    app_id: str,
 ) -> CommandResult:
     settings = load_settings(env_file)
     executor = create_node_executor(
@@ -20,7 +22,7 @@ def run_spotify(
     payload = {
         "command_id": str(uuid4()),
         "device_id": settings.device_id,
-        "application_id": "spotify",
+        "application_id": app_id,
         "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
         + timedelta(minutes=5),
     }
@@ -38,9 +40,13 @@ def main() -> None:
     database_path = node_directory / "data" / "node.db"
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
-    result = run_spotify(
+    if len(sys.argv) != 2:
+        raise SystemExit("Usage: python -m venus_node.dev_run <AppID>")
+
+    result = run_app(
         env_file=node_directory / ".env",
         database_path=database_path,
+        app_id=sys.argv[1],
     )
 
     print(result.model_dump_json())

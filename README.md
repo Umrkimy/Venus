@@ -77,7 +77,6 @@ WebSocket URL:
 
 ```text
 VENUS_NODE_DEVICE_ID=your-device-id
-VENUS_NODE_SPOTIFY_TARGET=spotify:
 VENUS_NODE_CORE_DEV_TOKEN=your-shared-development-node-token
 VENUS_NODE_CORE_URL=ws://127.0.0.1:8000/nodes/connect
 ```
@@ -136,16 +135,16 @@ This creates a proposal that waits for approval. Approve it with
 With real actions off, the Node records a fake result and does not launch
 Spotify.
 
-## Run the local Spotify developer command
+## Run the local app developer command
 
-Then run:
+Then run, with an AppID from `Get-StartApps`:
 
 ```powershell
 Set-Location apps/node
-.\.venv\Scripts\python.exe -m venus_node.dev_run
+.\.venv\Scripts\python.exe -m venus_node.dev_run <AppID>
 ```
 
-This intentionally asks Windows to open Spotify. It writes local command
+This intentionally asks Windows to open that app. It writes local command
 history to the Git-ignored `apps/node/data/node.db` and prints the command
 result. Use it only as a local developer check; it bypasses future Core policy,
 confirmation, and network authentication.
@@ -172,6 +171,6 @@ Set-Location ../..
 
 Core may request a fake allowlisted action only after a development-owner token
 check. The Windows Node owns the private Windows-specific application mapping
-and independently validates each command. The current local Spotify developer
+and independently validates each command. The current local app developer
 command reports that Windows accepted the launch request; it does not claim
-Spotify playback or app health.
+the app is healthy.
