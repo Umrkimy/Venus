@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import NodeCommands from "./node-commands";
 
 type OwnerState =
   | { status: "loading" }
@@ -76,6 +77,7 @@ export default function Home() {
               {owner.username}
             </span>
           </p>
+          <NodeCommands />
           <button
             type="button"
             onClick={handleLogout}
