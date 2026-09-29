@@ -3,6 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
+import AppPicker, { type NodeApp } from "./app-picker";
+import { getJson } from "./get-json";
+
 type NodeList = { device_ids: string[] };
 type CommandStatus = { command_id: string; status: string; detail?: string };
 
@@ -11,21 +14,16 @@ const FINAL_STATUSES = ["succeeded", "failed", "denied", "expired", "unknown"];
 
 const STATUS_TEXT: Record<string, string> = {
   dispatched: "Sent to your PC…",
-  succeeded: "Spotify opened.",
-  failed: "Your PC couldn't open Spotify.",
+  succeeded: "Opened.",
+  failed: "Your PC couldn't open it.",
   denied: "Denied.",
   expired: "Expired before you decided.",
   unknown: "No answer from your PC.",
 };
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return response.json();
-}
-
 export default function NodeCommands() {
   const [commandId, setCommandId] = useState<string | null>(null);
+  const [appName, setAppName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -73,12 +71,15 @@ export default function NodeCommands() {
     }
   }
 
-  async function propose(deviceId: string) {
+  async function propose(deviceId: string, app: NodeApp) {
     const data = await post(
       `/api/nodes/${encodeURIComponent(deviceId)}/commands`,
-      { application_id: "spotify" },
+      { application_id: app.app_id },
     );
-    if (data) setCommandId(data.command_id);
+    if (data) {
+      setAppName(app.name);
+      setCommandId(data.command_id);
+    }
   }
 
   async function decide(approved: boolean) {
@@ -114,24 +115,21 @@ export default function NodeCommands() {
         {nodes.data?.device_ids.map((deviceId) => (
           <li
             key={deviceId}
-            className="flex items-center justify-between rounded-md border border-border px-4 py-3"
+            className="rounded-md border border-border px-4 py-3"
           >
             <span className="font-medium">{deviceId}</span>
-            <button
-              type="button"
-              onClick={() => propose(deviceId)}
+            <AppPicker
+              deviceId={deviceId}
               disabled={busy || inFlight}
-              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:opacity-50 motion-safe:transition-transform motion-safe:active:scale-[0.98]"
-            >
-              Open Spotify
-            </button>
+              onOpen={(app) => propose(deviceId, app)}
+            />
           </li>
         ))}
       </ul>
 
       {status === "awaiting_approval" && (
         <div className="mt-6 rounded-md border border-border p-4">
-          <p>Open Spotify on this PC?</p>
+          <p>Open {appName} on this PC?</p>
           <div className="mt-3 flex gap-2">
             <button
               type="button"
