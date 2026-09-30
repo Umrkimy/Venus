@@ -27,6 +27,8 @@ from features.nodes.connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
 )
+from features.settings.dependencies import get_settings_repository
+from features.settings.repository import SettingsRepository
 from storage.base import Base
 
 from venus_protocol.schemas.commands import (
@@ -117,6 +119,10 @@ def command_records():
     Base.metadata.create_all(engine)
     auth_repository = AuthRepository(engine)
     app.dependency_overrides[get_auth_repository] = lambda: auth_repository
+    settings_repository = SettingsRepository(engine)
+    app.dependency_overrides[get_settings_repository] = (
+        lambda: settings_repository
+    )
     yield CommandRecordRepository(engine)
     engine.dispose()
 
@@ -383,6 +389,25 @@ def test_propose_command_creates_awaiting_approval_record(
     assert stored_record.device_id == "PC-Umar"
     assert stored_record.application_id == "spotify"
     assert stored_record.state == "awaiting_approval"
+
+
+def test_full_mode_proposal_dispatches_without_approval(
+    command_records: CommandRecordRepository,
+):
+    owner_headers = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
+    client.put("/settings/mode", json={"mode": "full"}, headers=owner_headers)
+
+    with connected_pc_umar() as websocket:
+        response = client.post(
+            "/nodes/PC-Umar/commands", json=OPEN_SPOTIFY, headers=owner_headers,
+        )
+        # The Node gets the command with no approval call in between.
+        assert websocket.receive_json() == response.json()
+
+    command = OpenApplicationCommand.model_validate(response.json())
+    stored_record = command_records.get(command.command_id)
+    assert stored_record is not None
+    assert stored_record.state == "dispatched"
 
 
 def test_node_connection_rejects_unsolicited_result():

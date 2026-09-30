@@ -32,6 +32,8 @@ from features.nodes.connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
 )
+from features.settings.dependencies import get_settings_repository
+from features.settings.repository import SettingsRepository
 from config import CoreSettings, get_settings
 
 
@@ -158,6 +160,43 @@ async def connect_node(
         await registry.unregister(hello.device_id, websocket)
 
 
+async def approve_and_dispatch(
+    command: OpenApplicationCommand,
+    registry: NodeConnectionRegistry,
+    result_registry: CommandResultRegistry,
+    command_records: CommandRecordRepository,
+) -> dict:
+    websocket = registry.get(command.device_id)
+
+    if websocket is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Node is not connected",
+        )
+
+    # Mark it dispatched before Node can receive the command.
+    try:
+        command_records.decide_approval(
+            command.command_id,
+            approved=True,
+            decided_at=datetime.now(timezone.utc),
+        )
+    except ApprovalExpiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Command has expired",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Command is not awaiting approval",
+        ) from exc
+    result_registry.expect(command, websocket)
+    await websocket.send_json(command.model_dump(mode="json"))
+
+    return command.model_dump(mode="json")
+
+
 @router.post("/nodes/{device_id}/commands", dependencies=[Depends(require_owner)])
 async def propose_command(
     device_id: str,
@@ -169,6 +208,14 @@ async def propose_command(
     registry: Annotated[
         NodeConnectionRegistry,
         Depends(get_connection_registry),
+    ],
+    result_registry: Annotated[
+        CommandResultRegistry,
+        Depends(get_command_result_registry),
+    ],
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
     ],
 ):
     apps = registry.apps_for(device_id)
@@ -201,6 +248,12 @@ async def propose_command(
             expires_at=command.expires_at,
         )
     )
+
+    # Full mode (D-34): app launches skip the approval step.
+    if settings_repository.get_mode() == "full":
+        return await approve_and_dispatch(
+            command, registry, result_registry, command_records,
+        )
     return command.model_dump(mode="json")
 
 
@@ -267,38 +320,12 @@ async def decide_command_approval(
 
         return {"command_id": str(command_id), "status": "denied"}
 
-    websocket = registry.get(record.device_id)
-
-    if websocket is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Node is not connected",
-        )
-
     command = OpenApplicationCommand(
         command_id=record.command_id,
         device_id=record.device_id,
         application_id=record.application_id,
         expires_at=expires_at,
     )
-    # Mark it dispatched before Node can receive the command.
-    try:
-        command_records.decide_approval(
-            command_id,
-            approved=True,
-            decided_at=datetime.now(timezone.utc),
-        )
-    except ApprovalExpiredError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Command has expired",
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Command is not awaiting approval",
-        ) from exc
-    result_registry.expect(command, websocket)
-    await websocket.send_json(command.model_dump(mode="json"))
-
-    return command.model_dump(mode="json")
+    return await approve_and_dispatch(
+        command, registry, result_registry, command_records,
+    )
