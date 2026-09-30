@@ -11,7 +11,9 @@ from starlette.websockets import WebSocketDisconnect
 
 from venus_protocol.schemas.commands import (
     CommandResult,
+    NodeCommand,
     OpenApplicationCommand,
+    OpenUrlCommand,
 )
 from venus_protocol.schemas.connections import NodeHello
 
@@ -27,7 +29,11 @@ from features.commands.repository import (
     CommandNotDispatchedError,
     CommandRecordRepository,
 )
-from features.commands.schemas import ApprovalDecision, ProposeCommandRequest
+from features.commands.schemas import (
+    ApprovalDecision,
+    ProposeCommandRequest,
+    ProposeUrlRequest,
+)
 from features.nodes.connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
@@ -161,7 +167,7 @@ async def connect_node(
 
 
 async def approve_and_dispatch(
-    command: OpenApplicationCommand,
+    command: NodeCommand,
     registry: NodeConnectionRegistry,
     result_registry: CommandResultRegistry,
     command_records: CommandRecordRepository,
@@ -257,6 +263,79 @@ async def propose_command(
     return command.model_dump(mode="json")
 
 
+@router.post(
+    "/nodes/{device_id}/commands/open-url",
+    dependencies=[Depends(require_owner)],
+)
+async def propose_url_command(
+    device_id: str,
+    request: ProposeUrlRequest,
+    command_records: Annotated[
+        CommandRecordRepository,
+        Depends(get_command_record_repository),
+    ],
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
+    result_registry: Annotated[
+        CommandResultRegistry,
+        Depends(get_command_result_registry),
+    ],
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
+    ],
+):
+    if registry.apps_for(device_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Node is not connected",
+        )
+
+    command = OpenUrlCommand(
+        command_id=uuid4(),
+        device_id=device_id,
+        url=request.url,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+    )
+
+    command_records.create(
+        CommandRecord(
+            command_id=command.command_id,
+            device_id=command.device_id,
+            application_id=None,
+            expires_at=command.expires_at,
+            kind="open_url",
+            url=str(command.url),
+        )
+    )
+
+    # Full mode (D-34): opening a link is as low-risk as an app launch.
+    if settings_repository.get_mode() == "full":
+        return await approve_and_dispatch(
+            command, registry, result_registry, command_records,
+        )
+    return command.model_dump(mode="json")
+
+
+def command_from_record(record: CommandRecord, expires_at: datetime) -> NodeCommand:
+    # The record remembers the kind so approval rebuilds the same command.
+    if record.kind == "open_url":
+        return OpenUrlCommand(
+            command_id=record.command_id,
+            device_id=record.device_id,
+            url=record.url,
+            expires_at=expires_at,
+        )
+    return OpenApplicationCommand(
+        command_id=record.command_id,
+        device_id=record.device_id,
+        application_id=record.application_id,
+        expires_at=expires_at,
+    )
+
+
 @router.post("/commands/{command_id}/approval", dependencies=[Depends(require_owner)])
 async def decide_command_approval(
     command_id: UUID,
@@ -320,12 +399,7 @@ async def decide_command_approval(
 
         return {"command_id": str(command_id), "status": "denied"}
 
-    command = OpenApplicationCommand(
-        command_id=record.command_id,
-        device_id=record.device_id,
-        application_id=record.application_id,
-        expires_at=expires_at,
-    )
+    command = command_from_record(record, expires_at)
     return await approve_and_dispatch(
         command, registry, result_registry, command_records,
     )
