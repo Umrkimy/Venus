@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 
 import pytest
-from uuid import uuid4
+from uuid import UUID, uuid4
 from datetime import datetime, timezone, timedelta
 
 from fastapi import status
@@ -1192,6 +1192,108 @@ def test_propose_project_rejects_disconnected_node():
     response = client.post(
         "/nodes/PC-Umar/commands/open-project",
         json=OPEN_VENUS,
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json() == {"detail": "Node is not connected"}
+
+
+def test_text_command_proposes_app_with_label(
+    command_records: CommandRecordRepository,
+):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/text",
+            json={"text": "open spot"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+    command = OpenApplicationCommand.model_validate(
+        {key: value for key, value in body.items() if key != "label"},
+    )
+    stored_record = command_records.get(command.command_id)
+
+    assert response.status_code == 200
+    assert body["label"] == "Spotify"
+    assert command.application_id == "spotify"
+    assert stored_record is not None
+    assert stored_record.state == "awaiting_approval"
+
+
+def test_text_command_search_is_saved_as_url_command(
+    command_records: CommandRecordRepository,
+):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/text",
+            json={"text": "youtube teo"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+    stored_record = command_records.get(UUID(body["command_id"]))
+
+    assert body["label"] == "YouTube search: teo"
+    assert stored_record is not None
+    assert stored_record.kind == "open_url"
+    assert stored_record.url == "https://www.youtube.com/results?search_query=teo"
+
+
+def test_full_mode_text_command_dispatches_without_approval(
+    command_records: CommandRecordRepository,
+):
+    owner_headers = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
+    client.put("/settings/mode", json={"mode": "full"}, headers=owner_headers)
+
+    with connected_pc_umar() as websocket:
+        response = client.post(
+            "/nodes/PC-Umar/commands/text",
+            json={"text": "open my project venus"},
+            headers=owner_headers,
+        )
+        sent = OpenProjectCommand.model_validate(websocket.receive_json())
+
+    stored_record = command_records.get(sent.command_id)
+
+    assert response.json()["label"] == "Venus in VS Code"
+    assert sent.project_name == "Venus"
+    assert stored_record is not None
+    assert stored_record.state == "dispatched"
+
+
+def test_text_command_rejects_text_venus_does_not_understand():
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/text",
+            json={"text": "make me a sandwich"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "Venus didn't understand that"}
+
+
+def test_text_command_rejects_invalid_link():
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/text",
+            json={"text": "a.b:99999"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "That link doesn't look right"}
+
+
+def test_text_command_rejects_disconnected_node():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = lambda: registry
+
+    response = client.post(
+        "/nodes/PC-Umar/commands/text",
+        json={"text": "open spotify"},
         headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
     )
 
