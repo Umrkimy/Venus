@@ -33,3 +33,9 @@ def test_node_hello_defaults_to_no_apps():
     hello = NodeHello(device_id="laptop-1")
 
     assert hello.apps == []
+
+
+def test_node_hello_defaults_to_no_projects():
+    hello = NodeHello(device_id="laptop-1")
+
+    assert hello.projects == []

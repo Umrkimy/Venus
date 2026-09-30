@@ -6,7 +6,13 @@ from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 
 from pydantic import ValidationError
-from venus_protocol.schemas.commands import CommandResult, NodeCommand, OpenUrlCommand, node_command_adapter
+from venus_protocol.schemas.commands import (
+    CommandResult,
+    NodeCommand,
+    OpenProjectCommand,
+    OpenUrlCommand,
+    node_command_adapter,
+)
 
 from venus_node.storage.models.command_record import CommandRecord
 from venus_node.storage.repositories.command_records import CommandRecordRepository
@@ -15,7 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 def execute_fake(command: NodeCommand) -> CommandResult:
-    target = command.url if isinstance(command, OpenUrlCommand) else command.application_id
+    if isinstance(command, OpenUrlCommand):
+        target = command.url
+    elif isinstance(command, OpenProjectCommand):
+        target = command.project_name
+    else:
+        target = command.application_id
     return CommandResult(
         command_id=command.command_id,
         status="succeeded",

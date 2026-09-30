@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from uuid import uuid4
 import pytest
 
-from venus_protocol.schemas.commands import OpenApplicationCommand, OpenUrlCommand
+from venus_protocol.schemas.commands import OpenApplicationCommand, OpenProjectCommand, OpenUrlCommand
 
 import venus_node.commands.launcher as launcher
 
@@ -112,8 +113,73 @@ def test_command_router_sends_url_command_to_url_executor():
     router = launcher.create_command_router(
         open_app=lambda command: calls.append("app"),
         open_url=lambda command: calls.append("url"),
+        open_project=lambda command: calls.append("project"),
     )
 
     router(make_url_command("https://www.youtube.com"))
 
     assert calls == ["url"]
+
+
+def make_project_command(project_name: str) -> OpenProjectCommand:
+    return OpenProjectCommand(
+        command_id=uuid4(),
+        device_id="laptop-1",
+        project_name=project_name,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+    )
+
+
+def test_project_executor_opens_listed_folder(tmp_path: Path):
+    (tmp_path / "Venus").mkdir()
+    opened: list[Path] = []
+    executor = launcher.create_project_command_executor(
+        projects_root=tmp_path,
+        open_folder=opened.append,
+    )
+
+    result = executor(make_project_command("Venus"))
+
+    assert result.status == "succeeded"
+    assert opened == [tmp_path / "Venus"]
+
+
+def test_project_executor_denies_unlisted_project(tmp_path: Path):
+    opened: list[Path] = []
+    executor = launcher.create_project_command_executor(
+        projects_root=tmp_path,
+        open_folder=opened.append,
+    )
+
+    result = executor(make_project_command("Venus"))
+
+    assert result.status == "denied"
+    assert result.detail == "Not in this PC's projects"
+    assert opened == []
+
+
+def test_project_executor_denies_when_root_not_set():
+    opened: list[Path] = []
+    executor = launcher.create_project_command_executor(
+        projects_root=None,
+        open_folder=opened.append,
+    )
+
+    result = executor(make_project_command("Venus"))
+
+    assert result.status == "denied"
+    assert result.detail == "Projects are not set up on this PC"
+    assert opened == []
+
+
+def test_command_router_sends_project_command_to_project_executor():
+    calls: list[str] = []
+    router = launcher.create_command_router(
+        open_app=lambda command: calls.append("app"),
+        open_url=lambda command: calls.append("url"),
+        open_project=lambda command: calls.append("project"),
+    )
+
+    router(make_project_command("Venus"))
+
+    assert calls == ["project"]
