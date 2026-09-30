@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import AppPicker, { type NodeApp } from "./app-picker";
+import UrlOpener from "./url-opener";
 import { getJson } from "./get-json";
 
 type NodeList = { device_ids: string[] };
@@ -23,7 +24,7 @@ const STATUS_TEXT: Record<string, string> = {
 
 export default function NodeCommands() {
   const [commandId, setCommandId] = useState<string | null>(null);
-  const [appName, setAppName] = useState<string | null>(null);
+  const [targetName, setTargetName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -77,7 +78,18 @@ export default function NodeCommands() {
       { application_id: app.app_id },
     );
     if (data) {
-      setAppName(app.name);
+      setTargetName(app.name);
+      setCommandId(data.command_id);
+    }
+  }
+
+  async function proposeUrl(deviceId: string, url: string) {
+    const data = await post(
+      `/api/nodes/${encodeURIComponent(deviceId)}/commands/open-url`,
+      { url },
+    );
+    if (data) {
+      setTargetName(data.url);
       setCommandId(data.command_id);
     }
   }
@@ -123,13 +135,18 @@ export default function NodeCommands() {
               disabled={busy || inFlight}
               onOpen={(app) => propose(deviceId, app)}
             />
+            <UrlOpener
+              deviceId={deviceId}
+              disabled={busy || inFlight}
+              onOpen={(url) => proposeUrl(deviceId, url)}
+            />
           </li>
         ))}
       </ul>
 
       {status === "awaiting_approval" && (
         <div className="mt-6 rounded-md border border-border p-4">
-          <p>Open {appName} on this PC?</p>
+          <p className="break-all">Open {targetName} on this PC?</p>
           <div className="mt-3 flex gap-2">
             <button
               type="button"
