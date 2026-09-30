@@ -9,6 +9,7 @@ class NodeConnectionRegistry:
     def __init__(self):
         self._connections: dict[str, WebSocket] = {}
         self._apps: dict[str, list[NodeApp]] = {}
+        self._projects: dict[str, list[str]] = {}
         self._lock = asyncio.Lock()
 
     async def register(
@@ -16,11 +17,13 @@ class NodeConnectionRegistry:
         device_id: str,
         websocket: WebSocket,
         apps: list[NodeApp] | None = None,
+        projects: list[str] | None = None,
     ) -> None:
         async with self._lock:
             old_websocket = self._connections.get(device_id)
             self._connections[device_id] = websocket
             self._apps[device_id] = list(apps or [])
+            self._projects[device_id] = list(projects or [])
 
         if old_websocket is not None:
             await old_websocket.close(
@@ -36,6 +39,12 @@ class NodeConnectionRegistry:
             return None
         return list(self._apps.get(device_id, []))
 
+    def projects_for(self, device_id: str) -> list[str] | None:
+        # None means the Node is not connected
+        if device_id not in self._connections:
+            return None
+        return list(self._projects.get(device_id, []))
+
     def connected_device_ids(self) -> list[str]:
         return sorted(self._connections)
 
@@ -49,6 +58,7 @@ class NodeConnectionRegistry:
             if self._connections.get(device_id) is websocket:
                 del self._connections[device_id]
                 self._apps.pop(device_id, None)
+                self._projects.pop(device_id, None)
 
 
 connection_registry = NodeConnectionRegistry()
