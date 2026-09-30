@@ -34,11 +34,13 @@ from storage.base import Base
 from venus_protocol.schemas.commands import (
     CommandResult,
     OpenApplicationCommand,
+    OpenUrlCommand,
 )
 
 TEST_NODE_TOKEN = "test-node-token"
 TEST_OWNER_TOKEN = "test-owner-token"
 OPEN_SPOTIFY = {"application_id": "spotify"}
+OPEN_YOUTUBE = {"url": "https://www.youtube.com"}
 # The Node reports the apps this PC can open; Core only accepts those
 PC_UMAR_HELLO = {
     "device_id": "PC-Umar",
@@ -408,6 +410,91 @@ def test_full_mode_proposal_dispatches_without_approval(
     stored_record = command_records.get(command.command_id)
     assert stored_record is not None
     assert stored_record.state == "dispatched"
+
+
+def test_propose_url_creates_awaiting_approval_record(
+    command_records: CommandRecordRepository,
+):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/open-url",
+            json=OPEN_YOUTUBE,
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+    command = OpenUrlCommand.model_validate(response.json())
+    stored_record = command_records.get(command.command_id)
+
+    assert stored_record is not None
+    assert stored_record.kind == "open_url"
+    assert stored_record.url == "https://www.youtube.com/"
+    assert stored_record.application_id is None
+    assert stored_record.state == "awaiting_approval"
+
+
+def test_approving_url_proposal_sends_open_url_command():
+    owner_headers = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
+
+    with connected_pc_umar() as websocket:
+        proposal = client.post(
+            "/nodes/PC-Umar/commands/open-url",
+            json=OPEN_YOUTUBE,
+            headers=owner_headers,
+        ).json()
+        approval = client.post(
+            f"/commands/{proposal['command_id']}/approval",
+            json={"approved": True},
+            headers=owner_headers,
+        )
+        # Approval rebuilds the command from the record; it must stay a URL command
+        sent = OpenUrlCommand.model_validate(websocket.receive_json())
+
+    assert approval.status_code == 200
+    assert str(sent.url) == "https://www.youtube.com/"
+
+
+def test_full_mode_url_proposal_dispatches_without_approval(
+    command_records: CommandRecordRepository,
+):
+    owner_headers = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
+    client.put("/settings/mode", json={"mode": "full"}, headers=owner_headers)
+
+    with connected_pc_umar() as websocket:
+        response = client.post(
+            "/nodes/PC-Umar/commands/open-url",
+            json=OPEN_YOUTUBE,
+            headers=owner_headers,
+        )
+        assert websocket.receive_json() == response.json()
+
+    command = OpenUrlCommand.model_validate(response.json())
+    stored_record = command_records.get(command.command_id)
+    assert stored_record is not None
+    assert stored_record.state == "dispatched"
+
+
+def test_propose_url_rejects_file_scheme():
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/open-url",
+            json={"url": "file:///C:/Windows/System32/cmd.exe"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_propose_url_rejects_disconnected_node():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = lambda: registry
+
+    response = client.post(
+        "/nodes/PC-Umar/commands/open-url",
+        json=OPEN_YOUTUBE,
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json() == {"detail": "Node is not connected"}
 
 
 def test_node_connection_rejects_unsolicited_result():

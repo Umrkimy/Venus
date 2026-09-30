@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import WebSocket
-from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand
+from venus_protocol.schemas.commands import CommandResult, NodeCommand
 
 
 @dataclass
@@ -22,7 +22,7 @@ class CommandResultRegistry:
 
     def expect(
         self,
-        command: OpenApplicationCommand,
+        command: NodeCommand,
         websocket: WebSocket,
     ) -> None:
         self._dispatched_commands[command.command_id] = DispatchedCommand(

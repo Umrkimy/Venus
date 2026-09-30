@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import BaseModel, ConfigDict, HttpUrl, StrictBool
 
 from venus_protocol.schemas.commands import ApplicationId
 
@@ -11,3 +11,9 @@ class ProposeCommandRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     application_id: ApplicationId
+
+
+class ProposeUrlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: HttpUrl
