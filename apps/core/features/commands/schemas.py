@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict, HttpUrl, StrictBool
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, HttpUrl, StrictBool, StringConstraints
 
 from venus_protocol.schemas.commands import ApplicationId, ProjectName
 
@@ -23,3 +25,12 @@ class ProposeProjectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     project_name: ProjectName
+
+
+class ProposeTextRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=500),
+    ]
