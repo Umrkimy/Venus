@@ -34,7 +34,13 @@ from features.commands.schemas import (
     ApprovalDecision,
     ProposeCommandRequest,
     ProposeProjectRequest,
+    ProposeTextRequest,
     ProposeUrlRequest,
+)
+from features.commands.text_parser import (
+    CommandTextError,
+    ParsedCommand,
+    parse_command_text,
 )
 from features.nodes.connection_registry import (
     NodeConnectionRegistry,
@@ -224,6 +230,23 @@ async def approve_and_dispatch(
     return command.model_dump(mode="json")
 
 
+async def propose(
+    command: NodeCommand,
+    registry: NodeConnectionRegistry,
+    result_registry: CommandResultRegistry,
+    command_records: CommandRecordRepository,
+    settings_repository: SettingsRepository,
+) -> dict:
+    command_records.create(record_from_command(command))
+
+    # Full mode (D-34): apps, links and project folders are all low-risk.
+    if settings_repository.get_mode() == "full":
+        return await approve_and_dispatch(
+            command, registry, result_registry, command_records,
+        )
+    return command.model_dump(mode="json")
+
+
 @router.post("/nodes/{device_id}/commands", dependencies=[Depends(require_owner)])
 async def propose_command(
     device_id: str,
@@ -267,21 +290,9 @@ async def propose_command(
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
 
-    command_records.create(
-        CommandRecord(
-            command_id=command.command_id,
-            device_id=command.device_id,
-            application_id=command.application_id,
-            expires_at=command.expires_at,
-        )
+    return await propose(
+        command, registry, result_registry, command_records, settings_repository,
     )
-
-    # Full mode (D-34): app launches skip the approval step.
-    if settings_repository.get_mode() == "full":
-        return await approve_and_dispatch(
-            command, registry, result_registry, command_records,
-        )
-    return command.model_dump(mode="json")
 
 
 @router.post(
@@ -321,23 +332,9 @@ async def propose_url_command(
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
 
-    command_records.create(
-        CommandRecord(
-            command_id=command.command_id,
-            device_id=command.device_id,
-            application_id=None,
-            expires_at=command.expires_at,
-            kind="open_url",
-            url=str(command.url),
-        )
+    return await propose(
+        command, registry, result_registry, command_records, settings_repository,
     )
-
-    # Full mode (D-34): opening a link is as low-risk as an app launch.
-    if settings_repository.get_mode() == "full":
-        return await approve_and_dispatch(
-            command, registry, result_registry, command_records,
-        )
-    return command.model_dump(mode="json")
 
 
 @router.post(
@@ -386,8 +383,81 @@ async def propose_project_command(
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
 
-    command_records.create(
-        CommandRecord(
+    return await propose(
+        command, registry, result_registry, command_records, settings_repository,
+    )
+
+
+@router.post(
+    "/nodes/{device_id}/commands/text",
+    dependencies=[Depends(require_owner)],
+)
+async def propose_text_command(
+    device_id: str,
+    request: ProposeTextRequest,
+    command_records: Annotated[
+        CommandRecordRepository,
+        Depends(get_command_record_repository),
+    ],
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
+    result_registry: Annotated[
+        CommandResultRegistry,
+        Depends(get_command_result_registry),
+    ],
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
+    ],
+):
+    apps = registry.apps_for(device_id)
+    projects = registry.projects_for(device_id)
+
+    if apps is None or projects is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Node is not connected",
+        )
+
+    try:
+        parsed = parse_command_text(request.text, apps, projects)
+    except CommandTextError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    # Text like "a.b:99999" passes the parser but is not a valid link.
+    try:
+        command = command_from_parsed(parsed, device_id)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That link doesn't look right",
+        ) from exc
+
+    response = await propose(
+        command, registry, result_registry, command_records, settings_repository,
+    )
+    response["label"] = parsed.label
+    return response
+
+
+def record_from_command(command: NodeCommand) -> CommandRecord:
+    # Mirror of command_from_record: each kind saves its own target column.
+    if isinstance(command, OpenUrlCommand):
+        return CommandRecord(
+            command_id=command.command_id,
+            device_id=command.device_id,
+            application_id=None,
+            expires_at=command.expires_at,
+            kind="open_url",
+            url=str(command.url),
+        )
+    if isinstance(command, OpenProjectCommand):
+        return CommandRecord(
             command_id=command.command_id,
             device_id=command.device_id,
             application_id=None,
@@ -395,14 +465,12 @@ async def propose_project_command(
             kind="open_project",
             project_name=command.project_name,
         )
+    return CommandRecord(
+        command_id=command.command_id,
+        device_id=command.device_id,
+        application_id=command.application_id,
+        expires_at=command.expires_at,
     )
-
-    # Full mode (D-34): opening a project folder is as low-risk as an app launch.
-    if settings_repository.get_mode() == "full":
-        return await approve_and_dispatch(
-            command, registry, result_registry, command_records,
-        )
-    return command.model_dump(mode="json")
 
 
 def command_from_record(record: CommandRecord, expires_at: datetime) -> NodeCommand:
@@ -425,6 +493,31 @@ def command_from_record(record: CommandRecord, expires_at: datetime) -> NodeComm
         command_id=record.command_id,
         device_id=record.device_id,
         application_id=record.application_id,
+        expires_at=expires_at,
+    )
+
+
+def command_from_parsed(parsed: ParsedCommand, device_id: str) -> NodeCommand:
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+    if parsed.application_id is not None:
+        return OpenApplicationCommand(
+            command_id=uuid4(),
+            device_id=device_id,
+            application_id=parsed.application_id,
+            expires_at=expires_at,
+        )
+    if parsed.project_name is not None:
+        return OpenProjectCommand(
+            command_id=uuid4(),
+            device_id=device_id,
+            project_name=parsed.project_name,
+            expires_at=expires_at,
+        )
+    return OpenUrlCommand(
+        command_id=uuid4(),
+        device_id=device_id,
+        url=parsed.url,
         expires_at=expires_at,
     )
 
