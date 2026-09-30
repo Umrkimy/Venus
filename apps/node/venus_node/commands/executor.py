@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 
 from pydantic import ValidationError
-from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand
+from venus_protocol.schemas.commands import CommandResult, NodeCommand, OpenUrlCommand, node_command_adapter
 
 from venus_node.storage.models.command_record import CommandRecord
 from venus_node.storage.repositories.command_records import CommandRecordRepository
@@ -14,11 +14,12 @@ from venus_node.storage.repositories.command_records import CommandRecordReposit
 logger = logging.getLogger(__name__)
 
 
-def execute_fake(command: OpenApplicationCommand) -> CommandResult:
+def execute_fake(command: NodeCommand) -> CommandResult:
+    target = command.url if isinstance(command, OpenUrlCommand) else command.application_id
     return CommandResult(
         command_id=command.command_id,
         status="succeeded",
-        detail=f"Fake executor accepted {command.application_id}",
+        detail=f"Fake executor accepted {target}",
     )
 
 class NodeExecutor:
@@ -27,7 +28,7 @@ class NodeExecutor:
         device_id: str,
         command_records: CommandRecordRepository,
         clock: Callable[[], datetime] | None = None,
-        command_executor: Callable[[OpenApplicationCommand], CommandResult] | None = None,
+        command_executor: Callable[[NodeCommand], CommandResult] | None = None,
     ) -> None:
         self.device_id = device_id
         self.command_records = command_records
@@ -43,7 +44,7 @@ class NodeExecutor:
             return None
 
         try:
-            command = OpenApplicationCommand.model_validate(payload)
+            command = node_command_adapter.validate_python(payload)
         except ValidationError:
             return CommandResult(
                 command_id=command_id,
