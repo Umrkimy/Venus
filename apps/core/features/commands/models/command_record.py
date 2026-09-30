@@ -15,7 +15,13 @@ class CommandRecord(Base):
         primary_key=True,
     )
     device_id: Mapped[str] = mapped_column(String(100))
-    application_id: Mapped[str] = mapped_column(String(512))
+    application_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    kind: Mapped[str] = mapped_column(
+        String(20),
+        server_default="open_application",
+    )
+    # 2083 is Pydantic HttpUrl's max length; raise both together.
+    url: Mapped[str | None] = mapped_column(String(2083), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     state: Mapped[str] = mapped_column(String(20))
     detail: Mapped[str | None] = mapped_column(
@@ -31,14 +37,18 @@ class CommandRecord(Base):
         self,
         command_id: UUID,
         device_id: str,
-        application_id: str,
+        application_id: str | None,
         expires_at: datetime,
         state: str = "awaiting_approval",
+        kind: str = "open_application",
+        url: str | None = None,
     ) -> None:
         self.command_id = command_id
         self.device_id = device_id
         self.application_id = application_id
         self.expires_at = expires_at
         self.state = state
+        self.kind = kind
+        self.url = url
         self.detail = None
         self.completed_at = None
