@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import AppPicker, { type NodeApp } from "./app-picker";
+import ProjectPicker from "./project-picker";
 import UrlOpener from "./url-opener";
 import { getJson } from "./get-json";
 
@@ -94,6 +95,17 @@ export default function NodeCommands() {
     }
   }
 
+  async function proposeProject(deviceId: string, projectName: string) {
+    const data = await post(
+      `/api/nodes/${encodeURIComponent(deviceId)}/commands/open-project`,
+      { project_name: projectName },
+    );
+    if (data) {
+      setTargetName(`${projectName} in VS Code`);
+      setCommandId(data.command_id);
+    }
+  }
+
   async function decide(approved: boolean) {
     if (commandId === null) return;
     await post(`/api/commands/${commandId}/approval`, { approved });
@@ -139,6 +151,11 @@ export default function NodeCommands() {
               deviceId={deviceId}
               disabled={busy || inFlight}
               onOpen={(url) => proposeUrl(deviceId, url)}
+            />
+            <ProjectPicker
+              deviceId={deviceId}
+              disabled={busy || inFlight}
+              onOpen={(projectName) => proposeProject(deviceId, projectName)}
             />
           </li>
         ))}
