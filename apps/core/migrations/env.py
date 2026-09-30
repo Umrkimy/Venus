@@ -10,6 +10,7 @@ from features.commands.models.command_record import CommandRecord
 from features.auth.models.owner_account import OwnerAccount
 from features.auth.models.owner_session import OwnerSession
 from features.settings.models.command_mode import CommandModeSetting
+from features.shortcuts.models.site_shortcut import SiteShortcut
 from storage.base import Base
 
 # this is the Alembic Config object, which provides

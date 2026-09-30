@@ -29,6 +29,9 @@ from features.nodes.connection_registry import (
 )
 from features.settings.dependencies import get_settings_repository
 from features.settings.repository import SettingsRepository
+from features.shortcuts.dependencies import get_shortcut_repository
+from features.shortcuts.models.site_shortcut import SiteShortcut
+from features.shortcuts.repository import ShortcutRepository
 from storage.base import Base
 
 from venus_protocol.schemas.commands import (
@@ -127,6 +130,10 @@ def command_records():
     settings_repository = SettingsRepository(engine)
     app.dependency_overrides[get_settings_repository] = (
         lambda: settings_repository
+    )
+    shortcut_repository = ShortcutRepository(engine)
+    app.dependency_overrides[get_shortcut_repository] = (
+        lambda: shortcut_repository
     )
     yield CommandRecordRepository(engine)
     engine.dispose()
@@ -1299,3 +1306,53 @@ def test_text_command_rejects_disconnected_node():
 
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json() == {"detail": "Node is not connected"}
+
+
+def test_text_command_uses_owner_shortcut(
+    command_records: CommandRecordRepository,
+):
+    shortcuts = app.dependency_overrides[get_shortcut_repository]()
+    shortcuts.add(SiteShortcut(
+        keyword="comix",
+        label="Comix",
+        home_url="https://comix.to/",
+        search_url="https://comix.to/search?q={words}",
+    ))
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/text",
+            json={"text": "comix solo leveling"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+    stored_record = command_records.get(UUID(body["command_id"]))
+
+    assert body["label"] == "Comix search: solo leveling"
+    assert stored_record is not None
+    assert stored_record.url == "https://comix.to/search?q=solo+leveling"
+
+
+def test_owner_shortcut_replaces_built_in_site(
+    command_records: CommandRecordRepository,
+):
+    shortcuts = app.dependency_overrides[get_shortcut_repository]()
+    shortcuts.add(SiteShortcut(
+        keyword="youtube",
+        label="YouTube Music",
+        home_url="https://music.youtube.com/",
+        search_url="https://music.youtube.com/search?q={words}",
+    ))
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/text",
+            json={"text": "youtube lofi"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    stored_record = command_records.get(UUID(response.json()["command_id"]))
+
+    assert stored_record is not None
+    assert stored_record.url == "https://music.youtube.com/search?q=lofi"

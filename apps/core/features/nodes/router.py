@@ -38,8 +38,10 @@ from features.commands.schemas import (
     ProposeUrlRequest,
 )
 from features.commands.text_parser import (
+    SEARCH_SITES,
     CommandTextError,
     ParsedCommand,
+    SearchSite,
     parse_command_text,
 )
 from features.nodes.connection_registry import (
@@ -48,6 +50,9 @@ from features.nodes.connection_registry import (
 )
 from features.settings.dependencies import get_settings_repository
 from features.settings.repository import SettingsRepository
+from features.shortcuts.dependencies import get_shortcut_repository
+from features.shortcuts.models.site_shortcut import SiteShortcut
+from features.shortcuts.repository import ShortcutRepository
 from config import CoreSettings, get_settings
 
 
@@ -411,6 +416,10 @@ async def propose_text_command(
         SettingsRepository,
         Depends(get_settings_repository),
     ],
+    shortcuts: Annotated[
+        ShortcutRepository,
+        Depends(get_shortcut_repository),
+    ],
 ):
     apps = registry.apps_for(device_id)
     projects = registry.projects_for(device_id)
@@ -422,7 +431,9 @@ async def propose_text_command(
         )
 
     try:
-        parsed = parse_command_text(request.text, apps, projects)
+        parsed = parse_command_text(
+            request.text, apps, projects, search_sites(shortcuts.list_all()),
+        )
     except CommandTextError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -520,6 +531,18 @@ def command_from_parsed(parsed: ParsedCommand, device_id: str) -> NodeCommand:
         url=parsed.url,
         expires_at=expires_at,
     )
+
+
+def search_sites(shortcuts: list[SiteShortcut]) -> dict[str, SearchSite]:
+    # The owner's shortcuts go on top, so one called "youtube" replaces ours.
+    sites = dict(SEARCH_SITES)
+    for shortcut in shortcuts:
+        sites[shortcut.keyword] = SearchSite(
+            label=shortcut.label,
+            home_url=shortcut.home_url,
+            search_url=shortcut.search_url,
+        )
+    return sites
 
 
 @router.post("/commands/{command_id}/approval", dependencies=[Depends(require_owner)])
