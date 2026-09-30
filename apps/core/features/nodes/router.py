@@ -13,6 +13,7 @@ from venus_protocol.schemas.commands import (
     CommandResult,
     NodeCommand,
     OpenApplicationCommand,
+    OpenProjectCommand,
     OpenUrlCommand,
 )
 from venus_protocol.schemas.connections import NodeHello
@@ -32,6 +33,7 @@ from features.commands.repository import (
 from features.commands.schemas import (
     ApprovalDecision,
     ProposeCommandRequest,
+    ProposeProjectRequest,
     ProposeUrlRequest,
 )
 from features.nodes.connection_registry import (
@@ -88,6 +90,25 @@ async def list_node_apps(
     return {"device_id": device_id, "apps": [app.model_dump() for app in apps]}
 
 
+@router.get("/nodes/{device_id}/projects", dependencies=[Depends(require_owner)])
+async def list_node_projects(
+    device_id: str,
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
+):
+    projects = registry.projects_for(device_id)
+
+    if projects is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node is not connected",
+        )
+
+    return {"device_id": device_id, "projects": projects}
+
+
 @router.websocket("/nodes/connect")
 async def connect_node(
     websocket: WebSocket,
@@ -124,7 +145,7 @@ async def connect_node(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await registry.register(hello.device_id, websocket, hello.apps)
+    await registry.register(hello.device_id, websocket, hello.apps, hello.projects)
 
     try:
         # Confirm the device only; echoing hundreds of apps back is useless
@@ -319,6 +340,71 @@ async def propose_url_command(
     return command.model_dump(mode="json")
 
 
+@router.post(
+    "/nodes/{device_id}/commands/open-project",
+    dependencies=[Depends(require_owner)],
+)
+async def propose_project_command(
+    device_id: str,
+    request: ProposeProjectRequest,
+    command_records: Annotated[
+        CommandRecordRepository,
+        Depends(get_command_record_repository),
+    ],
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
+    result_registry: Annotated[
+        CommandResultRegistry,
+        Depends(get_command_result_registry),
+    ],
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
+    ],
+):
+    projects = registry.projects_for(device_id)
+
+    if projects is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Node is not connected",
+        )
+
+    # Only folders this PC reported can be proposed; the Node re-checks too
+    if request.project_name not in projects:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Project is not on this PC",
+        )
+
+    command = OpenProjectCommand(
+        command_id=uuid4(),
+        device_id=device_id,
+        project_name=request.project_name,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+    )
+
+    command_records.create(
+        CommandRecord(
+            command_id=command.command_id,
+            device_id=command.device_id,
+            application_id=None,
+            expires_at=command.expires_at,
+            kind="open_project",
+            project_name=command.project_name,
+        )
+    )
+
+    # Full mode (D-34): opening a project folder is as low-risk as an app launch.
+    if settings_repository.get_mode() == "full":
+        return await approve_and_dispatch(
+            command, registry, result_registry, command_records,
+        )
+    return command.model_dump(mode="json")
+
+
 def command_from_record(record: CommandRecord, expires_at: datetime) -> NodeCommand:
     # The record remembers the kind so approval rebuilds the same command.
     if record.kind == "open_url":
@@ -326,6 +412,13 @@ def command_from_record(record: CommandRecord, expires_at: datetime) -> NodeComm
             command_id=record.command_id,
             device_id=record.device_id,
             url=record.url,
+            expires_at=expires_at,
+        )
+    if record.kind == "open_project":
+        return OpenProjectCommand(
+            command_id=record.command_id,
+            device_id=record.device_id,
+            project_name=record.project_name,
             expires_at=expires_at,
         )
     return OpenApplicationCommand(

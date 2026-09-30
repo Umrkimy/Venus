@@ -34,6 +34,7 @@ from storage.base import Base
 from venus_protocol.schemas.commands import (
     CommandResult,
     OpenApplicationCommand,
+    OpenProjectCommand,
     OpenUrlCommand,
 )
 
@@ -41,10 +42,12 @@ TEST_NODE_TOKEN = "test-node-token"
 TEST_OWNER_TOKEN = "test-owner-token"
 OPEN_SPOTIFY = {"application_id": "spotify"}
 OPEN_YOUTUBE = {"url": "https://www.youtube.com"}
-# The Node reports the apps this PC can open; Core only accepts those
+OPEN_VENUS = {"project_name": "Venus"}
+# The Node reports the apps and project folders this PC can open; Core only accepts those
 PC_UMAR_HELLO = {
     "device_id": "PC-Umar",
     "apps": [{"name": "Spotify", "app_id": "spotify"}],
+    "projects": ["Venus"],
 }
 
 
@@ -1073,3 +1076,124 @@ def test_list_node_apps_rejects_missing_owner_token():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "Not authenticated"}
+
+
+def test_list_node_projects_returns_reported_projects():
+    with connected_pc_umar():
+        response = client.get(
+            "/nodes/PC-Umar/projects",
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"device_id": "PC-Umar", "projects": ["Venus"]}
+
+
+def test_list_node_projects_rejects_disconnected_node():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = lambda: registry
+
+    response = client.get(
+        "/nodes/PC-Umar/projects",
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Node is not connected"}
+
+
+def test_propose_project_creates_awaiting_approval_record(
+    command_records: CommandRecordRepository,
+):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/open-project",
+            json=OPEN_VENUS,
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+    command = OpenProjectCommand.model_validate(response.json())
+    stored_record = command_records.get(command.command_id)
+
+    assert stored_record is not None
+    assert stored_record.kind == "open_project"
+    assert stored_record.project_name == "Venus"
+    assert stored_record.application_id is None
+    assert stored_record.state == "awaiting_approval"
+
+
+def test_approving_project_proposal_sends_open_project_command():
+    owner_headers = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
+
+    with connected_pc_umar() as websocket:
+        proposal = client.post(
+            "/nodes/PC-Umar/commands/open-project",
+            json=OPEN_VENUS,
+            headers=owner_headers,
+        ).json()
+        approval = client.post(
+            f"/commands/{proposal['command_id']}/approval",
+            json={"approved": True},
+            headers=owner_headers,
+        )
+        # Approval rebuilds the command from the record; it must stay a project command
+        sent = OpenProjectCommand.model_validate(websocket.receive_json())
+
+    assert approval.status_code == 200
+    assert sent.project_name == "Venus"
+
+
+def test_full_mode_project_proposal_dispatches_without_approval(
+    command_records: CommandRecordRepository,
+):
+    owner_headers = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
+    client.put("/settings/mode", json={"mode": "full"}, headers=owner_headers)
+
+    with connected_pc_umar() as websocket:
+        response = client.post(
+            "/nodes/PC-Umar/commands/open-project",
+            json=OPEN_VENUS,
+            headers=owner_headers,
+        )
+        assert websocket.receive_json() == response.json()
+
+    command = OpenProjectCommand.model_validate(response.json())
+    stored_record = command_records.get(command.command_id)
+    assert stored_record is not None
+    assert stored_record.state == "dispatched"
+
+
+def test_propose_project_rejects_unreported_project():
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/open-project",
+            json={"project_name": "fastapi_blog"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "Project is not on this PC"}
+
+
+def test_propose_project_rejects_path_like_name():
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/commands/open-project",
+            json={"project_name": ".."},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_propose_project_rejects_disconnected_node():
+    registry = NodeConnectionRegistry()
+    app.dependency_overrides[get_connection_registry] = lambda: registry
+
+    response = client.post(
+        "/nodes/PC-Umar/commands/open-project",
+        json=OPEN_VENUS,
+        headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json() == {"detail": "Node is not connected"}
