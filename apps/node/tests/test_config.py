@@ -95,3 +95,38 @@ def test_load_settings_rejects_invalid_real_actions(tmp_path: Path):
         match="VENUS_NODE_REAL_ACTIONS must be true or false",
     ):
         load_settings(env_file)
+
+
+NODE_VALUES = (
+    "VENUS_NODE_DEVICE_ID=laptop-1\n"
+    "VENUS_NODE_CORE_DEV_TOKEN=test-node-token\n"
+    "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
+)
+
+
+def test_load_settings_reads_projects_root(tmp_path: Path):
+    projects_root = tmp_path / "projects"
+    projects_root.mkdir()
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES + f"VENUS_NODE_PROJECTS_ROOT={projects_root}\n")
+
+    settings = load_settings(env_file)
+
+    assert settings.projects_root == projects_root
+
+
+def test_load_settings_projects_root_defaults_to_none(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES)
+
+    settings = load_settings(env_file)
+
+    assert settings.projects_root is None
+
+
+def test_load_settings_rejects_missing_projects_root(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES + f"VENUS_NODE_PROJECTS_ROOT={tmp_path / 'missing'}\n")
+
+    with pytest.raises(ValueError, match="VENUS_NODE_PROJECTS_ROOT must be an existing folder"):
+        load_settings(env_file)

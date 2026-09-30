@@ -95,6 +95,7 @@ def test_keep_connected_retries_after_network_failure(monkeypatch):
         on_connected=None,
         execute_payload=None,
         list_apps=None,
+        list_projects=None,
     ) -> NodeHello:
         connection_attempts.append(received_settings)
 
@@ -144,6 +145,7 @@ def test_keep_connected_retries_after_abnormal_disconnect(monkeypatch):
         on_connected=None,
         execute_payload=None,
         list_apps=None,
+        list_projects=None,
     ) -> NodeHello:
         connection_attempts.append(received_settings)
 
@@ -193,6 +195,7 @@ def test_keep_connected_retries_after_core_disconnect(monkeypatch):
         on_connected=None,
         execute_payload=None,
         list_apps=None,
+        list_projects=None,
     ) -> NodeHello:
         connection_attempts.append(received_settings)
 
@@ -404,3 +407,45 @@ def test_connect_to_core_sends_apps_in_hello(monkeypatch):
 
     sent_hello = NodeHello.model_validate_json(sent_messages[0])
     assert sent_hello.apps == [NodeApp(name="Notepad", app_id="notepad-id")]
+
+
+def test_connect_to_core_sends_projects_in_hello(monkeypatch):
+    settings = NodeSettings(
+        device_id="laptop-1",
+        core_dev_token="test-node-token",
+        core_url="ws://core.test/nodes/connect",
+    )
+    sent_messages: list[str] = []
+
+    class FakeWebSocket:
+        async def send(self, message: str):
+            sent_messages.append(message)
+
+        async def recv(self) -> str:
+            return NodeHello(device_id="laptop-1").model_dump_json()
+
+        async def wait_closed(self) -> None:
+            pass
+
+    class FakeConnection:
+        async def __aenter__(self):
+            return FakeWebSocket()
+
+        async def __aexit__(self, exc_type, exc_value, traceback):
+            return False
+
+    monkeypatch.setattr(
+        core_connection,
+        "connect",
+        lambda url, additional_headers: FakeConnection(),
+    )
+
+    asyncio.run(
+        core_connection.connect_to_core(
+            settings,
+            list_projects=lambda: ["Venus"],
+        ),
+    )
+
+    sent_hello = NodeHello.model_validate_json(sent_messages[0])
+    assert sent_hello.projects == ["Venus"]
