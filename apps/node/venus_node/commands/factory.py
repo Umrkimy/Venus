@@ -5,6 +5,8 @@ from venus_node.commands.executor import NodeExecutor
 from venus_node.commands.launcher import (
     create_application_command_executor,
     start_windows_target,
+    create_command_router,
+    create_url_command_executor,
 )
 from venus_node.commands.start_apps import read_start_apps, run_powershell
 from venus_node.storage.repositories.command_records import CommandRecordRepository
@@ -16,10 +18,13 @@ def create_node_executor(
 ) -> NodeExecutor:
     settings = load_settings(env_file)
     command_records = CommandRecordRepository(database_path)
-    command_executor = create_application_command_executor(
-        settings=settings,
-        start_target=start_windows_target,
-        list_apps=lambda: read_start_apps(run_powershell),
+    command_executor = create_command_router(
+        open_app=create_application_command_executor(
+            settings=settings,
+            start_target=start_windows_target,
+            list_apps=lambda: read_start_apps(run_powershell),
+        ),
+        open_url=create_url_command_executor(start_target=start_windows_target),
     )
 
     return NodeExecutor(

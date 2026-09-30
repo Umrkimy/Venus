@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 import pytest
 
-from venus_protocol.schemas.commands import OpenApplicationCommand
+from venus_protocol.schemas.commands import OpenApplicationCommand, OpenUrlCommand
 
 import venus_node.commands.launcher as launcher
 
@@ -86,3 +86,34 @@ def test_application_executor_denies_unlisted_app():
     assert result.status == "denied"
     assert result.detail == "Not in this PC's Start menu"
     assert started_targets == []
+
+
+def make_url_command(url: str) -> OpenUrlCommand:
+    return OpenUrlCommand(
+        command_id=uuid4(),
+        device_id="laptop-1",
+        url=url,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+    )
+
+
+def test_url_executor_opens_url_in_default_browser():
+    started_targets: list[str] = []
+    executor = launcher.create_url_command_executor(start_target=started_targets.append)
+
+    result = executor(make_url_command("https://www.youtube.com"))
+
+    assert result.status == "succeeded"
+    assert started_targets == ["https://www.youtube.com/"]
+
+
+def test_command_router_sends_url_command_to_url_executor():
+    calls: list[str] = []
+    router = launcher.create_command_router(
+        open_app=lambda command: calls.append("app"),
+        open_url=lambda command: calls.append("url"),
+    )
+
+    router(make_url_command("https://www.youtube.com"))
+
+    assert calls == ["url"]

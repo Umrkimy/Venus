@@ -2,7 +2,14 @@ from datetime import datetime, timezone
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    HttpUrl,
+    StringConstraints,
+    TypeAdapter,
+    field_validator,
+)
 
 
 # A Start menu AppID. The Node checks it against the PC's Start menu list.
@@ -13,12 +20,11 @@ ApplicationId = Annotated[
 ]
 
 
-class OpenApplicationCommand(BaseModel):
+class NodeCommandBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     command_id: UUID
     device_id: str
-    application_id: ApplicationId
     expires_at: datetime
 
     @field_validator("device_id")
@@ -36,6 +42,22 @@ class OpenApplicationCommand(BaseModel):
         if value <= datetime.now(timezone.utc):
             raise ValueError("expires_at must be in the future")
         return value
+
+
+class OpenApplicationCommand(NodeCommandBase):
+    kind: Literal["open_application"] = "open_application"
+    application_id: ApplicationId
+
+
+class OpenUrlCommand(NodeCommandBase):
+    kind: Literal["open_url"] = "open_url"
+    # HttpUrl accepts only http and https, so file: or ms-settings: cannot reach os.startfile.
+    url: HttpUrl
+
+
+# extra="forbid" on both models means a payload can match only one of them.
+NodeCommand = OpenApplicationCommand | OpenUrlCommand
+node_command_adapter = TypeAdapter(NodeCommand)
 
 
 class CommandResult(BaseModel):
