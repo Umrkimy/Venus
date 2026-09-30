@@ -3,7 +3,7 @@ from collections.abc import Callable
 
 from venus_node.commands.start_apps import StartApp
 from venus_node.config import NodeSettings
-from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand
+from venus_protocol.schemas.commands import CommandResult, NodeCommand, OpenApplicationCommand, OpenUrlCommand
 
 
 def start_windows_target(target: str) -> None:
@@ -31,5 +31,32 @@ def create_application_command_executor(
             status="succeeded",
             detail="Launch requested",
         )
+
+    return execute
+
+
+def create_url_command_executor(
+    start_target: Callable[[str], None],
+) -> Callable[[OpenUrlCommand], CommandResult]:
+    def execute(command: OpenUrlCommand) -> CommandResult:
+        # The default browser handles http(s) links (Brave on this PC)
+        start_target(str(command.url))
+        return CommandResult(
+            command_id=command.command_id,
+            status="succeeded",
+            detail="Browser open requested",
+        )
+
+    return execute
+
+
+def create_command_router(
+    open_app: Callable[[OpenApplicationCommand], CommandResult],
+    open_url: Callable[[OpenUrlCommand], CommandResult],
+) -> Callable[[NodeCommand], CommandResult]:
+    def execute(command: NodeCommand) -> CommandResult:
+        if isinstance(command, OpenUrlCommand):
+            return open_url(command)
+        return open_app(command)
 
     return execute

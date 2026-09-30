@@ -566,3 +566,24 @@ def test_executor_records_failed_result_when_app_launch_fails(tmp_path):
     assert record is not None
     assert record.status == "failed"
     assert record.completed_at is not None
+
+
+def test_executor_denies_unknown_command_kind(tmp_path):
+    command_id = uuid4()
+    executor = NodeExecutor(
+        device_id="laptop-1",
+        command_records=CommandRecordRepository(tmp_path / "node.db"),
+    )
+
+    result = executor.execute_payload(
+        {
+            "kind": "format_disk",
+            "command_id": str(command_id),
+            "device_id": "laptop-1",
+            "application_id": "spotify",
+            "expires_at": datetime.now(ZoneInfo("Asia/Kuala_Lumpur")) + timedelta(minutes=5),
+        }
+    )
+
+    assert result.status == "denied"
+    assert result.detail == "Invalid command"
