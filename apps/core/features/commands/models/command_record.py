@@ -22,6 +22,8 @@ class CommandRecord(Base):
     )
     # 2083 is Pydantic HttpUrl's max length; raise both together.
     url: Mapped[str | None] = mapped_column(String(2083), nullable=True)
+    # 255 matches the protocol's ProjectName max; raise both together.
+    project_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     state: Mapped[str] = mapped_column(String(20))
     detail: Mapped[str | None] = mapped_column(
@@ -42,6 +44,7 @@ class CommandRecord(Base):
         state: str = "awaiting_approval",
         kind: str = "open_application",
         url: str | None = None,
+        project_name: str | None = None,
     ) -> None:
         self.command_id = command_id
         self.device_id = device_id
@@ -50,5 +53,6 @@ class CommandRecord(Base):
         self.state = state
         self.kind = kind
         self.url = url
+        self.project_name = project_name
         self.detail = None
         self.completed_at = None
