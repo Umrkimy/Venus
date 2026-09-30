@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import AppPicker, { type NodeApp } from "./app-picker";
 import ProjectPicker from "./project-picker";
+import TextCommand from "./text-command";
 import UrlOpener from "./url-opener";
 import { getJson } from "./get-json";
 
@@ -106,6 +107,17 @@ export default function NodeCommands() {
     }
   }
 
+  async function proposeText(deviceId: string, text: string) {
+    const data = await post(
+      `/api/nodes/${encodeURIComponent(deviceId)}/commands/text`,
+      { text },
+    );
+    if (data) {
+      setTargetName(data.label);
+      setCommandId(data.command_id);
+    }
+  }
+
   async function decide(approved: boolean) {
     if (commandId === null) return;
     await post(`/api/commands/${commandId}/approval`, { approved });
@@ -142,6 +154,11 @@ export default function NodeCommands() {
             className="rounded-md border border-border px-4 py-3"
           >
             <span className="font-medium">{deviceId}</span>
+            <TextCommand
+              deviceId={deviceId}
+              disabled={busy || inFlight}
+              onSend={(text) => proposeText(deviceId, text)}
+            />
             <AppPicker
               deviceId={deviceId}
               disabled={busy || inFlight}
