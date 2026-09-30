@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import NodeCommands from "./node-commands";
+import ModeSwitch from "./mode-switch";
 
 type OwnerState =
   | { status: "loading" }
@@ -77,6 +78,7 @@ export default function Home() {
               {owner.username}
             </span>
           </p>
+          <ModeSwitch />
           <NodeCommands />
           <button
             type="button"
