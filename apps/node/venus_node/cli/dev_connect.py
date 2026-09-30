@@ -1,11 +1,12 @@
 import asyncio
 from pathlib import Path
 
-from venus_node.config import load_settings
+from venus_node.config import NodeSettings, load_settings
 from venus_node.commands.factory import (
     create_fake_node_executor,
     create_node_executor,
 )
+from venus_node.commands.projects import list_projects
 from venus_node.commands.start_apps import StartApp, read_start_apps, run_powershell
 from venus_node.connection.client import keep_connected
 from venus_protocol.schemas.connections import NodeHello
@@ -28,6 +29,7 @@ def run_connect(env_file: Path) -> None:
             on_retry=print_retry,
             execute_payload=executor.execute_payload,
             list_apps=list_reported_apps,
+            list_projects=lambda: list_reported_projects(settings),
         ),
     )
 
@@ -42,6 +44,12 @@ def print_retry() -> None:
 
 def list_reported_apps() -> list[StartApp]:
     return read_start_apps(run_powershell)
+
+
+def list_reported_projects(settings: NodeSettings) -> list[str]:
+    if settings.projects_root is None:
+        return []
+    return list_projects(settings.projects_root)
 
 
 def main() -> None:

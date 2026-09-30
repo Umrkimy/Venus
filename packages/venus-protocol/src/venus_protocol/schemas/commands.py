@@ -8,6 +8,7 @@ from pydantic import (
     HttpUrl,
     StringConstraints,
     TypeAdapter,
+    AfterValidator,
     field_validator,
 )
 
@@ -17,6 +18,21 @@ from pydantic import (
 ApplicationId = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=512),
+]
+
+
+def check_project_name(value: str) -> str:
+    if value in {".", ".."} or "\\" in value or "/" in value:
+        raise ValueError("project name must not contain path separators or be '.' or '..'")
+    return value
+
+
+# A folder name inside the Node's projects root, never a path.
+# 255 is the longest folder name Windows allows.
+ProjectName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=255),
+    AfterValidator(check_project_name),
 ]
 
 
@@ -55,8 +71,13 @@ class OpenUrlCommand(NodeCommandBase):
     url: HttpUrl
 
 
-# extra="forbid" on both models means a payload can match only one of them.
-NodeCommand = OpenApplicationCommand | OpenUrlCommand
+class OpenProjectCommand(NodeCommandBase):
+    kind: Literal["open_project"] = "open_project"
+    project_name: ProjectName
+
+
+# extra="forbid" on every model means a payload can match only one of them.
+NodeCommand = OpenApplicationCommand | OpenUrlCommand | OpenProjectCommand
 node_command_adapter = TypeAdapter(NodeCommand)
 
 

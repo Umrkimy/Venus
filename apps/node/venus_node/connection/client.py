@@ -21,11 +21,13 @@ async def connect_to_core(
         CommandResult | None,
     ] | None = None,
     list_apps: Callable[[], list[StartApp]] | None = None,
+    list_projects: Callable[[], list[str]] | None = None,
 ) -> NodeHello:
     apps = [] if list_apps is None else [
         NodeApp(name=app.name, app_id=app.app_id) for app in list_apps()
     ]
-    hello = NodeHello(device_id=settings.device_id, apps=apps)
+    projects = [] if list_projects is None else list_projects()
+    hello = NodeHello(device_id=settings.device_id, apps=apps, projects=projects)
     headers = {
         "Authorization": f"Bearer {settings.core_dev_token}",
     }
@@ -65,6 +67,7 @@ async def keep_connected(
         CommandResult | None,
     ] | None = None,
     list_apps: Callable[[], list[StartApp]] | None = None,
+    list_projects: Callable[[], list[str]] | None = None,
 ) -> None:
     while True:
         try:
@@ -73,6 +76,7 @@ async def keep_connected(
                 on_connected,
                 execute_payload,
                 list_apps=list_apps,
+                list_projects=list_projects,
             )
         except (OSError, ConnectionClosedError):
             if on_retry is not None:

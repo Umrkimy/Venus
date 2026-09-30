@@ -7,6 +7,8 @@ from venus_node.commands.launcher import (
     start_windows_target,
     create_command_router,
     create_url_command_executor,
+    create_project_command_executor,
+    open_in_vscode,
 )
 from venus_node.commands.start_apps import read_start_apps, run_powershell
 from venus_node.storage.repositories.command_records import CommandRecordRepository
@@ -25,6 +27,10 @@ def create_node_executor(
             list_apps=lambda: read_start_apps(run_powershell),
         ),
         open_url=create_url_command_executor(start_target=start_windows_target),
+        open_project=create_project_command_executor(
+            projects_root=settings.projects_root,
+            open_folder=open_in_vscode,
+        ),
     )
 
     return NodeExecutor(

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from venus_protocol.schemas.commands import ApplicationId
+from venus_protocol.schemas.commands import ApplicationId, ProjectName
 
 
 class NodeApp(BaseModel):
@@ -16,6 +16,8 @@ class NodeHello(BaseModel):
     device_id: str
     # Apps this PC can open; empty if the Node sends none
     apps: list[NodeApp] = Field(default_factory=list)
+    # Folders in the Node's projects root; empty if none are set up
+    projects: list[ProjectName] = Field(default_factory=list)
 
     @field_validator("device_id")
     @classmethod

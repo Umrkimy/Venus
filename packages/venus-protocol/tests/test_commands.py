@@ -4,7 +4,13 @@ from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from venus_protocol.schemas.commands import CommandResult, OpenApplicationCommand, OpenUrlCommand, node_command_adapter
+from venus_protocol.schemas.commands import (
+    CommandResult,
+    OpenApplicationCommand,
+    OpenProjectCommand,
+    OpenUrlCommand,
+    node_command_adapter,
+)
 
 
 def test_open_application_command_accepts_spotify():
@@ -118,3 +124,40 @@ def test_node_command_picks_model_by_kind():
     )
 
     assert isinstance(command, OpenUrlCommand)
+
+
+def make_project_command(project_name: str) -> OpenProjectCommand:
+    return OpenProjectCommand(
+        command_id=uuid4(),
+        device_id="laptop-1",
+        project_name=project_name,
+        expires_at=datetime.now(ZoneInfo("Asia/Kuala_Lumpur")) + timedelta(minutes=5),
+    )
+
+
+def test_open_project_command_accepts_folder_name():
+    command = make_project_command("Venus")
+
+    assert command.project_name == "Venus"
+
+
+@pytest.mark.parametrize("project_name", ["a\\b", "a/b", "..", ".", "   "])
+def test_open_project_command_rejects_path_like_names(project_name: str):
+    with pytest.raises(ValidationError):
+        make_project_command(project_name)
+
+
+def test_node_command_adapter_parses_open_project():
+    command = node_command_adapter.validate_python(
+        {
+            "kind": "open_project",
+            "command_id": str(uuid4()),
+            "device_id": "laptop-1",
+            "project_name": "Venus",
+            "expires_at": (
+                datetime.now(ZoneInfo("Asia/Kuala_Lumpur")) + timedelta(minutes=5)
+            ).isoformat(),
+        }
+    )
+
+    assert isinstance(command, OpenProjectCommand)
