@@ -31,6 +31,8 @@ export default function Shortcuts() {
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "Saved comix" / "Added comix" after a successful save.
+  const [notice, setNotice] = useState<string | null>(null);
 
   const shortcuts = useQuery({
     queryKey: ["shortcuts"],
@@ -44,6 +46,7 @@ export default function Shortcuts() {
     setSearchExample("");
     setSearchWords("");
     setEditing(null);
+    setNotice(null);
   }
 
   function startEdit(shortcut: Shortcut) {
@@ -55,12 +58,14 @@ export default function Shortcuts() {
     setSearchWords("");
     setEditing(shortcut.keyword);
     setError(null);
+    setNotice(null);
   }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    setNotice(null);
     const fields = {
       label,
       home_url: homeUrl,
@@ -85,7 +90,18 @@ export default function Shortcuts() {
         );
         return;
       }
-      clearForm();
+      // Stay on the edited shortcut and show what Core really saved.
+      if (editing) {
+        setLabel(data.label);
+        setHomeUrl(data.home_url);
+        setSearchExample(data.search_url ?? "");
+        setSearchWords("");
+        setNotice(`Saved ${data.keyword}`);
+      } else {
+        // clearForm also clears the notice, so set it afterwards.
+        clearForm();
+        setNotice(`Added ${data.keyword}`);
+      }
       await shortcuts.refetch();
     } catch {
       setError("Can't reach Venus Core. Is it running?");
@@ -152,9 +168,7 @@ export default function Shortcuts() {
       )}
 
       <form onSubmit={save} className="mt-4 space-y-3">
-        {editing && (
-          <p className="text-sm font-medium">Editing {editing}</p>
-        )}
+        {editing && <p className="text-sm font-medium">Editing {editing}</p>}
         <label className="block text-sm">
           Keyword
           <input
@@ -244,6 +258,12 @@ export default function Shortcuts() {
           )}
         </div>
       </form>
+
+      {notice && (
+        <p role="status" className="mt-2 text-sm">
+          {notice}
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="mt-2 text-sm text-danger">
