@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import NodeCommands from "./node-commands";
 import ModeSwitch from "./mode-switch";
+import Shortcuts from "./shortcuts";
 
 type OwnerState =
   | { status: "loading" }
@@ -80,6 +81,7 @@ export default function Home() {
           </p>
           <ModeSwitch />
           <NodeCommands />
+          <Shortcuts />
           <button
             type="button"
             onClick={handleLogout}
