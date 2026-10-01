@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import AppPicker, { type NodeApp } from "./app-picker";
+import ChatBox, { type ChatMessage } from "./chat-box";
 import ProjectPicker from "./project-picker";
-import TextCommand from "./text-command";
 import UrlOpener from "./url-opener";
 import { getJson } from "@/lib/get-json";
 
@@ -29,6 +29,7 @@ export default function NodeCommands() {
   const [targetName, setTargetName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const nodes = useQuery({
     queryKey: ["nodes"],
@@ -107,15 +108,25 @@ export default function NodeCommands() {
     }
   }
 
-  async function proposeText(deviceId: string, text: string) {
+  async function chat(deviceId: string, text: string) {
+    // Show your message at once; the updater keeps both adds below.
+    setMessages((old) => [...old, { from: "you", text }]);
     const data = await post(
-      `/api/nodes/${encodeURIComponent(deviceId)}/commands/text`,
-      { text },
+      `/api/nodes/${encodeURIComponent(deviceId)}/chat`,
+      { message: text },
     );
-    if (data) {
-      setTargetName(data.label);
-      setCommandId(data.command_id);
+    if (!data) return;
+    if (data.type === "reply") {
+      setMessages((old) => [...old, { from: "venus", text: data.reply }]);
+      return;
     }
+    // A command: same Approve card as the other pickers.
+    setMessages((old) => [
+      ...old,
+      { from: "venus", text: `On it: ${data.label}` },
+    ]);
+    setTargetName(data.label);
+    setCommandId(data.command_id);
   }
 
   async function decide(approved: boolean) {
@@ -154,10 +165,11 @@ export default function NodeCommands() {
             className="rounded-md border border-border px-4 py-3"
           >
             <span className="font-medium">{deviceId}</span>
-            <TextCommand
+            <ChatBox
               deviceId={deviceId}
               disabled={busy || inFlight}
-              onSend={(text) => proposeText(deviceId, text)}
+              messages={messages}
+              onSend={(text) => chat(deviceId, text)}
             />
             <AppPicker
               deviceId={deviceId}
