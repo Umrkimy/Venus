@@ -1,10 +1,20 @@
-from pydantic import BaseModel, ConfigDict, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class ChatTurn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
 
 
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     message: str
+    history: list[ChatTurn] = Field(default=[], max_length=20)
 
     @field_validator("message")
     @classmethod

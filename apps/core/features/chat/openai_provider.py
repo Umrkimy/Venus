@@ -3,6 +3,7 @@ import json
 from openai import AsyncOpenAI, OpenAIError
 
 from features.chat.provider import BrainReply
+from features.chat.schemas import ChatTurn
 from features.chat.tools import TOOLS, tool_to_command
 
 SYSTEM_PROMPT = (
@@ -17,12 +18,14 @@ class OpenAIProvider:
         self._client = client
         self._model = model
 
-    async def reply(self, message: str) -> BrainReply:
+    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply:
         try:
             response = await self._client.responses.create(
                 model=self._model,
                 instructions=SYSTEM_PROMPT,
-                input=message,
+                input=[
+                    {"role": turn.role, "content": turn.content} for turn in history
+                ] + [{"role": "user", "content": message}],
                 tools=TOOLS,
             )
         except OpenAIError:
