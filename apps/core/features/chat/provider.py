@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Protocol
 
+from features.chat.schemas import ChatTurn
+
 
 @dataclass(frozen=True)
 class BrainReply:
@@ -9,9 +11,9 @@ class BrainReply:
 
 
 class ChatProvider(Protocol):
-    async def reply(self, message: str) -> BrainReply: ...
+    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply: ...
 
 
 class FakeProvider:
-    async def reply(self, message: str) -> BrainReply:
+    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply:
         return BrainReply(text=f"Fake Venus: {message}")

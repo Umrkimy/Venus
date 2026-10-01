@@ -514,7 +514,7 @@ async def chat(
             request.message, apps, projects, search_sites(shortcuts.list_all()),
         )
     except NotUnderstoodError:
-        brain = await provider.reply(request.message)
+        brain = await provider.reply(request.message, request.history)
         if brain.command is None:
             return {"type": "reply", "reply": brain.text}
         # Luna picked a tool: run its choice through the same parser.
