@@ -19,6 +19,9 @@ from venus_protocol.schemas.commands import (
 from venus_protocol.schemas.connections import NodeHello
 
 from features.auth.dependencies import require_owner
+from features.chat.dependencies import get_chat_provider
+from features.chat.provider import ChatProvider
+from features.chat.schemas import ChatRequest
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -40,6 +43,7 @@ from features.commands.schemas import (
 from features.commands.text_parser import (
     SEARCH_SITES,
     CommandTextError,
+    NotUnderstoodError,
     ParsedCommand,
     SearchSite,
     parse_command_text,
@@ -393,6 +397,30 @@ async def propose_project_command(
     )
 
 
+async def propose_parsed(
+    parsed: ParsedCommand,
+    device_id: str,
+    registry: NodeConnectionRegistry,
+    result_registry: CommandResultRegistry,
+    command_records: CommandRecordRepository,
+    settings_repository: SettingsRepository,
+) -> dict:
+    # Text like "a.b:99999" passes the parser but is not a valid link.
+    try:
+        command = command_from_parsed(parsed, device_id)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That link doesn't look right",
+        ) from exc
+
+    response = await propose(
+        command, registry, result_registry, command_records, settings_repository,
+    )
+    response["label"] = parsed.label
+    return response
+
+
 @router.post(
     "/nodes/{device_id}/commands/text",
     dependencies=[Depends(require_owner)],
@@ -440,20 +468,61 @@ async def propose_text_command(
             detail=str(exc),
         ) from exc
 
-    # Text like "a.b:99999" passes the parser but is not a valid link.
-    try:
-        command = command_from_parsed(parsed, device_id)
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="That link doesn't look right",
-        ) from exc
-
-    response = await propose(
-        command, registry, result_registry, command_records, settings_repository,
+    return await propose_parsed(
+        parsed, device_id, registry, result_registry, command_records, settings_repository,
     )
-    response["label"] = parsed.label
-    return response
+
+
+@router.post("/nodes/{device_id}/chat", dependencies=[Depends(require_owner)])
+async def chat(
+    device_id: str,
+    request: ChatRequest,
+    command_records: Annotated[
+        CommandRecordRepository,
+        Depends(get_command_record_repository),
+    ],
+    registry: Annotated[
+        NodeConnectionRegistry,
+        Depends(get_connection_registry),
+    ],
+    result_registry: Annotated[
+        CommandResultRegistry,
+        Depends(get_command_result_registry),
+    ],
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
+    ],
+    shortcuts: Annotated[
+        ShortcutRepository,
+        Depends(get_shortcut_repository),
+    ],
+    provider: Annotated[ChatProvider, Depends(get_chat_provider)],
+):
+    apps = registry.apps_for(device_id)
+    projects = registry.projects_for(device_id)
+
+    if apps is None or projects is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Node is not connected",
+        )
+
+    # Rules answer first; the brain only gets what they don't understand.
+    try:
+        parsed = parse_command_text(
+            request.message, apps, projects, search_sites(shortcuts.list_all()),
+        )
+    except NotUnderstoodError:
+        return {"type": "reply", "reply": await provider.reply(request.message)}
+    except CommandTextError as exc:
+        # "Which one: ...?" and "No app called ..." are answers in a chat.
+        return {"type": "reply", "reply": str(exc)}
+
+    response = await propose_parsed(
+        parsed, device_id, registry, result_registry, command_records, settings_repository,
+    )
+    return {"type": "command", **response}
 
 
 def record_from_command(command: NodeCommand) -> CommandRecord:
