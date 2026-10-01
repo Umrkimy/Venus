@@ -8,6 +8,10 @@ class CommandTextError(ValueError):
     """The message is shown to the owner as is."""
 
 
+class NotUnderstoodError(CommandTextError):
+    """The rule parser has no rule for this text; the brain may answer."""
+
+
 @dataclass(frozen=True)
 class SearchSite:
     label: str
@@ -56,7 +60,7 @@ def parse_command_text(
     lowered = text.lower()
 
     if not text:
-        raise CommandTextError("Venus didn't understand that")
+        raise NotUnderstoodError("Venus didn't understand that")
 
     for prefix in PROJECT_PREFIXES:
         if lowered.startswith(prefix):
@@ -78,7 +82,7 @@ def parse_command_text(
     if _looks_like_url(text):
         return _parse_url(text)
 
-    raise CommandTextError("Venus didn't understand that")
+    raise NotUnderstoodError("Venus didn't understand that")
 
 
 def _parse_project(name: str, projects: list[str]) -> ParsedCommand:
