@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { getJson } from "./get-json";
+import { getJson } from "@/lib/get-json";
 
 type Mode = "confirm" | "full";
 type ModeResponse = { mode: Mode };

@@ -7,7 +7,7 @@ import AppPicker, { type NodeApp } from "./app-picker";
 import ProjectPicker from "./project-picker";
 import TextCommand from "./text-command";
 import UrlOpener from "./url-opener";
-import { getJson } from "./get-json";
+import { getJson } from "@/lib/get-json";
 
 type NodeList = { device_ids: string[] };
 type CommandStatus = { command_id: string; status: string; detail?: string };

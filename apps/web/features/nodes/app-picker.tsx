@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { getJson } from "./get-json";
+import { getJson } from "@/lib/get-json";
 
 export type NodeApp = { name: string; app_id: string };
 type NodeApps = { device_id: string; apps: NodeApp[] };
