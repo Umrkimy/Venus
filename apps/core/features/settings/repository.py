@@ -2,8 +2,10 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from features.settings.models.command_mode import CommandModeSetting
+from features.settings.models.llm import LlmSetting
 
 MODE_ROW_ID = 1
+LLM_ROW_ID = 1
 
 
 class SettingsRepository:
@@ -21,4 +23,33 @@ class SettingsRepository:
         with Session(self.engine) as session:
             # merge inserts the row the first time and updates it afterwards.
             session.merge(CommandModeSetting(id=MODE_ROW_ID, mode=mode))
+            session.commit()
+
+    def get_llm(self) -> LlmSetting | None:
+        with Session(self.engine) as session:
+            return session.get(LlmSetting, LLM_ROW_ID)
+
+    def set_llm(
+        self,
+        provider: str,
+        model: str,
+        api_key_encrypted: str | None,
+    ) -> None:
+        with Session(self.engine) as session:
+            row = session.get(LlmSetting, LLM_ROW_ID)
+            if row is None:
+                session.add(
+                    LlmSetting(
+                        id=LLM_ROW_ID,
+                        provider=provider,
+                        model=model,
+                        api_key_encrypted=api_key_encrypted,
+                    ),
+                )
+            else:
+                row.provider = provider
+                row.model = model
+                # No new key means "keep the saved one".
+                if api_key_encrypted is not None:
+                    row.api_key_encrypted = api_key_encrypted
             session.commit()

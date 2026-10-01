@@ -12,6 +12,8 @@ class CoreSettings:
     llm_provider: str = "fake"
     llm_model: str = ""
     llm_api_key: str = ""
+    secret_key: str = ""
+
 
 def get_settings() -> CoreSettings:
     core_directory = Path(__file__).resolve().parent
@@ -26,6 +28,7 @@ def load_settings(env_file: Path) -> CoreSettings:
     llm_provider = values.get("VENUS_CORE_LLM_PROVIDER") or "fake"
     llm_model = values.get("VENUS_CORE_LLM_MODEL") or ""
     llm_api_key = values.get("VENUS_CORE_LLM_API_KEY") or ""
+    secret_key = values.get("VENUS_CORE_SECRET_KEY") or ""
 
     if not node_token or not node_token.strip():
         raise ValueError("VENUS_CORE_DEV_NODE_TOKEN is required")
@@ -43,4 +46,5 @@ def load_settings(env_file: Path) -> CoreSettings:
         llm_provider=llm_provider,
         llm_model=llm_model,
         llm_api_key=llm_api_key,
+        secret_key=secret_key,
     )
