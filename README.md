@@ -84,6 +84,14 @@ VENUS_NODE_CORE_URL=ws://127.0.0.1:8000/nodes/connect
 The Node token proves a Node may connect. The owner token protects the
 development-only fake HTTP dispatch route; never reuse the Node token for it.
 
+## Start everything at once
+
+After the setup above, double-click `start-venus.cmd` in the repository root,
+or run `.\start-venus.ps1` from PowerShell. It starts Docker Desktop if needed,
+waits for Postgres, then opens Core (port 9000, auto-reload), the Node, and the
+web UI in their own windows. Parts that are already running are skipped. Close
+a window to stop that part. The sections below start each part by hand.
+
 ## Run Core
 
 ```powershell
