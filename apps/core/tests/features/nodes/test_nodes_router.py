@@ -20,6 +20,8 @@ from features.commands.result_registry import (
 )
 from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
+from features.chat.dependencies import get_chat_provider
+from features.chat.provider import BrainReply
 from features.commands.dependencies import get_command_record_repository
 from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
@@ -1317,6 +1319,56 @@ def test_chat_asks_the_brain_when_the_parser_does_not_understand():
 
     assert response.status_code == 200
     assert response.json() == {"type": "reply", "reply": "Fake Venus: hello"}
+
+
+class ToolBrain:
+    """A brain that always picks a tool, already written as parser text."""
+
+    def __init__(self, command: str) -> None:
+        self.command = command
+
+    async def reply(self, message: str) -> BrainReply:
+        return BrainReply(command=self.command)
+
+
+def test_chat_brain_tool_choice_proposes_command(
+    command_records: CommandRecordRepository,
+):
+    app.dependency_overrides[get_chat_provider] = lambda: ToolBrain("open spotify")
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "can you open spotify for me"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+    stored_record = command_records.get(UUID(body["command_id"]))
+
+    assert response.status_code == 200
+    assert body["type"] == "command"
+    assert body["label"] == "Spotify"
+    assert stored_record is not None
+    assert stored_record.state == "awaiting_approval"
+
+
+def test_chat_brain_tool_choice_still_goes_through_parser_checks():
+    # Luna can't open anything the owner couldn't type themselves.
+    app.dependency_overrides[get_chat_provider] = lambda: ToolBrain("open zzz")
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "can you open zzz for me"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "type": "reply",
+        "reply": "No app called zzz on this PC",
+    }
 
 
 def test_chat_requires_owner():

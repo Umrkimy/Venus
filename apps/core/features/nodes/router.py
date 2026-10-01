@@ -514,7 +514,16 @@ async def chat(
             request.message, apps, projects, search_sites(shortcuts.list_all()),
         )
     except NotUnderstoodError:
-        return {"type": "reply", "reply": await provider.reply(request.message)}
+        brain = await provider.reply(request.message)
+        if brain.command is None:
+            return {"type": "reply", "reply": brain.text}
+        # Luna picked a tool: run its choice through the same parser.
+        try:
+            parsed = parse_command_text(
+                brain.command, apps, projects, search_sites(shortcuts.list_all()),
+            )
+        except CommandTextError as exc:
+            return {"type": "reply", "reply": str(exc)}
     except CommandTextError as exc:
         # "Which one: ...?" and "No app called ..." are answers in a chat.
         return {"type": "reply", "reply": str(exc)}
