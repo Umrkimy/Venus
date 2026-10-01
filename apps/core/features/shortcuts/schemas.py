@@ -9,9 +9,23 @@ from pydantic import (
 )
 
 
-class ShortcutRequest(BaseModel):
+class ShortcutFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    label: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+    ]
+    home_url: HttpUrl
+    # A real search link; the router turns it into a {words} template.
+    search_example: HttpUrl | None = None
+    search_words: Annotated[
+        str | None,
+        StringConstraints(strip_whitespace=True, max_length=100),
+    ] = None
+
+
+class ShortcutRequest(ShortcutFields):
     # The pattern runs before to_lower, so capitals must pass it.
     keyword: Annotated[
         str,
@@ -22,12 +36,6 @@ class ShortcutRequest(BaseModel):
             max_length=50,
         ),
     ]
-    label: Annotated[
-        str,
-        StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
-    ]
-    home_url: HttpUrl
-    search_url: HttpUrl | None = None
 
     @field_validator("keyword")
     @classmethod
@@ -37,9 +45,6 @@ class ShortcutRequest(BaseModel):
             raise ValueError("You can't name a shortcut open")
         return keyword
 
-    @field_validator("search_url")
-    @classmethod
-    def search_url_has_words_slot(cls, url: HttpUrl | None) -> HttpUrl | None:
-        if url is not None and "{words}" not in str(url):
-            raise ValueError("The search link needs {words} where your search goes")
-        return url
+
+class ShortcutUpdate(ShortcutFields):
+    pass
