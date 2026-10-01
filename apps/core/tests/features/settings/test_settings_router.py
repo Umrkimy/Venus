@@ -1,4 +1,5 @@
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -8,6 +9,7 @@ from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
 from features.settings.dependencies import get_settings_repository
 from features.settings.repository import SettingsRepository
+from features.settings.secrets import decrypt_text
 from main import app
 from storage.base import Base
 
@@ -69,3 +71,93 @@ def test_put_mode_requires_owner():
     response = client.put("/settings/mode", json={"mode": "full"})
 
     assert response.status_code == 401
+
+
+SECRET_KEY = Fernet.generate_key().decode()
+
+
+def use_settings(**changes):
+    app.dependency_overrides[get_settings] = lambda: CoreSettings(
+        dev_node_token="test-node-token",
+        dev_owner_token=TEST_OWNER_TOKEN,
+        database_url="postgresql+psycopg://venus:test-password@127.0.0.1:5432/venus",
+        **changes,
+    )
+
+
+def save_llm(**body):
+    return client.put("/settings/llm", json=body, headers=OWNER_HEADERS)
+
+
+def test_llm_settings_fall_back_to_env():
+    use_settings(llm_provider="openai", llm_model="gpt-6-luna", llm_api_key="sk-env")
+
+    response = client.get("/settings/llm", headers=OWNER_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "has_key": True,
+    }
+
+
+def test_llm_settings_never_return_the_key():
+    use_settings(secret_key=SECRET_KEY)
+
+    put = save_llm(provider="openai", model="gpt-6-luna", api_key="sk-secret")
+    get = client.get("/settings/llm", headers=OWNER_HEADERS)
+
+    expected = {"provider": "openai", "model": "gpt-6-luna", "has_key": True}
+    assert put.status_code == 200
+    assert put.json() == expected
+    assert get.json() == expected
+    assert "sk-secret" not in put.text + get.text
+
+
+def test_llm_settings_store_the_key_encrypted():
+    use_settings(secret_key=SECRET_KEY)
+    repository = app.dependency_overrides[get_settings_repository]()
+
+    save_llm(provider="openai", model="gpt-6-luna", api_key="sk-secret")
+    stored = repository.get_llm().api_key_encrypted
+
+    assert stored != "sk-secret"
+    assert "sk-secret" not in stored
+    assert decrypt_text(stored, SECRET_KEY) == "sk-secret"
+
+
+def test_llm_settings_put_without_key_keeps_old_key():
+    use_settings(secret_key=SECRET_KEY)
+    repository = app.dependency_overrides[get_settings_repository]()
+    save_llm(provider="openai", model="gpt-6-luna", api_key="sk-secret")
+
+    response = save_llm(provider="openai", model="gpt-6-mini")
+    stored = repository.get_llm()
+
+    assert response.json()["has_key"] is True
+    assert stored.model == "gpt-6-mini"
+    assert decrypt_text(stored.api_key_encrypted, SECRET_KEY) == "sk-secret"
+
+
+def test_llm_settings_need_secret_key_for_api_key():
+    response = save_llm(provider="openai", model="gpt-6-luna", api_key="sk-secret")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Set VENUS_CORE_SECRET_KEY in Core's .env first",
+    }
+
+
+def test_llm_settings_reject_unknown_provider():
+    response = save_llm(provider="skynet", model="t-800")
+
+    assert response.status_code == 422
+
+
+def test_llm_settings_require_owner():
+    get = client.get("/settings/llm")
+    put = client.put("/settings/llm", json={"provider": "fake", "model": ""})
+
+    assert get.status_code == 401
+    assert put.status_code == 401
