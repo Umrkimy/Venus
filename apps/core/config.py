@@ -9,6 +9,7 @@ class CoreSettings:
     dev_node_token: str
     dev_owner_token: str
     database_url: str
+    llm_provider: str = "fake"
 
 def get_settings() -> CoreSettings:
     core_directory = Path(__file__).resolve().parent
@@ -20,6 +21,7 @@ def load_settings(env_file: Path) -> CoreSettings:
     node_token = values.get("VENUS_CORE_DEV_NODE_TOKEN", "")
     owner_token = values.get("VENUS_CORE_DEV_OWNER_TOKEN", "")
     database_url = values.get("VENUS_CORE_DATABASE_URL", "")
+    llm_provider = values.get("VENUS_CORE_LLM_PROVIDER") or "fake"
 
     if not node_token or not node_token.strip():
         raise ValueError("VENUS_CORE_DEV_NODE_TOKEN is required")
@@ -34,4 +36,5 @@ def load_settings(env_file: Path) -> CoreSettings:
         dev_node_token=node_token,
         dev_owner_token=owner_token,
         database_url=database_url,
+        llm_provider=llm_provider,
     )

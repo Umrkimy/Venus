@@ -1270,6 +1270,61 @@ def test_full_mode_text_command_dispatches_without_approval(
     assert stored_record.state == "dispatched"
 
 
+def test_chat_runs_a_command_the_parser_understands(
+    command_records: CommandRecordRepository,
+):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open spot"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+    stored_record = command_records.get(UUID(body["command_id"]))
+
+    assert response.status_code == 200
+    assert body["type"] == "command"
+    assert body["label"] == "Spotify"
+    assert stored_record is not None
+    assert stored_record.state == "awaiting_approval"
+
+
+def test_chat_answers_parser_questions_without_the_brain(
+    command_records: CommandRecordRepository,
+):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open zzz"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "type": "reply",
+        "reply": "No app called zzz on this PC",
+    }
+
+
+def test_chat_asks_the_brain_when_the_parser_does_not_understand():
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hello"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"type": "reply", "reply": "Fake Venus: hello"}
+
+
+def test_chat_requires_owner():
+    response = client.post("/nodes/PC-Umar/chat", json={"message": "hello"})
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
 def test_text_command_rejects_text_venus_does_not_understand():
     with connected_pc_umar():
         response = client.post(
