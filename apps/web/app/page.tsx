@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import NodeCommands from "./node-commands";
-import ModeSwitch from "./mode-switch";
-import Shortcuts from "./shortcuts";
+import NodeCommands from "@/features/nodes/node-commands";
+import ModeSwitch from "@/features/settings/mode-switch";
+import Shortcuts from "@/features/shortcuts/shortcuts";
 
 type OwnerState =
   | { status: "loading" }
