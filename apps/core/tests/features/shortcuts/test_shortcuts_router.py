@@ -18,7 +18,7 @@ COMIX = {
     "keyword": "comix",
     "label": "Comix",
     "home_url": "https://comix.to",
-    "search_url": "https://comix.to/search?q={words}",
+    "search_example": "https://comix.to/search?q={words}",
 }
 
 client = TestClient(app)
@@ -98,14 +98,28 @@ def test_unusable_keyword_is_rejected(keyword: str):
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
-def test_search_link_without_words_slot_is_rejected():
+def test_search_example_is_saved_as_template():
     response = client.post(
         "/shortcuts",
-        json={**COMIX, "search_url": "https://comix.to/search"},
+        json={**COMIX, "search_example": "https://comix.to/browse?q=solo%20leveling"},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.json()["search_url"] == "https://comix.to/browse?q={words}"
+
+
+def test_search_example_without_search_is_rejected():
+    response = client.post(
+        "/shortcuts",
+        json={**COMIX, "search_example": "https://comix.to/browse"},
         headers=OWNER_HEADERS,
     )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": "I couldn't find your search in that link. "
+        "What did you search for?",
+    }
 
 
 def test_delete_shortcut_removes_it():
@@ -123,6 +137,43 @@ def test_delete_missing_shortcut_returns_404():
     response = client.delete("/shortcuts/comix", headers=OWNER_HEADERS)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_update_shortcut_changes_fields():
+    client.post("/shortcuts", json=COMIX, headers=OWNER_HEADERS)
+
+    response = client.put(
+        "/shortcuts/Comix",
+        json={"label": "Comix Site", "home_url": "https://comix.to/home"},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "keyword": "comix",
+        "label": "Comix Site",
+        "home_url": "https://comix.to/home",
+        "search_url": None,
+    }
+
+
+def test_update_missing_shortcut_returns_404():
+    response = client.put(
+        "/shortcuts/comix",
+        json={"label": "Comix", "home_url": "https://comix.to"},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_update_shortcut_requires_owner():
+    response = client.put(
+        "/shortcuts/comix",
+        json={"label": "Comix", "home_url": "https://comix.to"},
+    )
+
+    assert response.status_code == 401
 
 
 def test_shortcuts_require_owner():

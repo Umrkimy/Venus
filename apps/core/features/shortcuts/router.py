@@ -6,7 +6,15 @@ from features.auth.dependencies import require_owner
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.shortcuts.repository import ShortcutRepository
-from features.shortcuts.schemas import ShortcutRequest
+from features.shortcuts.schemas import (
+    ShortcutFields,
+    ShortcutRequest,
+    ShortcutUpdate,
+)
+from features.shortcuts.search_template import (
+    SearchTemplateError,
+    search_template,
+)
 
 
 router = APIRouter(prefix="/shortcuts", dependencies=[Depends(require_owner)])
@@ -19,6 +27,18 @@ def shortcut_json(shortcut: SiteShortcut) -> dict:
         "home_url": shortcut.home_url,
         "search_url": shortcut.search_url,
     }
+
+
+def search_url_from(request: ShortcutFields) -> str | None:
+    if request.search_example is None:
+        return None
+    try:
+        return search_template(str(request.search_example), request.search_words)
+    except SearchTemplateError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
 
 
 @router.get("")
@@ -49,10 +69,32 @@ def add_shortcut(
         keyword=request.keyword,
         label=request.label,
         home_url=str(request.home_url),
-        # str(None) would save the text "None", so keep None as None.
-        search_url=str(request.search_url) if request.search_url else None,
+        search_url=search_url_from(request),
     )
     shortcuts.add(shortcut)
+    return shortcut_json(shortcut)
+
+
+@router.put("/{keyword}")
+def update_shortcut(
+    keyword: str,
+    request: ShortcutUpdate,
+    shortcuts: Annotated[
+        ShortcutRepository,
+        Depends(get_shortcut_repository),
+    ],
+):
+    shortcut = shortcuts.update(
+        keyword.lower(),
+        label=request.label,
+        home_url=str(request.home_url),
+        search_url=search_url_from(request),
+    )
+    if shortcut is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No shortcut called {keyword}",
+        )
     return shortcut_json(shortcut)
 
 

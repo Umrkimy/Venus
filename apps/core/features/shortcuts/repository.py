@@ -32,3 +32,21 @@ class ShortcutRepository:
             session.delete(shortcut)
             session.commit()
             return True
+
+    def update(
+        self,
+        keyword: str,
+        label: str,
+        home_url: str,
+        search_url: str | None,
+    ) -> SiteShortcut | None:
+        # Keep the values readable after commit; the route returns them.
+        with Session(self.engine, expire_on_commit=False) as session:
+            shortcut = session.get(SiteShortcut, keyword)
+            if shortcut is None:
+                return None
+            shortcut.label = label
+            shortcut.home_url = home_url
+            shortcut.search_url = search_url
+            session.commit()
+            return shortcut
