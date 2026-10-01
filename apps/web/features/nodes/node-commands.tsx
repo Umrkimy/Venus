@@ -109,12 +109,18 @@ export default function NodeCommands() {
   }
 
   async function chat(deviceId: string, text: string) {
+    // Older lines only: `messages` doesn't include the new one yet.
+    // Core allows 20 turns and 4000 characters per turn.
+    const history = messages.slice(-10).map((m) => ({
+      role: m.from === "you" ? "user" : "assistant",
+      content: m.text.slice(0, 4000),
+    }));
     // Show your message at once; the updater keeps both adds below.
     setMessages((old) => [...old, { from: "you", text }]);
-    const data = await post(
-      `/api/nodes/${encodeURIComponent(deviceId)}/chat`,
-      { message: text },
-    );
+    const data = await post(`/api/nodes/${encodeURIComponent(deviceId)}/chat`, {
+      message: text,
+      history,
+    });
     if (!data) return;
     if (data.type === "reply") {
       setMessages((old) => [...old, { from: "venus", text: data.reply }]);
