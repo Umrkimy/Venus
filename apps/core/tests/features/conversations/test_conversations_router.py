@@ -14,6 +14,8 @@ from features.auth.repository import AuthRepository
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.models.conversation import Conversation, Message
 from features.conversations.repository import ConversationRepository
+from features.projects.dependencies import get_project_repository
+from features.projects.repository import ProjectRepository
 from main import app
 from storage.base import Base
 
@@ -45,6 +47,8 @@ def conversations(engine):
     )
     app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
     app.dependency_overrides[get_conversation_repository] = lambda: repository
+    projects = ProjectRepository(engine)
+    app.dependency_overrides[get_project_repository] = lambda: projects
     yield repository
     app.dependency_overrides.clear()
 
@@ -165,7 +169,11 @@ def test_archived_conversation_leaves_main_list_and_shows_in_archive(conversatio
     )
 
     assert response.status_code == 200
-    assert response.json() == {"id": str(archived), "archived": True}
+    assert response.json() == {
+        "id": str(archived),
+        "archived": True,
+        "project_id": None,
+    }
     assert listed_titles() == ["today"]
     assert listed_titles(archived=True) == ["old plan"]
     # Archived chats can still be opened.
@@ -213,3 +221,51 @@ def test_delete_and_archive_require_owner(conversations):
         == status.HTTP_401_UNAUTHORIZED
     )
     assert conversations.get(conversation_id).archived_at is None
+
+
+def test_move_conversation_into_and_out_of_project(engine, conversations):
+    project = ProjectRepository(engine).create("Java assignment")
+    conversation_id = conversations.create("loops question")
+
+    moved_in = client.patch(
+        f"/conversations/{conversation_id}",
+        json={"project_id": str(project.id)},
+        headers=OWNER_HEADERS,
+    )
+    listed = client.get("/conversations", headers=OWNER_HEADERS).json()
+    # Archiving doesn't send project_id, so the chat stays in its project.
+    client.patch(
+        f"/conversations/{conversation_id}",
+        json={"archived": True},
+        headers=OWNER_HEADERS,
+    )
+    still_in = conversations.get(conversation_id).project_id
+    moved_out = client.patch(
+        f"/conversations/{conversation_id}",
+        json={"project_id": None},
+        headers=OWNER_HEADERS,
+    )
+
+    assert moved_in.json()["project_id"] == str(project.id)
+    assert listed[0]["project_id"] == str(project.id)
+    assert still_in == project.id
+    assert moved_out.status_code == 200
+    assert moved_out.json() == {
+        "id": str(conversation_id),
+        "archived": True,
+        "project_id": None,
+    }
+
+
+def test_move_conversation_to_unknown_project_returns_404(conversations):
+    conversation_id = conversations.create("lost")
+
+    response = client.patch(
+        f"/conversations/{conversation_id}",
+        json={"project_id": str(uuid4())},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["detail"] == "Project not found"
+    assert conversations.get(conversation_id).project_id is None

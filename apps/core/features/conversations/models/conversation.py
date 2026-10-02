@@ -15,6 +15,13 @@ class Conversation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # Moves forward with every message, so the newest chat sorts first.
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Empty means the chat isn't in a project.
+    project_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("projects.id"),
+        index=True,
+        default=None,
+    )
     # Empty means active; a time means the owner archived the chat then.
     archived_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
