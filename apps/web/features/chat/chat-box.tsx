@@ -4,8 +4,15 @@ import { ArrowUp } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import ActionCard, { type ChatAction } from "./action-card";
 
-export type ChatMessage = { from: "you" | "venus"; text: string };
+export type ChatMessage = {
+  from: "you" | "venus";
+  text: string;
+  actions?: ChatAction[];
+  // Sent in this visit (not loaded from a saved chat).
+  live?: boolean;
+};
 
 type ChatBoxProps = {
   disabled: boolean;
@@ -54,13 +61,20 @@ export default function ChatBox({
                 key={index}
                 className={
                   message.from === "you"
-                    ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words"
-                    : "max-w-[85%] break-words"
+                    ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap"
+                    : "max-w-[85%] break-words whitespace-pre-wrap"
                 }
               >
                 <span className="sr-only">
                   {message.from === "you" ? "You: " : "Venus: "}
                 </span>
+                {/* What Venus did comes first, then what she says about it. */}
+                {message.actions && message.actions.length > 0 && (
+                  <ActionCard
+                    actions={message.actions}
+                    startOpen={message.live ?? false}
+                  />
+                )}
                 {message.text}
               </li>
             ))}
