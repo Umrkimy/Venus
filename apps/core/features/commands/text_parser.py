@@ -77,6 +77,10 @@ def parse_command_text(
     if first_word == "open" and rest:
         if _looks_like_url(rest):
             return _parse_url(rest)
+        # "open comix" means the shortcut, unless an app has exactly that name.
+        site = sites.get(rest.lower())
+        if site is not None and not any(app.name.lower() == rest.lower() for app in apps):
+            return _parse_site(site, "")
         return _parse_app(rest, apps)
 
     if _looks_like_url(text):
@@ -124,7 +128,8 @@ def _parse_app(name: str, apps: list[NodeApp]) -> ParsedCommand:
     if matches:
         names = ", ".join(app.name for app in matches[:MAX_CHOICES])
         raise CommandTextError(f"Which one: {names}?")
-    raise CommandTextError(f"No app called {name} on this PC")
+    # Maybe extra words ("spotify for me"): let the brain read the whole sentence.
+    raise NotUnderstoodError(f"No app called {name} on this PC")
 
 
 def _parse_url(text: str) -> ParsedCommand:

@@ -9,3 +9,13 @@ def test_build_instructions_stacks_base_personality_then_project():
 
 def test_build_instructions_skips_empty_parts():
     assert build_instructions(None, "   ") == BASE_PROMPT
+
+
+def test_build_instructions_lists_saved_sites_after_base_rules():
+    text = build_instructions("Be flirty.", None, ["youtube", "comix"])
+
+    assert text == (
+        f"{BASE_PROMPT}\n\n"
+        "Saved sites: comix, youtube. To open one, call open_app with its keyword.\n\n"
+        "Be flirty."
+    )

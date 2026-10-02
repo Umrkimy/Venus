@@ -4,6 +4,7 @@ from venus_protocol.schemas.connections import NodeApp
 
 from features.commands.text_parser import (
     CommandTextError,
+    NotUnderstoodError,
     SearchSite,
     parse_command_text,
 )
@@ -43,11 +44,29 @@ def test_several_matching_apps_ask_which_one():
     assert str(error.value) == "Which one: Notepad, Notepad++, Notion?"
 
 
-def test_unknown_app_is_rejected():
-    with pytest.raises(CommandTextError) as error:
-        parse("open photoshop")
+def test_unknown_app_is_not_understood():
+    # Not understood, so the chat route hands the sentence to the brain.
+    with pytest.raises(NotUnderstoodError) as error:
+        parse("open spotify for me")
 
-    assert str(error.value) == "No app called photoshop on this PC"
+    assert str(error.value) == "No app called spotify for me on this PC"
+
+
+def test_open_site_keyword_opens_home_page():
+    sites = {"comix": SearchSite(label="Comix", home_url="https://comix.to")}
+
+    parsed = parse("open Comix", sites=sites)
+
+    assert parsed.url == "https://comix.to"
+    assert parsed.label == "Comix"
+
+
+def test_app_with_exact_name_wins_over_site_keyword():
+    sites = {"steam": SearchSite(label="Steam store", home_url="https://store.steampowered.com")}
+
+    parsed = parse("open steam", sites=sites)
+
+    assert parsed.application_id == "steam"
 
 
 @pytest.mark.parametrize("text", ["open project venus", "Open my project VENUS"])
