@@ -1,10 +1,24 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { LogOut, Plus, Settings } from "lucide-react";
+import {
+  Archive,
+  LogOut,
+  MoreHorizontal,
+  Plus,
+  Settings,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -14,12 +28,15 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { useNewChat } from "@/features/chat/new-chat";
+import { useChatActions } from "@/features/shell/chat-actions";
+import DeleteChatDialog from "@/features/shell/delete-chat-dialog";
 import { getJson } from "@/lib/get-json";
 import { useNodes } from "@/lib/use-nodes";
 
@@ -35,11 +52,20 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
   const { startNewChat } = useNewChat();
   const nodes = useNodes();
   const deviceId = nodes.data?.device_ids[0];
+  const actions = useChatActions();
+  const [deleting, setDeleting] = useState<ConversationSummary | null>(null);
 
   const conversations = useQuery({
     queryKey: ["conversations"],
     queryFn: () => getJson<ConversationSummary[]>("/api/conversations"),
   });
+
+  async function confirmDelete() {
+    if (deleting === null) return;
+    const id = deleting.id;
+    setDeleting(null);
+    await actions.deleteChat(id);
+  }
 
   return (
     <Sidebar>
@@ -58,6 +84,12 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
+        {actions.error && (
+          <p role="alert" className="px-4 pt-2 text-sm text-destructive">
+            {actions.error}
+          </p>
+        )}
+
         <SidebarGroup>
           <SidebarGroupLabel>Chats</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -82,18 +114,15 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
               </p>
             )}
             <SidebarMenu>
-              {conversations.data?.map((conversation) => {
-                const href = `/chat/${conversation.id}`;
-                return (
-                  <SidebarMenuItem key={conversation.id}>
-                    <SidebarMenuButton asChild isActive={pathname === href}>
-                      <Link href={href}>
-                        <span>{conversation.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              {conversations.data?.map((conversation) => (
+                <ChatRow
+                  key={conversation.id}
+                  conversation={conversation}
+                  active={pathname === `/chat/${conversation.id}`}
+                  onArchive={() => actions.setArchived(conversation.id, true)}
+                  onDelete={() => setDeleting(conversation)}
+                />
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -125,6 +154,55 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
+
+      <DeleteChatDialog
+        title={deleting?.title ?? null}
+        onCancel={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+      />
     </Sidebar>
+  );
+}
+
+type ChatRowProps = {
+  conversation: ConversationSummary;
+  active: boolean;
+  onArchive: () => void;
+  onDelete: () => void;
+};
+
+function ChatRow({
+  conversation,
+  active,
+  onArchive,
+  onDelete,
+}: ChatRowProps) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild isActive={active}>
+        <Link href={`/chat/${conversation.id}`}>
+          <span>{conversation.title}</span>
+        </Link>
+      </SidebarMenuButton>
+      {/* modal={false}: a modal menu closing as the dialog opens can leave the page unclickable. */}
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <SidebarMenuAction showOnHover>
+            <MoreHorizontal />
+            <span className="sr-only">Chat actions</span>
+          </SidebarMenuAction>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start">
+          <DropdownMenuItem onSelect={onArchive}>
+            <Archive />
+            Archive
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+            <Trash2 />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </SidebarMenuItem>
   );
 }
