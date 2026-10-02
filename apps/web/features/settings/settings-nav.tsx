@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Link2, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Archive, Heart, Link2, SlidersHorizontal, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 const PAGES = [
   { href: "/settings/general", label: "General", icon: SlidersHorizontal },
+  { href: "/settings/personality", label: "Personality", icon: Heart },
   { href: "/settings/ai", label: "AI model", icon: Sparkles },
   { href: "/settings/shortcuts", label: "Shortcuts", icon: Link2 },
   { href: "/settings/archive", label: "Archive", icon: Archive },
