@@ -5,27 +5,19 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { isFinal, useCommandStatus, type ChatAction } from "./action-card";
 import ChatBox, { type ChatMessage } from "./chat-box";
 import { getJson } from "@/lib/get-json";
 import { useNodes } from "@/lib/use-nodes";
 
-type CommandStatus = { command_id: string; status: string; detail?: string };
 type SavedConversation = {
   id: string;
   title: string;
-  messages: { role: "user" | "assistant"; content: string }[];
-};
-
-// Once a command reaches one of these, it never changes again.
-const FINAL_STATUSES = ["succeeded", "failed", "denied", "expired", "unknown"];
-
-const STATUS_TEXT: Record<string, string> = {
-  dispatched: "Sent to your PC…",
-  succeeded: "Opened.",
-  failed: "Your PC couldn't open it.",
-  denied: "Denied.",
-  expired: "Expired before you decided.",
-  unknown: "No answer from your PC.",
+  messages: {
+    role: "user" | "assistant";
+    content: string;
+    actions?: ChatAction[];
+  }[];
 };
 
 // The see-through card in front of the scene.
@@ -80,6 +72,7 @@ export function SavedChat({ conversationId }: { conversationId: string }) {
       initialMessages={saved.data.messages.map((m) => ({
         from: m.role === "user" ? "you" : "venus",
         text: m.content,
+        actions: m.actions,
       }))}
     />
   );
@@ -101,8 +94,8 @@ export default function ChatPanel({
 }: ChatPanelProps) {
   const queryClient = useQueryClient();
   const [conversationId, setConversationId] = useState(startId);
+  // The newest command: the input stays locked until it is finished.
   const [commandId, setCommandId] = useState<string | null>(null);
-  const [targetName, setTargetName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
@@ -111,16 +104,9 @@ export default function ChatPanel({
   const nodes = useNodes();
   const deviceId = nodes.data?.device_ids[0];
 
-  const command = useQuery({
-    queryKey: ["command", commandId],
-    queryFn: () => getJson<CommandStatus>(`/api/commands/${commandId}`),
-    enabled: commandId !== null,
-    refetchInterval: (query) =>
-      FINAL_STATUSES.includes(query.state.data?.status ?? "") ? false : 1000,
-  });
-
-  const status = command.data?.status;
-  const inFlight = commandId !== null && !FINAL_STATUSES.includes(status ?? "");
+  const command = useCommandStatus(commandId);
+  const inFlight =
+    commandId !== null && !command.isError && !isFinal(command.data?.status);
 
   async function post(url: string, body?: object) {
     setBusy(true);
@@ -167,23 +153,18 @@ export default function ChatPanel({
       window.history.replaceState(null, "", `/chat/${data.conversation_id}`);
     }
     queryClient.invalidateQueries({ queryKey: ["conversations"] });
-    if (data.type === "reply") {
-      setMessages((old) => [...old, { from: "venus", text: data.reply }]);
-      return;
-    }
-    // A command: Venus asks before opening anything (unless Full mode).
     setMessages((old) => [
       ...old,
-      { from: "venus", text: `On it: ${data.label}` },
+      {
+        from: "venus",
+        text: data.reply ?? `On it: ${data.label}`,
+        actions: data.actions,
+        live: true,
+      },
     ]);
-    setTargetName(data.label);
-    setCommandId(data.command_id);
-  }
-
-  async function decide(approved: boolean) {
-    if (commandId === null) return;
-    await post(`/api/commands/${commandId}/approval`, { approved });
-    await command.refetch();
+    // A command: Venus asks before opening anything (unless Full mode);
+    // its card holds Approve and Deny.
+    if (data.type === "command") setCommandId(data.command_id);
   }
 
   return (
@@ -201,36 +182,6 @@ export default function ChatPanel({
       />
 
       <div aria-live="polite" className="empty:hidden px-4 pb-3">
-        {status === "awaiting_approval" && (
-          <div className="rounded-xl border border-border p-4">
-            <p className="break-all">Open {targetName} on this PC?</p>
-            <div className="mt-3 flex gap-2">
-              <Button onClick={() => decide(true)} disabled={busy}>
-                Approve
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => decide(false)}
-                disabled={busy}
-              >
-                Deny
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {status && status !== "awaiting_approval" && (
-          <p role="status" className="text-sm">
-            {STATUS_TEXT[status] ?? status}
-          </p>
-        )}
-
-        {command.isError && (
-          <p role="alert" className="text-sm text-destructive">
-            Lost track of this command.
-          </p>
-        )}
-
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
