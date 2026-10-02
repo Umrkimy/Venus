@@ -21,6 +21,14 @@ export function useProjects() {
   });
 }
 
+// Its key starts with "projects", so every refresh of the list above refreshes this too.
+export function useArchivedProjects() {
+  return useQuery({
+    queryKey: ["projects", "archived"],
+    queryFn: () => getJson<Project[]>("/api/projects?archived=true"),
+  });
+}
+
 // Create, rename, archive and delete. Each returns null or false when it failed,
 // and `error` says why.
 export function useProjectActions() {
