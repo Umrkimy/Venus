@@ -20,3 +20,15 @@ def test_build_instructions_lists_sites_and_folders_after_base_rules():
     assert "search_site" in parts[1]
     assert parts[2].startswith("Project folders on the PC: Venus.")
     assert parts[3] == "Be flirty."
+
+
+def test_build_instructions_lists_owner_facts_before_personality():
+    text = build_instructions("Be flirty.", None, memories=["Owner name is Umar."])
+    parts = text.split("\n\n")
+
+    assert parts[1] == "What you know about the owner: Owner name is Umar."
+    assert parts[2] == "Be flirty."
+
+
+def test_build_instructions_without_facts_has_no_owner_line():
+    assert "What you know" not in build_instructions(None, None, memories=[])

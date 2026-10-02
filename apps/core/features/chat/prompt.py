@@ -10,12 +10,14 @@ def build_instructions(
     project: str | None,
     sites: list[str] | None = None,
     folders: list[str] | None = None,
+    memories: list[str] | None = None,
 ) -> str:
-    """Base rules and what's on the PC, then who Venus is, then the project."""
+    """Base rules, what's on the PC and the owner, then who Venus is, then the project."""
     parts = [
         BASE_PROMPT,
         sites_line(sites or []),
         folders_line(folders or []),
+        memories_line(memories or []),
         personality,
         project,
     ]
@@ -44,3 +46,11 @@ def folders_line(folders: list[str]) -> str | None:
         "When the owner wants one of them or says code plus its name, "
         "call open_project with the folder name."
     )
+
+
+def memories_line(memories: list[str]) -> str | None:
+    # Facts the owner asked Venus to keep, shared by every chat.
+    if not memories:
+        return None
+    facts = " ".join(fact.rstrip(".") + "." for fact in memories)
+    return f"What you know about the owner: {facts}"

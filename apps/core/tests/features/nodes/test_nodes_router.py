@@ -28,6 +28,8 @@ from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
+from features.memories.dependencies import get_memory_repository
+from features.memories.repository import MemoryRepository
 from features.personalities.dependencies import get_personality_repository
 from features.personalities.repository import PersonalityRepository
 from features.projects.dependencies import get_project_repository
@@ -154,6 +156,8 @@ def command_records():
     app.dependency_overrides[get_personality_repository] = (
         lambda: personality_repository
     )
+    memory_repository = MemoryRepository(engine)
+    app.dependency_overrides[get_memory_repository] = lambda: memory_repository
     yield CommandRecordRepository(engine)
     engine.dispose()
 
@@ -1590,6 +1594,69 @@ def test_chat_moved_into_project_uses_its_instructions(
         )
 
     assert brain.instructions.endswith("Explain step by step.")
+
+
+class MemoryBrain:
+    """A brain that always chooses to remember a fact."""
+
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
+        return BrainReply(text="Lo-fi is perfect for coding!", memory="Owner likes lo-fi")
+
+
+def test_chat_remember_saves_fact_without_a_command(
+    conversations: ConversationRepository,
+):
+    memories = app.dependency_overrides[get_memory_repository]()
+    # The rule answers, so the brain is never asked.
+    app.dependency_overrides[get_chat_provider] = lambda: ToolBrain("open spotify")
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "remember I like lo-fi"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+
+    assert body["type"] == "reply"
+    assert body["reply"] == "Saved: I like lo-fi"
+    assert [memory.text for memory in memories.list_all()] == ["I like lo-fi"]
+
+
+def test_chat_brain_save_memory_saves_fact(conversations: ConversationRepository):
+    memories = app.dependency_overrides[get_memory_repository]()
+    app.dependency_overrides[get_chat_provider] = lambda: MemoryBrain()
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "i really love lo-fi music"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.json()["reply"] == (
+        "Lo-fi is perfect for coding!\n\nSaved to memory: Owner likes lo-fi"
+    )
+    assert [memory.text for memory in memories.list_all()] == ["Owner likes lo-fi"]
+
+
+def test_chat_sends_saved_facts_to_the_brain(conversations: ConversationRepository):
+    memories = app.dependency_overrides[get_memory_repository]()
+    memories.create("Owner name is Umar")
+    brain = RecordingBrain()
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hello"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert "What you know about the owner: Owner name is Umar." in brain.instructions
 
 
 def test_chat_requires_owner():

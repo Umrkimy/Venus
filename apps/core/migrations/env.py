@@ -12,6 +12,7 @@ from features.auth.models.owner_account import OwnerAccount
 from features.auth.models.owner_session import OwnerSession
 from features.projects.models.project import Project
 from features.personalities.models.personality import Personality
+from features.memories.models.memory import Memory
 from features.settings.models.command_mode import CommandModeSetting
 from features.settings.models.llm import LlmSetting
 from features.shortcuts.models.site_shortcut import SiteShortcut

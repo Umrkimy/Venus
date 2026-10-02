@@ -30,10 +30,33 @@ class OpenAIProvider:
         for item in response.output:
             if item.type == "function_call":
                 try:
-                    return BrainReply(command=tool_to_command(item.name, json.loads(item.arguments)))
+                    arguments = json.loads(item.arguments)
+                    if item.name == "save_memory":
+                        # Saved by Core itself; nothing goes to the PC.
+                        fact = arguments["fact"]
+                        text = await self._answer_after_save(response.id, item.call_id)
+                        return BrainReply(text=text, memory=fact)
+                    return BrainReply(command=tool_to_command(item.name, arguments))
                 except (ValueError, KeyError):
                     # Luna invented a tool or forgot an argument.
                     return BrainReply(text="Sorry, I couldn't do that.")
 
         # Responses API returns text through output_text.
         return BrainReply(text=response.output_text or "I don't have an answer for that.")
+
+    async def _answer_after_save(self, response_id: str, call_id: str) -> str | None:
+        # The model stops at a tool call; tell it the fact is kept so it
+        # goes on to answer the owner's message in its own words.
+        try:
+            followup = await self._client.responses.create(
+                model=self._model,
+                previous_response_id=response_id,
+                input=[
+                    {"type": "function_call_output", "call_id": call_id, "output": "Saved."},
+                ],
+                tools=TOOLS,
+                tool_choice="none",
+            )
+        except OpenAIError:
+            return None
+        return followup.output_text or None

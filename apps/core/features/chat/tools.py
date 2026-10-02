@@ -63,6 +63,24 @@ TOOLS: list[dict] = [
             "required": ["site", "words"],
         },
     },
+    {
+        "type": "function",
+        "name": "save_memory",
+        "description": (
+            "Remember a fact about the owner for future chats, when they "
+            "tell you something about themselves or ask you to remember it."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "fact": {
+                    "type": "string",
+                    "description": "One short sentence, e.g. Owner likes lo-fi music",
+                }
+            },
+            "required": ["fact"],
+        },
+    },
 ]
 
 

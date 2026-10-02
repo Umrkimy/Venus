@@ -11,7 +11,9 @@ from features.chat.tools import TOOLS
 
 
 def function_call(name: str, arguments: str):
-    return SimpleNamespace(type="function_call", name=name, arguments=arguments)
+    return SimpleNamespace(
+        type="function_call", name=name, arguments=arguments, call_id="call-1",
+    )
 
 
 class FakeResponses:
@@ -20,18 +22,25 @@ class FakeResponses:
         error: Exception | None = None,
         output: list | None = None,
         output_text: str = "Hi from Luna",
+        followup_error: Exception | None = None,
     ):
         self.calls = []
         self.error = error
         self.output = output or []
         self.output_text = output_text
+        self.followup_error = followup_error
 
     async def create(self, **kwargs):
         # Remember what the provider sent, then answer like the SDK would.
         self.calls.append(kwargs)
         if self.error is not None:
             raise self.error
-        return SimpleNamespace(output=self.output, output_text=self.output_text)
+        if "previous_response_id" in kwargs:
+            # Second call after a tool result: answer with words only.
+            if self.followup_error is not None:
+                raise self.followup_error
+            return SimpleNamespace(id="resp-2", output=[], output_text="Love that, Umar!")
+        return SimpleNamespace(id="resp-1", output=self.output, output_text=self.output_text)
 
 
 class FakeClient:
@@ -90,12 +99,45 @@ def test_openai_provider_turns_function_call_into_command():
     )
 
 
+def test_openai_provider_saves_memory_and_still_answers():
+    client = FakeClient(
+        output=[function_call("save_memory", '{"fact": "Owner likes lo-fi"}')],
+        output_text="",
+    )
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    reply = asyncio.run(provider.reply("i love lo-fi", [], ""))
+
+    assert reply == BrainReply(text="Love that, Umar!", memory="Owner likes lo-fi")
+    followup = client.responses.calls[1]
+    assert followup["previous_response_id"] == "resp-1"
+    assert followup["input"] == [
+        {"type": "function_call_output", "call_id": "call-1", "output": "Saved."},
+    ]
+    # Luna can't chain another tool from the follow-up answer.
+    assert followup["tool_choice"] == "none"
+
+
+def test_openai_provider_keeps_memory_when_followup_fails():
+    client = FakeClient(
+        output=[function_call("save_memory", '{"fact": "Owner likes lo-fi"}')],
+        output_text="",
+        followup_error=OpenAIError("boom"),
+    )
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    reply = asyncio.run(provider.reply("i love lo-fi", [], ""))
+
+    assert reply == BrainReply(memory="Owner likes lo-fi")
+
+
 @pytest.mark.parametrize(
     "item",
     [
         function_call("delete_files", '{"path": "C:/"}'),  # invented tool
         function_call("open_app", "{}"),  # missing argument
         function_call("open_app", "not json"),  # broken arguments
+        function_call("save_memory", "{}"),  # fact missing
     ],
 )
 def test_openai_provider_answers_when_function_call_is_broken(item):
@@ -104,6 +146,7 @@ def test_openai_provider_answers_when_function_call_is_broken(item):
     reply = asyncio.run(provider.reply("do something", [], ""))
 
     assert reply.command is None
+    assert reply.memory is None
     assert reply.text
 
 
