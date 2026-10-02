@@ -1,12 +1,29 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useNewChat } from "@/features/chat/new-chat";
+import { getJson } from "@/lib/get-json";
 
-// Archive, unarchive and delete for the sidebar's chat rows.
+export type ConversationSummary = {
+  id: string;
+  title: string;
+  updated_at: string;
+  // null when the chat isn't in a project.
+  project_id: string | null;
+};
+
+// Active chats, newest first. The sidebar and project pages filter it.
+export function useConversations() {
+  return useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => getJson<ConversationSummary[]>("/api/conversations"),
+  });
+}
+
+// Archive, unarchive, move and delete for chat rows.
 export function useChatActions() {
   const queryClient = useQueryClient();
   const pathname = usePathname();
@@ -52,6 +69,19 @@ export function useChatActions() {
     if (done && archived) leaveIfOpen(id);
   }
 
+  // null takes the chat out of its project.
+  async function moveToProject(id: string, projectId: string | null) {
+    await send(
+      `/api/conversations/${id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+      },
+      "Couldn't move that chat.",
+    );
+  }
+
   async function deleteChat(id: string) {
     // 204 has an empty body, so send() never reads response.json().
     const done = await send(
@@ -65,5 +95,5 @@ export function useChatActions() {
     }
   }
 
-  return { error, setArchived, deleteChat };
+  return { error, setArchived, moveToProject, deleteChat };
 }

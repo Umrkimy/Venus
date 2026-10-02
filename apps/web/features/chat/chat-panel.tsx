@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import ChatBox, { type ChatMessage } from "./chat-box";
@@ -88,11 +88,16 @@ export function SavedChat({ conversationId }: { conversationId: string }) {
 type ChatPanelProps = {
   conversationId: string | null;
   initialMessages: ChatMessage[];
+  // A new chat started here is created inside this project.
+  projectId?: string;
+  emptyState?: ReactNode;
 };
 
 export default function ChatPanel({
   conversationId: startId,
   initialMessages,
+  projectId,
+  emptyState,
 }: ChatPanelProps) {
   const queryClient = useQueryClient();
   const [conversationId, setConversationId] = useState(startId);
@@ -153,6 +158,7 @@ export default function ChatPanel({
     const data = await post(`/api/nodes/${encodeURIComponent(deviceId)}/chat`, {
       message: text,
       conversation_id: conversationId ?? undefined,
+      project_id: conversationId === null ? projectId : undefined,
     });
     if (!data) return;
     if (conversationId === null) {
@@ -191,6 +197,7 @@ export default function ChatPanel({
         }
         messages={messages}
         onSend={chat}
+        emptyState={emptyState}
       />
 
       <div aria-live="polite" className="empty:hidden px-4 pb-3">

@@ -10,8 +10,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { type ConversationSummary } from "@/features/shell/app-sidebar";
-import { useChatActions } from "@/features/shell/chat-actions";
+import {
+  type ConversationSummary,
+  useChatActions,
+} from "@/features/shell/chat-actions";
 import DeleteChatDialog from "@/features/shell/delete-chat-dialog";
 import { getJson } from "@/lib/get-json";
 
