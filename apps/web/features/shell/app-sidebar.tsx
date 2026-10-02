@@ -38,7 +38,6 @@ import { useNewChat } from "@/features/chat/new-chat";
 import { useChatActions } from "@/features/shell/chat-actions";
 import DeleteChatDialog from "@/features/shell/delete-chat-dialog";
 import { getJson } from "@/lib/get-json";
-import { useNodes } from "@/lib/use-nodes";
 
 export type ConversationSummary = { id: string; title: string; updated_at: string };
 
@@ -50,8 +49,6 @@ type AppSidebarProps = {
 export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
   const pathname = usePathname();
   const { startNewChat } = useNewChat();
-  const nodes = useNodes();
-  const deviceId = nodes.data?.device_ids[0];
   const actions = useChatActions();
   const [deleting, setDeleting] = useState<ConversationSummary | null>(null);
 
@@ -129,13 +126,6 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter>
-        <p className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
-          <span
-            aria-hidden="true"
-            className={`size-2 rounded-full ${deviceId ? "bg-primary" : "bg-muted-foreground/50"}`}
-          />
-          {deviceId ? `${deviceId} online` : "PC offline"}
-        </p>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === "/settings"}>
