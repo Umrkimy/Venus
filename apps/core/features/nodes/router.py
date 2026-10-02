@@ -26,6 +26,7 @@ from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
 from features.projects.dependencies import get_project_repository
 from features.projects.repository import ProjectRepository
+from features.projects.router import require_open_project
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -516,11 +517,8 @@ async def chat(
             detail="Conversation not found",
         )
     new_in_project = request.conversation_id is None and request.project_id is not None
-    if new_in_project and not projects.exists(request.project_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found",
-        )
+    if new_in_project:
+        require_open_project(projects, request.project_id)
 
     apps = registry.apps_for(device_id)
     projects = registry.projects_for(device_id)

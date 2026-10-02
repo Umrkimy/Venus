@@ -9,6 +9,7 @@ from features.conversations.repository import ConversationRepository
 from features.conversations.schemas import ConversationUpdate
 from features.projects.dependencies import get_project_repository
 from features.projects.repository import ProjectRepository
+from features.projects.router import require_open_project
 
 
 router = APIRouter(prefix="/conversations")
@@ -79,13 +80,8 @@ def update_conversation(
     # model_fields_set holds only the fields the request sent, so
     # {"archived": true} leaves the project alone and {"project_id": null} clears it.
     move = "project_id" in request.model_fields_set
-    if move and request.project_id is not None and not projects.exists(
-        request.project_id,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found",
-        )
+    if move and request.project_id is not None:
+        require_open_project(projects, request.project_id)
     if request.archived is not None:
         conversations.set_archived(conversation_id, request.archived)
     if move:
