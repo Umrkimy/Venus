@@ -3,6 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FIELD_HOVER, LABEL_CLASS } from "@/features/settings/field-styles";
 import { getJson } from "@/lib/get-json";
 
 import ShortcutRow from "./shortcut-row";
@@ -14,12 +17,6 @@ export type Shortcut = {
   search_url: string | null;
 };
 type ShortcutsResponse = { shortcuts: Shortcut[] };
-
-// Same look for every text box and every border-style button.
-const INPUT_CLASS =
-  "mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50";
-const BUTTON_CLASS =
-  "rounded-md border border-border px-3 py-1.5 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 motion-safe:transition-transform motion-safe:active:scale-[0.98]";
 
 export default function Shortcuts() {
   const [keyword, setKeyword] = useState("");
@@ -132,33 +129,31 @@ export default function Shortcuts() {
   }
 
   return (
-    <section className="mt-10">
-      <h2 className="text-sm font-medium text-muted">Shortcuts</h2>
-
+    <div>
       {shortcuts.isPending && (
-        <div role="status" className="mt-2">
+        <div role="status">
           <span className="sr-only">Loading shortcuts</span>
-          <div className="h-12 w-full rounded-md bg-muted/20 motion-safe:animate-pulse" />
+          <div className="h-12 w-full rounded-md bg-foreground/20 motion-safe:animate-pulse" />
         </div>
       )}
 
       {shortcuts.isError && (
-        <p role="alert" className="mt-2 text-sm text-danger">
+        <p role="alert" className="text-sm text-destructive">
           Can&apos;t load shortcuts.
         </p>
       )}
 
       {shortcuts.isSuccess && shortcuts.data.shortcuts.length === 0 && (
-        <p className="mt-2 text-sm text-muted">No shortcuts yet.</p>
+        <p className="text-sm text-muted-foreground">No shortcuts yet.</p>
       )}
 
       {shortcuts.isSuccess && shortcuts.data.shortcuts.length > 0 && (
-        <ul className="mt-2 space-y-2">
+        <ul className="space-y-2">
           {shortcuts.data.shortcuts.map((shortcut) => (
             <ShortcutRow
               key={shortcut.keyword}
               shortcut={shortcut}
-              buttonClass={BUTTON_CLASS}
+              editing={editing === shortcut.keyword}
               disabled={busy}
               onEdit={startEdit}
               onDelete={remove}
@@ -167,46 +162,57 @@ export default function Shortcuts() {
         </ul>
       )}
 
-      <form onSubmit={save} className="mt-4 space-y-3">
-        {editing && <p className="text-sm font-medium">Editing {editing}</p>}
-        <label className="block text-sm">
+      <form onSubmit={save} className="mt-5 space-y-4 border-t border-border pt-5">
+        <p className="text-sm font-semibold">
+          {editing ? (
+            <>
+              Editing{" "}
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-primary">
+                {editing}
+              </span>
+            </>
+          ) : (
+            "Add a shortcut"
+          )}
+        </p>
+        <label className={LABEL_CLASS}>
           Keyword
-          <input
+          <Input
             type="text"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             disabled={editing !== null}
             placeholder="comix"
             autoComplete="off"
-            className={INPUT_CLASS}
+            className={FIELD_HOVER}
           />
         </label>
-        <label className="block text-sm">
+        <label className={LABEL_CLASS}>
           Name
-          <input
+          <Input
             type="text"
             value={label}
             onChange={(event) => setLabel(event.target.value)}
             placeholder="Comix"
             autoComplete="off"
-            className={INPUT_CLASS}
+            className={FIELD_HOVER}
           />
         </label>
-        <label className="block text-sm">
+        <label className={LABEL_CLASS}>
           Home link
-          <input
+          <Input
             type="text"
             inputMode="url"
             value={homeUrl}
             onChange={(event) => setHomeUrl(event.target.value)}
             placeholder="https://site.com"
             autoComplete="off"
-            className={INPUT_CLASS}
+            className={FIELD_HOVER}
           />
         </label>
-        <label className="block text-sm">
+        <label className={LABEL_CLASS}>
           Example search link (optional)
-          <input
+          <Input
             type="text"
             inputMode="url"
             value={searchExample}
@@ -214,47 +220,47 @@ export default function Shortcuts() {
             placeholder="https://site.com/search?q=naruto"
             autoComplete="off"
             aria-describedby="search-example-hint"
-            className={INPUT_CLASS}
+            className={FIELD_HOVER}
           />
         </label>
-        <p id="search-example-hint" className="-mt-2 text-xs text-muted">
+        <p id="search-example-hint" className="-mt-3 text-xs text-muted-foreground">
           Search for anything on the site, then paste the link from the address
           bar.
         </p>
-        <label className="block text-sm">
+        <label className={LABEL_CLASS}>
           What you searched for (optional)
-          <input
+          <Input
             type="text"
             value={searchWords}
             onChange={(event) => setSearchWords(event.target.value)}
             placeholder="naruto"
             autoComplete="off"
             aria-describedby="search-words-hint"
-            className={INPUT_CLASS}
+            className={FIELD_HOVER}
           />
         </label>
-        <p id="search-words-hint" className="-mt-2 text-xs text-muted">
+        <p id="search-words-hint" className="-mt-3 text-xs text-muted-foreground">
           Only needed if Venus can&apos;t find your search in the link.
         </p>
         <div className="flex gap-2">
-          <button
+          <Button
             type="submit"
+            variant="outline"
             disabled={
               busy || !keyword.trim() || !label.trim() || !homeUrl.trim()
             }
-            className={BUTTON_CLASS}
           >
             {editing ? "Save" : "Add shortcut"}
-          </button>
+          </Button>
           {editing && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               disabled={busy}
               onClick={clearForm}
-              className={BUTTON_CLASS}
             >
               Cancel
-            </button>
+            </Button>
           )}
         </div>
       </form>
@@ -266,10 +272,10 @@ export default function Shortcuts() {
       )}
 
       {error && (
-        <p role="alert" className="mt-2 text-sm text-danger">
+        <p role="alert" className="mt-2 text-sm text-destructive">
           {error}
         </p>
       )}
-    </section>
+    </div>
   );
 }

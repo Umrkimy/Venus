@@ -529,8 +529,8 @@ async def chat(
             request.message, apps, projects, search_sites(shortcuts.list_all()),
         )
     except NotUnderstoodError:
-        # Until the web sends conversation_id, its own history keeps chats working.
-        history = request.history
+        # Core holds the history: the saved lines of this conversation.
+        history = []
         if request.conversation_id is not None:
             history = conversations.recent_turns(request.conversation_id)
         brain = await provider.reply(request.message, history)

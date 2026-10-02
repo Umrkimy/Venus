@@ -46,16 +46,16 @@ export default function ModeSwitch() {
 
   if (mode.isPending) {
     return (
-      <div role="status" className="mt-4">
+      <div role="status">
         <span className="sr-only">Loading mode</span>
-        <div className="h-8 w-36 rounded-md bg-muted/20 motion-safe:animate-pulse" />
+        <div className="h-8 w-36 rounded-md bg-foreground/20 motion-safe:animate-pulse" />
       </div>
     );
   }
 
   if (mode.isError) {
     return (
-      <p role="alert" className="mt-4 text-sm text-danger">
+      <p role="alert" className="text-sm text-destructive">
         Can&apos;t load the mode.
       </p>
     );
@@ -64,11 +64,11 @@ export default function ModeSwitch() {
   const current = mode.data.mode;
 
   return (
-    <div className="mt-4">
+    <div>
       <div
         role="group"
         aria-label="Command mode"
-        className="inline-flex rounded-md border border-border p-0.5"
+        className="inline-flex rounded-lg border border-border bg-muted/50 p-1"
       >
         {OPTIONS.map((option) => {
           const active = option.value === current;
@@ -79,8 +79,10 @@ export default function ModeSwitch() {
               aria-pressed={active}
               disabled={busy}
               onClick={() => choose(option.value)}
-              className={`rounded px-3 py-1 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${
-                active ? "bg-accent text-accent-foreground" : "text-muted"
+              className={`rounded-md px-4 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+                active
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:bg-background hover:text-foreground"
               }`}
             >
               {option.label}
@@ -88,13 +90,13 @@ export default function ModeSwitch() {
           );
         })}
       </div>
-      <p className="mt-1 text-xs text-muted">
+      <p className="mt-2 text-sm text-muted-foreground">
         {current === "full"
           ? "Apps open without asking."
           : "You approve each command."}
       </p>
       {error && (
-        <p role="alert" className="mt-2 text-sm text-danger">
+        <p role="alert" className="mt-2 text-sm text-destructive">
           {error}
         </p>
       )}

@@ -59,7 +59,7 @@ export default function LoginPage() {
             autoComplete="username"
             required
             maxLength={100}
-            className="rounded-md border border-border bg-transparent px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="rounded-md border border-border bg-transparent px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
 
@@ -74,20 +74,20 @@ export default function LoginPage() {
             autoComplete="current-password"
             required
             maxLength={1024}
-            className="rounded-md border border-border bg-transparent px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="rounded-md border border-border bg-transparent px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
 
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-accent px-4 py-2 font-medium text-accent-foreground disabled:opacity-60 motion-safe:transition-transform motion-safe:active:scale-[0.98]"
+          className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60 motion-safe:transition-transform motion-safe:active:scale-[0.98]"
         >
           {pending ? "Signing in…" : "Sign in"}
         </button>
 
         {error && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         )}
