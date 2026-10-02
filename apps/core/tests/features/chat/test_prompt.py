@@ -1,4 +1,6 @@
-from features.chat.prompt import BASE_PROMPT, build_instructions
+import pytest
+
+from features.chat.prompt import BASE_PROMPT, build_instructions, plain_punctuation
 
 
 def test_build_instructions_stacks_base_personality_then_project():
@@ -32,3 +34,21 @@ def test_build_instructions_lists_owner_facts_before_personality():
 
 def test_build_instructions_without_facts_has_no_owner_line():
     assert "What you know" not in build_instructions(None, None, memories=[])
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("I love you too, Umar; you've got me.", "I love you too, Umar, you've got me."),
+        ("Opening it now\u2014enjoy, love.", "Opening it now, enjoy, love."),
+        ("Sure \u2013 here you go", "Sure, here you go"),
+        ("Fine - whatever you want", "Fine, whatever you want"),
+        ("Done,; love", "Done, love"),
+    ],
+)
+def test_plain_punctuation_swaps_bot_pauses_for_commas(text, expected):
+    assert plain_punctuation(text) == expected
+
+
+def test_plain_punctuation_keeps_hyphenated_words():
+    assert plain_punctuation("I like lo-fi and sci-fi.") == "I like lo-fi and sci-fi."

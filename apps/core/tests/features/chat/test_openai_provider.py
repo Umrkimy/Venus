@@ -183,3 +183,10 @@ def test_openai_provider_say_gives_nothing_on_api_error():
     provider = OpenAIProvider(FakeClient(error=OpenAIError("boom")), "gpt-6-luna")
 
     assert asyncio.run(provider.say("open spotify", "")) is None
+
+
+def test_openai_provider_cleans_bot_punctuation():
+    provider = OpenAIProvider(FakeClient(output_text="Hi babe; missed you\u2014a lot"), "gpt-6-luna")
+
+    assert asyncio.run(provider.reply("hi", [], "")).text == "Hi babe, missed you, a lot"
+    assert asyncio.run(provider.say("hi", "")) == "Hi babe, missed you, a lot"
