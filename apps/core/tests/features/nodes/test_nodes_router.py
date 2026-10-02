@@ -1369,17 +1369,23 @@ class ToolBrain:
 
     def __init__(self, command: str) -> None:
         self.command = command
+        self.said: str | None = None
 
     async def reply(
         self, message: str, history: list[ChatTurn], instructions: str,
     ) -> BrainReply:
         return BrainReply(command=self.command)
 
+    async def say(self, message: str, instructions: str) -> str | None:
+        self.said = instructions
+        return "On it, love."
+
 
 def test_chat_brain_tool_choice_proposes_command(
     command_records: CommandRecordRepository,
 ):
-    app.dependency_overrides[get_chat_provider] = lambda: ToolBrain("open spotify")
+    brain = ToolBrain("open spotify")
+    app.dependency_overrides[get_chat_provider] = lambda: brain
 
     with connected_pc_umar():
         response = client.post(
@@ -1396,6 +1402,12 @@ def test_chat_brain_tool_choice_proposes_command(
     assert body["label"] == "Spotify"
     assert stored_record is not None
     assert stored_record.state == "awaiting_approval"
+    # Luna words the line herself and knows the owner still has to approve.
+    assert body["reply"] == "On it, love."
+    assert "Approve" in brain.said
+    assert body["actions"] == [
+        {"kind": "command", "command_id": body["command_id"], "label": "Spotify"},
+    ]
 
 
 def test_chat_brain_tool_choice_still_goes_through_parser_checks():
@@ -1477,7 +1489,8 @@ def test_chat_sends_saved_turns_to_the_brain(conversations: ConversationReposito
     assert len(conversations.messages(conversation_id)) == 4
 
 
-def test_chat_saves_command_proposal_as_text(conversations: ConversationRepository):
+def test_chat_saves_command_line_and_action(conversations: ConversationRepository):
+    # No AI here, so Core uses its own plain line.
     with connected_pc_umar():
         response = client.post(
             "/nodes/PC-Umar/chat",
@@ -1485,10 +1498,31 @@ def test_chat_saves_command_proposal_as_text(conversations: ConversationReposito
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
-    conversation_id = UUID(response.json()["conversation_id"])
-    saved = conversations.messages(conversation_id)
+    body = response.json()
+    saved = conversations.messages(UUID(body["conversation_id"]))
 
-    assert saved[-1].content == "Proposed: Spotify"
+    assert body["reply"] == "On it: Spotify"
+    assert saved[-1].content == "On it: Spotify"
+    assert saved[-1].actions == [
+        {"kind": "command", "command_id": body["command_id"], "label": "Spotify"},
+    ]
+
+
+def test_chat_full_mode_tells_luna_it_is_opening(command_records: CommandRecordRepository):
+    app.dependency_overrides[get_settings_repository]().set_mode("full")
+    brain = ToolBrain("open spotify")
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar() as websocket:
+        client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open spotify for me love"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        websocket.receive_json()
+
+    assert "opening Spotify" in brain.said
+    assert "Approve" not in brain.said
 
 
 def test_chat_rejects_unknown_conversation(conversations: ConversationRepository):
@@ -1620,9 +1654,12 @@ def test_chat_remember_saves_fact_without_a_command(
         )
 
     body = response.json()
+    saved = conversations.messages(UUID(body["conversation_id"]))
 
     assert body["type"] == "reply"
-    assert body["reply"] == "Saved: I like lo-fi"
+    assert body["reply"] == "On it, love."
+    assert body["actions"] == [{"kind": "memory", "text": "I like lo-fi"}]
+    assert saved[-1].actions == [{"kind": "memory", "text": "I like lo-fi"}]
     assert [memory.text for memory in memories.list_all()] == ["I like lo-fi"]
 
 
@@ -1637,9 +1674,11 @@ def test_chat_brain_save_memory_saves_fact(conversations: ConversationRepository
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
-    assert response.json()["reply"] == (
-        "Lo-fi is perfect for coding!\n\nSaved to memory: Owner likes lo-fi"
-    )
+    body = response.json()
+
+    # Her own answer stays; the saved fact is an action, not extra text.
+    assert body["reply"] == "Lo-fi is perfect for coding!"
+    assert body["actions"] == [{"kind": "memory", "text": "Owner likes lo-fi"}]
     assert [memory.text for memory in memories.list_all()] == ["Owner likes lo-fi"]
 
 

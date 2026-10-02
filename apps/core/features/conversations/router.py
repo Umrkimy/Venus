@@ -56,7 +56,11 @@ def get_conversation(
         "id": str(conversation.id),
         "title": conversation.title,
         "messages": [
-            {"role": message.role, "content": message.content}
+            {
+                "role": message.role,
+                "content": message.content,
+                "actions": message.actions or [],
+            }
             for message in conversations.messages(conversation_id)
         ],
     }

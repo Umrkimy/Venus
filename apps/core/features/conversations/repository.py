@@ -34,12 +34,20 @@ class ConversationRepository:
         with Session(self.engine) as session:
             return session.get(Conversation, conversation_id) is not None
 
-    def add_exchange(self, conversation_id: UUID, message: str, reply: str) -> None:
+    def add_exchange(
+        self,
+        conversation_id: UUID,
+        message: str,
+        reply: str,
+        actions: list[dict] | None = None,
+    ) -> None:
         # Both lines in one commit: a question is never saved without its answer.
         now = datetime.now(timezone.utc)
         with Session(self.engine) as session:
             session.add(Message(conversation_id, "user", message, now))
-            session.add(Message(conversation_id, "assistant", reply, now))
+            session.add(
+                Message(conversation_id, "assistant", reply, now, actions or None),
+            )
             conversation = session.get(Conversation, conversation_id)
             conversation.updated_at = now
             session.commit()

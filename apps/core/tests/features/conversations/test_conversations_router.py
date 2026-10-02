@@ -90,10 +90,10 @@ def test_get_conversation_returns_messages_in_order(conversations):
         "id": str(conversation_id),
         "title": "my name is Umar",
         "messages": [
-            {"role": "user", "content": "my name is Umar"},
-            {"role": "assistant", "content": "Nice to meet you."},
-            {"role": "user", "content": "whats my name"},
-            {"role": "assistant", "content": "Your name is Umar."},
+            {"role": "user", "content": "my name is Umar", "actions": []},
+            {"role": "assistant", "content": "Nice to meet you.", "actions": []},
+            {"role": "user", "content": "whats my name", "actions": []},
+            {"role": "assistant", "content": "Your name is Umar.", "actions": []},
         ],
     }
 
@@ -286,3 +286,13 @@ def test_move_chat_into_archived_project_is_rejected(engine, conversations):
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json()["detail"] == "Project is archived"
     assert conversations.get(conversation_id).project_id is None
+
+
+def test_get_conversation_returns_saved_actions(conversations):
+    conversation_id = conversations.create("open spotify")
+    action = {"kind": "command", "command_id": "abc", "label": "Spotify"}
+    conversations.add_exchange(conversation_id, "open spotify", "Opening it.", [action])
+
+    response = client.get(f"/conversations/{conversation_id}", headers=OWNER_HEADERS)
+
+    assert response.json()["messages"][1]["actions"] == [action]
