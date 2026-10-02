@@ -1,10 +1,11 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class ProjectRequest(BaseModel):
+class PersonalityRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(max_length=60)
+    name: str = Field(max_length=40)
+    text: str = Field(max_length=4000)
 
     @field_validator("name")
     @classmethod
@@ -14,13 +15,13 @@ class ProjectRequest(BaseModel):
         return value
 
 
-class ProjectUpdate(BaseModel):
+class PersonalityUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # Both optional: only the fields sent are changed.
-    name: str | None = Field(default=None, max_length=60)
-    archived: bool | None = None
-    instructions: str | None = Field(default=None, max_length=4000)
+    # All optional: only the fields sent are changed.
+    name: str | None = Field(default=None, max_length=40)
+    text: str | None = Field(default=None, max_length=4000)
+    active: bool | None = None
 
     @field_validator("name")
     @classmethod

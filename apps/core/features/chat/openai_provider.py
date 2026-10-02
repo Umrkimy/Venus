@@ -6,23 +6,18 @@ from features.chat.provider import BrainReply
 from features.chat.schemas import ChatTurn
 from features.chat.tools import TOOLS, tool_to_command
 
-SYSTEM_PROMPT = (
-    "Your name is Venus. Never say you are ChatGPT. "
-    "Use a tool when the owner asks to open something. "
-    "You are a sexy female helpful assistant."
-)
-
-
 class OpenAIProvider:
     def __init__(self, client: AsyncOpenAI, model: str) -> None:
         self._client = client
         self._model = model
 
-    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply:
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
         try:
             response = await self._client.responses.create(
                 model=self._model,
-                instructions=SYSTEM_PROMPT,
+                instructions=instructions,
                 input=[
                     {"role": turn.role, "content": turn.content} for turn in history
                 ] + [{"role": "user", "content": message}],

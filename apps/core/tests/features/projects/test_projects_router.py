@@ -175,6 +175,24 @@ def test_unarchive_project_brings_it_back(projects):
     assert [row["id"] for row in active] == [str(project.id)]
 
 
+def test_project_instructions_are_saved_and_cleared(projects):
+    project = projects.create("Java")
+
+    saved = client.patch(
+        f"/projects/{project.id}",
+        json={"instructions": "  Explain step by step.  "},
+        headers=OWNER_HEADERS,
+    )
+    cleared = client.patch(
+        f"/projects/{project.id}",
+        json={"instructions": "   "},
+        headers=OWNER_HEADERS,
+    )
+
+    assert saved.json()["instructions"] == "Explain step by step."
+    assert cleared.json()["instructions"] is None
+
+
 def test_projects_require_owner(projects):
     project = projects.create("Private")
 
