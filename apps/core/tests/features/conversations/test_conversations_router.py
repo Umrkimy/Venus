@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, update
+from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -12,7 +12,7 @@ from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
 from features.conversations.dependencies import get_conversation_repository
-from features.conversations.models.conversation import Conversation
+from features.conversations.models.conversation import Conversation, Message
 from features.conversations.repository import ConversationRepository
 from main import app
 from storage.base import Base
@@ -116,3 +116,100 @@ def test_recent_turns_keeps_only_the_newest_in_order(conversations):
     turns = conversations.recent_turns(conversation_id, limit=4)
 
     assert [turn.content for turn in turns] == ["q4", "a4", "q5", "a5"]
+
+
+def listed_titles(archived: bool = False) -> list[str]:
+    response = client.get(
+        "/conversations",
+        params={"archived": archived},
+        headers=OWNER_HEADERS,
+    )
+    assert response.status_code == 200
+    return [row["title"] for row in response.json()]
+
+
+def test_delete_conversation_removes_it_and_its_messages(engine, conversations):
+    deleted = conversations.create("forget this")
+    conversations.add_exchange(deleted, "forget this", "Okay.")
+    kept = conversations.create("keep this")
+    conversations.add_exchange(kept, "keep this", "Sure.")
+
+    response = client.delete(f"/conversations/{deleted}", headers=OWNER_HEADERS)
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert listed_titles() == ["keep this"]
+    with Session(engine) as session:
+        left = session.scalar(
+            select(func.count())
+            .select_from(Message)
+            .where(Message.conversation_id == deleted)
+        )
+    assert left == 0
+    assert len(conversations.messages(kept)) == 2
+
+
+def test_delete_unknown_conversation_returns_404(conversations):
+    response = client.delete(f"/conversations/{uuid4()}", headers=OWNER_HEADERS)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_archived_conversation_leaves_main_list_and_shows_in_archive(conversations):
+    archived = conversations.create("old plan")
+    conversations.create("today")
+
+    response = client.patch(
+        f"/conversations/{archived}",
+        json={"archived": True},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"id": str(archived), "archived": True}
+    assert listed_titles() == ["today"]
+    assert listed_titles(archived=True) == ["old plan"]
+    # Archived chats can still be opened.
+    opened = client.get(f"/conversations/{archived}", headers=OWNER_HEADERS)
+    assert opened.status_code == 200
+
+
+def test_unarchive_returns_conversation_to_main_list(conversations):
+    conversation_id = conversations.create("back again")
+    conversations.set_archived(conversation_id, True)
+
+    response = client.patch(
+        f"/conversations/{conversation_id}",
+        json={"archived": False},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert listed_titles() == ["back again"]
+    assert listed_titles(archived=True) == []
+
+
+def test_archive_unknown_conversation_returns_404(conversations):
+    response = client.patch(
+        f"/conversations/{uuid4()}",
+        json={"archived": True},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_delete_and_archive_require_owner(conversations):
+    conversation_id = conversations.create("private")
+
+    assert (
+        client.delete(f"/conversations/{conversation_id}").status_code
+        == status.HTTP_401_UNAUTHORIZED
+    )
+    assert (
+        client.patch(
+            f"/conversations/{conversation_id}",
+            json={"archived": True},
+        ).status_code
+        == status.HTTP_401_UNAUTHORIZED
+    )
+    assert conversations.get(conversation_id).archived_at is None

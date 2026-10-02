@@ -15,6 +15,11 @@ class Conversation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # Moves forward with every message, so the newest chat sorts first.
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Empty means active; a time means the owner archived the chat then.
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
 
     def __init__(
         self,

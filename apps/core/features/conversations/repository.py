@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -58,11 +58,17 @@ class ConversationRepository:
             for message in reversed(newest_first)
         ]
 
-    def list_all(self) -> list[Conversation]:
+    def list_all(self, archived: bool = False) -> list[Conversation]:
+        if archived:
+            which = Conversation.archived_at.is_not(None)
+        else:
+            which = Conversation.archived_at.is_(None)
         with Session(self.engine) as session:
             return list(
                 session.scalars(
-                    select(Conversation).order_by(Conversation.updated_at.desc())
+                    select(Conversation)
+                    .where(which)
+                    .order_by(Conversation.updated_at.desc())
                 ).all()
             )
 
@@ -79,3 +85,27 @@ class ConversationRepository:
                     .order_by(Message.id)
                 ).all()
             )
+
+    def delete(self, conversation_id: UUID) -> bool:
+        with Session(self.engine) as session:
+            conversation = session.get(Conversation, conversation_id)
+            if conversation is None:
+                return False
+            # Messages first, in the same commit: no message is left without its chat.
+            session.execute(
+                delete(Message).where(Message.conversation_id == conversation_id)
+            )
+            session.delete(conversation)
+            session.commit()
+        return True
+
+    def set_archived(self, conversation_id: UUID, archived: bool) -> bool:
+        with Session(self.engine) as session:
+            conversation = session.get(Conversation, conversation_id)
+            if conversation is None:
+                return False
+            conversation.archived_at = (
+                datetime.now(timezone.utc) if archived else None
+            )
+            session.commit()
+        return True
