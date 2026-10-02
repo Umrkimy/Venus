@@ -551,7 +551,10 @@ async def chat(
         brain = await provider.reply(
             request.message,
             history,
-            chat_instructions(request, conversations, projects, personalities),
+            chat_instructions(
+                request, conversations, projects, personalities,
+                list(search_sites(shortcuts.list_all())),
+            ),
         )
         if brain.command is None:
             answer = {"type": "reply", "reply": brain.text}
@@ -591,6 +594,7 @@ def chat_instructions(
     conversations: ConversationRepository,
     projects: ProjectRepository,
     personalities: PersonalityRepository,
+    sites: list[str],
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -602,6 +606,7 @@ def chat_instructions(
     return build_instructions(
         personality.text if personality is not None else None,
         project.instructions if project is not None else None,
+        sites,
     )
 
 

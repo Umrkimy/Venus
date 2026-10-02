@@ -1309,7 +1309,7 @@ def test_chat_runs_a_command_the_parser_understands(
     assert stored_record.state == "awaiting_approval"
 
 
-def test_chat_answers_parser_questions_without_the_brain(
+def test_chat_sends_unknown_app_to_the_brain(
     command_records: CommandRecordRepository,
 ):
     with connected_pc_umar():
@@ -1323,7 +1323,26 @@ def test_chat_answers_parser_questions_without_the_brain(
 
     assert response.status_code == 200
     assert body["type"] == "reply"
-    assert body["reply"] == "No app called zzz on this PC"
+    assert body["reply"] == "Fake Venus: open zzz"
+
+
+def test_chat_open_with_extra_words_goes_to_the_brain(
+    command_records: CommandRecordRepository,
+):
+    app.dependency_overrides[get_chat_provider] = lambda: ToolBrain("open Spotify")
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open spotify for me love"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["type"] == "command"
+    assert body["label"] == "Spotify"
 
 
 def test_chat_asks_the_brain_when_the_parser_does_not_understand():
@@ -1547,6 +1566,8 @@ def test_chat_sends_active_personality_to_the_brain(
 
     assert "Be flirty." in brain.instructions
     assert "Be polite." not in brain.instructions
+    # Built-in sites are always listed, so Luna uses them instead of guessing.
+    assert "youtube" in brain.instructions
 
 
 def test_chat_moved_into_project_uses_its_instructions(
