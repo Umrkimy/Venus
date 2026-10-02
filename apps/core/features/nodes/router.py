@@ -554,6 +554,7 @@ async def chat(
             chat_instructions(
                 request, conversations, projects, personalities,
                 list(search_sites(shortcuts.list_all())),
+                folders,
             ),
         )
         if brain.command is None:
@@ -595,6 +596,7 @@ def chat_instructions(
     projects: ProjectRepository,
     personalities: PersonalityRepository,
     sites: list[str],
+    folders: list[str],
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -607,6 +609,7 @@ def chat_instructions(
         personality.text if personality is not None else None,
         project.instructions if project is not None else None,
         sites,
+        folders,
     )
 
 

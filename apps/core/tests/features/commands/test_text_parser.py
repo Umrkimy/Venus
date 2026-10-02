@@ -52,6 +52,18 @@ def test_unknown_app_is_not_understood():
     assert str(error.value) == "No app called spotify for me on this PC"
 
 
+@pytest.mark.parametrize("text", ["open code venus", "Open VS Code Venus"])
+def test_open_code_with_folder_name_opens_project(text: str):
+    parsed = parse(text)
+
+    assert parsed.project_name == "Venus"
+
+
+def test_open_code_with_unknown_folder_is_not_understood():
+    with pytest.raises(NotUnderstoodError):
+        parse("open code venus for me")
+
+
 def test_open_site_keyword_opens_home_page():
     sites = {"comix": SearchSite(label="Comix", home_url="https://comix.to")}
 

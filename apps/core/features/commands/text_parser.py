@@ -47,6 +47,8 @@ SEARCH_SITES = {
 }
 
 PROJECT_PREFIXES = ("open my project ", "open project ")
+# "open code venus": only taken when a folder has that name.
+CODE_PREFIXES = ("open code ", "open vs code ", "open vscode ")
 MAX_CHOICES = 5
 
 
@@ -65,6 +67,12 @@ def parse_command_text(
     for prefix in PROJECT_PREFIXES:
         if lowered.startswith(prefix):
             return _parse_project(text[len(prefix):].strip(), projects)
+
+    for prefix in CODE_PREFIXES:
+        if lowered.startswith(prefix):
+            project = _find_project(text[len(prefix):].strip(), projects)
+            if project is not None:
+                return _project_command(project)
 
     first_word, _, rest = text.partition(" ")
     first_word = first_word.lower()
@@ -90,13 +98,21 @@ def parse_command_text(
 
 
 def _parse_project(name: str, projects: list[str]) -> ParsedCommand:
+    project = _find_project(name, projects)
+    if project is None:
+        raise CommandTextError(f"No project called {name} on this PC")
+    return _project_command(project)
+
+
+def _find_project(name: str, projects: list[str]) -> str | None:
     for project in projects:
         if project.lower() == name.lower():
-            return ParsedCommand(
-                label=f"{project} in VS Code",
-                project_name=project,
-            )
-    raise CommandTextError(f"No project called {name} on this PC")
+            return project
+    return None
+
+
+def _project_command(project: str) -> ParsedCommand:
+    return ParsedCommand(label=f"{project} in VS Code", project_name=project)
 
 
 def _parse_site(site: SearchSite, words: str) -> ParsedCommand:
