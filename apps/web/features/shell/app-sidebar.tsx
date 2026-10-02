@@ -1,46 +1,33 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import {
-  Archive,
-  LogOut,
-  MoreHorizontal,
-  Plus,
-  Settings,
-  Trash2,
-} from "lucide-react";
+import { Folder, LogOut, Plus, Settings } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { useNewChat } from "@/features/chat/new-chat";
-import { useChatActions } from "@/features/shell/chat-actions";
-import DeleteChatDialog from "@/features/shell/delete-chat-dialog";
-import { getJson } from "@/lib/get-json";
-import { useNodes } from "@/lib/use-nodes";
-
-export type ConversationSummary = { id: string; title: string; updated_at: string };
+import ProjectNameDialog from "@/features/projects/project-name-dialog";
+import {
+  useProjectActions,
+  useProjects,
+} from "@/features/projects/use-projects";
+import { useChatActions, useConversations } from "@/features/shell/chat-actions";
+import ChatMenu from "@/features/shell/chat-menu";
 
 type AppSidebarProps = {
   username: string;
@@ -49,23 +36,26 @@ type AppSidebarProps = {
 
 export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { startNewChat } = useNewChat();
-  const nodes = useNodes();
-  const deviceId = nodes.data?.device_ids[0];
   const actions = useChatActions();
-  const [deleting, setDeleting] = useState<ConversationSummary | null>(null);
+  const projectActions = useProjectActions();
+  const [creating, setCreating] = useState(false);
 
-  const conversations = useQuery({
-    queryKey: ["conversations"],
-    queryFn: () => getJson<ConversationSummary[]>("/api/conversations"),
-  });
+  const projects = useProjects();
+  const conversations = useConversations();
+  // Chats in a project live on the project's page, not here.
+  const looseChats = conversations.data?.filter(
+    (conversation) => conversation.project_id === null,
+  );
 
-  async function confirmDelete() {
-    if (deleting === null) return;
-    const id = deleting.id;
-    setDeleting(null);
-    await actions.deleteChat(id);
+  async function createProject(name: string) {
+    setCreating(false);
+    const project = await projectActions.create(name);
+    if (project) router.push(`/project/${project.id}`);
   }
+
+  const error = actions.error ?? projectActions.error;
 
   return (
     <Sidebar>
@@ -84,11 +74,47 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        {actions.error && (
+        {error && (
           <p role="alert" className="px-4 pt-2 text-sm text-destructive">
-            {actions.error}
+            {error}
           </p>
         )}
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Projects</SidebarGroupLabel>
+          <SidebarGroupAction title="New project" onClick={() => setCreating(true)}>
+            <Plus />
+            <span className="sr-only">New project</span>
+          </SidebarGroupAction>
+          <SidebarGroupContent>
+            {projects.isError && (
+              <p role="alert" className="px-2 text-sm text-destructive">
+                Can&apos;t load projects.
+              </p>
+            )}
+            {projects.data?.length === 0 && (
+              <p className="px-2 text-sm text-muted-foreground">
+                Group chats for an assignment or a bit of code.
+              </p>
+            )}
+            <SidebarMenu>
+              {projects.data?.map((project) => {
+                const href = `/project/${project.id}`;
+                return (
+                  <SidebarMenuItem key={project.id}>
+                    <SidebarMenuButton asChild isActive={pathname === href}>
+                      {/* startNewChat: clicking the project again empties its chat card. */}
+                      <Link href={href} onClick={startNewChat}>
+                        <Folder />
+                        <span>{project.name}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
         <SidebarGroup>
           <SidebarGroupLabel>Chats</SidebarGroupLabel>
@@ -108,34 +134,31 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
                 Can&apos;t load chats.
               </p>
             )}
-            {conversations.data?.length === 0 && (
+            {looseChats?.length === 0 && (
               <p className="px-2 text-sm text-muted-foreground">
                 No chats yet. Say hi to Venus.
               </p>
             )}
             <SidebarMenu>
-              {conversations.data?.map((conversation) => (
-                <ChatRow
-                  key={conversation.id}
-                  conversation={conversation}
-                  active={pathname === `/chat/${conversation.id}`}
-                  onArchive={() => actions.setArchived(conversation.id, true)}
-                  onDelete={() => setDeleting(conversation)}
-                />
-              ))}
+              {looseChats?.map((conversation) => {
+                const href = `/chat/${conversation.id}`;
+                return (
+                  <SidebarMenuItem key={conversation.id}>
+                    <SidebarMenuButton asChild isActive={pathname === href}>
+                      <Link href={href}>
+                        <span>{conversation.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    <ChatMenu conversation={conversation} actions={actions} />
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter>
-        <p className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
-          <span
-            aria-hidden="true"
-            className={`size-2 rounded-full ${deviceId ? "bg-primary" : "bg-muted-foreground/50"}`}
-          />
-          {deviceId ? `${deviceId} online` : "PC offline"}
-        </p>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === "/settings"}>
@@ -155,54 +178,13 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
       </SidebarFooter>
       <SidebarRail />
 
-      <DeleteChatDialog
-        title={deleting?.title ?? null}
-        onCancel={() => setDeleting(null)}
-        onConfirm={confirmDelete}
+      <ProjectNameDialog
+        open={creating}
+        title="New project"
+        submitLabel="Create"
+        onCancel={() => setCreating(false)}
+        onSubmit={createProject}
       />
     </Sidebar>
-  );
-}
-
-type ChatRowProps = {
-  conversation: ConversationSummary;
-  active: boolean;
-  onArchive: () => void;
-  onDelete: () => void;
-};
-
-function ChatRow({
-  conversation,
-  active,
-  onArchive,
-  onDelete,
-}: ChatRowProps) {
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active}>
-        <Link href={`/chat/${conversation.id}`}>
-          <span>{conversation.title}</span>
-        </Link>
-      </SidebarMenuButton>
-      {/* modal={false}: a modal menu closing as the dialog opens can leave the page unclickable. */}
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover>
-            <MoreHorizontal />
-            <span className="sr-only">Chat actions</span>
-          </SidebarMenuAction>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="right" align="start">
-          <DropdownMenuItem onSelect={onArchive}>
-            <Archive />
-            Archive
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-            <Trash2 />
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </SidebarMenuItem>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUp } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -12,6 +12,8 @@ type ChatBoxProps = {
   placeholder: string;
   messages: ChatMessage[];
   onSend: (text: string) => void;
+  // Shown instead of the greeting before the first message.
+  emptyState?: ReactNode;
 };
 
 export default function ChatBox({
@@ -19,6 +21,7 @@ export default function ChatBox({
   placeholder,
   messages,
   onSend,
+  emptyState,
 }: ChatBoxProps) {
   const [text, setText] = useState("");
   const endRef = useRef<HTMLLIElement>(null);
@@ -38,9 +41,11 @@ export default function ChatBox({
     <>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
-          <p className="mt-16 text-center text-3xl font-semibold tracking-tight text-balance">
-            What can I do for you?
-          </p>
+          (emptyState ?? (
+            <p className="mt-16 text-center text-3xl font-semibold tracking-tight text-balance">
+              What can I do for you?
+            </p>
+          ))
         ) : (
           <ul role="log" className="space-y-3">
             {/* Messages are only ever added, so the position is a safe key. */}
