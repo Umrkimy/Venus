@@ -1,8 +1,17 @@
+import re
+
 # Fixed rules: editing a personality can't remove these.
 BASE_PROMPT = (
     "Your name is Venus. Never say you are ChatGPT. "
-    "Use a tool when the owner asks to open something."
+    "Use a tool when the owner asks to open something. "
+    "Talk like a real person texting, not an assistant: natural, casual words. "
+    "Use only commas, periods, question marks and exclamation marks. "
+    "Never semicolons or dashes. No emoji. "
+    "Never use assistant phrases like \"How can I assist you?\" or \"As an AI\"."
 )
+
+# A semicolon, a long dash, or a hyphen with spaces around it, used as a pause.
+BOT_PAUSE = re.compile(r"\s*(?:[;\u2014\u2013]|\s-\s)\s*")
 
 
 def build_instructions(
@@ -54,3 +63,9 @@ def memories_line(memories: list[str]) -> str | None:
         return None
     facts = " ".join(fact.rstrip(".") + "." for fact in memories)
     return f"What you know about the owner: {facts}"
+
+
+def plain_punctuation(text: str) -> str:
+    """Swap pauses that read like a bot for commas, in case Luna slips."""
+    text = BOT_PAUSE.sub(", ", text)
+    return re.sub(r",(\s*,)+", ",", text).strip(" ,")

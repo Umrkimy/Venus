@@ -2,6 +2,7 @@ import json
 
 from openai import AsyncOpenAI, OpenAIError
 
+from features.chat.prompt import plain_punctuation
 from features.chat.provider import BrainReply
 from features.chat.schemas import ChatTurn
 from features.chat.tools import TOOLS, tool_to_command
@@ -42,7 +43,9 @@ class OpenAIProvider:
                     return BrainReply(text="Sorry, I couldn't do that.")
 
         # Responses API returns text through output_text.
-        return BrainReply(text=response.output_text or "I don't have an answer for that.")
+        return BrainReply(
+            text=plain_punctuation(response.output_text) or "I don't have an answer for that.",
+        )
 
     async def say(self, message: str, instructions: str) -> str | None:
         # No tools: a line about what was done can't start anything new.
@@ -54,7 +57,7 @@ class OpenAIProvider:
             )
         except OpenAIError:
             return None
-        return response.output_text or None
+        return plain_punctuation(response.output_text) or None
 
     async def _answer_after_save(self, response_id: str, call_id: str) -> str | None:
         # The model stops at a tool call; tell it the fact is kept so it
@@ -71,4 +74,4 @@ class OpenAIProvider:
             )
         except OpenAIError:
             return None
-        return followup.output_text or None
+        return plain_punctuation(followup.output_text) or None
