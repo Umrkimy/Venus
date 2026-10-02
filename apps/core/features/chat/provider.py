@@ -11,9 +11,13 @@ class BrainReply:
 
 
 class ChatProvider(Protocol):
-    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply: ...
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply: ...
 
 
 class FakeProvider:
-    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply:
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
         return BrainReply(text=f"Fake Venus: {message}")

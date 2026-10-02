@@ -20,10 +20,13 @@ from venus_protocol.schemas.connections import NodeHello
 
 from features.auth.dependencies import require_owner
 from features.chat.dependencies import get_chat_provider
+from features.chat.prompt import build_instructions
 from features.chat.provider import ChatProvider
 from features.chat.schemas import ChatRequest
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
+from features.personalities.dependencies import get_personality_repository
+from features.personalities.repository import PersonalityRepository
 from features.projects.dependencies import get_project_repository
 from features.projects.repository import ProjectRepository
 from features.projects.router import require_open_project
@@ -508,6 +511,10 @@ async def chat(
         Depends(get_conversation_repository),
     ],
     projects: Annotated[ProjectRepository, Depends(get_project_repository)],
+    personalities: Annotated[
+        PersonalityRepository,
+        Depends(get_personality_repository),
+    ],
 ):
     if request.conversation_id is not None and not conversations.exists(
         request.conversation_id,
@@ -521,9 +528,10 @@ async def chat(
         require_open_project(projects, request.project_id)
 
     apps = registry.apps_for(device_id)
-    projects = registry.projects_for(device_id)
+    # VS Code folders on the PC; not the same thing as chat projects.
+    folders = registry.projects_for(device_id)
 
-    if apps is None or projects is None:
+    if apps is None or folders is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Node is not connected",
@@ -533,21 +541,25 @@ async def chat(
     answer = None
     try:
         parsed = parse_command_text(
-            request.message, apps, projects, search_sites(shortcuts.list_all()),
+            request.message, apps, folders, search_sites(shortcuts.list_all()),
         )
     except NotUnderstoodError:
         # Core holds the history: the saved lines of this conversation.
         history = []
         if request.conversation_id is not None:
             history = conversations.recent_turns(request.conversation_id)
-        brain = await provider.reply(request.message, history)
+        brain = await provider.reply(
+            request.message,
+            history,
+            chat_instructions(request, conversations, projects, personalities),
+        )
         if brain.command is None:
             answer = {"type": "reply", "reply": brain.text}
         else:
             # Luna picked a tool: run its choice through the same parser.
             try:
                 parsed = parse_command_text(
-                    brain.command, apps, projects, search_sites(shortcuts.list_all()),
+                    brain.command, apps, folders, search_sites(shortcuts.list_all()),
                 )
             except CommandTextError as exc:
                 answer = {"type": "reply", "reply": str(exc)}
@@ -572,6 +584,25 @@ async def chat(
         saved_reply = answer["reply"] or ""
     conversations.add_exchange(conversation_id, request.message, saved_reply)
     return {**answer, "conversation_id": str(conversation_id)}
+
+
+def chat_instructions(
+    request: ChatRequest,
+    conversations: ConversationRepository,
+    projects: ProjectRepository,
+    personalities: PersonalityRepository,
+) -> str:
+    # Looked up on every message, so a chat moved into a project
+    # follows that project's instructions from its next message.
+    project_id = request.project_id
+    if request.conversation_id is not None:
+        project_id = conversations.get(request.conversation_id).project_id
+    project = projects.get(project_id) if project_id is not None else None
+    personality = personalities.active()
+    return build_instructions(
+        personality.text if personality is not None else None,
+        project.instructions if project is not None else None,
+    )
 
 
 def record_from_command(command: NodeCommand) -> CommandRecord:

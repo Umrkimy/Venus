@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from openai import OpenAIError
 
-from features.chat.openai_provider import SYSTEM_PROMPT, OpenAIProvider
+from features.chat.openai_provider import OpenAIProvider
 from features.chat.provider import BrainReply
 from features.chat.schemas import ChatTurn
 from features.chat.tools import TOOLS
@@ -42,19 +42,19 @@ class FakeClient:
 def test_openai_provider_returns_model_text():
     provider = OpenAIProvider(FakeClient(), "gpt-6-luna")
 
-    assert asyncio.run(provider.reply("hello", [])) == BrainReply(text="Hi from Luna")
+    assert asyncio.run(provider.reply("hello", [], "")) == BrainReply(text="Hi from Luna")
 
 
 def test_openai_provider_sends_model_instructions_message_and_tools():
     client = FakeClient()
     provider = OpenAIProvider(client, "gpt-6-luna")
 
-    asyncio.run(provider.reply("hello", []))
+    asyncio.run(provider.reply("hello", [], "Be Venus."))
 
     assert client.responses.calls == [
         {
             "model": "gpt-6-luna",
-            "instructions": SYSTEM_PROMPT,
+            "instructions": "Be Venus.",
             "input": [{"role": "user", "content": "hello"}],
             "tools": TOOLS,
         },
@@ -69,7 +69,7 @@ def test_openai_provider_sends_history_before_new_message():
         ChatTurn(role="assistant", content="Nice to meet you, Umar"),
     ]
 
-    asyncio.run(provider.reply("what is my name?", history))
+    asyncio.run(provider.reply("what is my name?", history, ""))
 
     assert client.responses.calls[0]["input"] == [
         {"role": "user", "content": "my name is Umar"},
@@ -85,7 +85,7 @@ def test_openai_provider_turns_function_call_into_command():
     )
     provider = OpenAIProvider(client, "gpt-6-luna")
 
-    assert asyncio.run(provider.reply("can you open spotify", [])) == BrainReply(
+    assert asyncio.run(provider.reply("can you open spotify", [], "")) == BrainReply(
         command="open Spotify",
     )
 
@@ -101,7 +101,7 @@ def test_openai_provider_turns_function_call_into_command():
 def test_openai_provider_answers_when_function_call_is_broken(item):
     provider = OpenAIProvider(FakeClient(output=[item]), "gpt-6-luna")
 
-    reply = asyncio.run(provider.reply("do something", []))
+    reply = asyncio.run(provider.reply("do something", [], ""))
 
     assert reply.command is None
     assert reply.text
@@ -110,7 +110,7 @@ def test_openai_provider_answers_when_function_call_is_broken(item):
 def test_openai_provider_turns_api_errors_into_friendly_reply():
     provider = OpenAIProvider(FakeClient(error=OpenAIError("boom")), "gpt-6-luna")
 
-    reply = asyncio.run(provider.reply("hello", []))
+    reply = asyncio.run(provider.reply("hello", [], ""))
 
     assert reply.text
     assert "boom" not in reply.text
@@ -120,6 +120,6 @@ def test_openai_provider_never_returns_empty_text():
     # output_text is "" when the model answers without text.
     provider = OpenAIProvider(FakeClient(output_text=""), "gpt-6-luna")
 
-    reply = asyncio.run(provider.reply("hello", []))
+    reply = asyncio.run(provider.reply("hello", [], ""))
 
     assert reply.text

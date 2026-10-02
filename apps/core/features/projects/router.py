@@ -19,6 +19,7 @@ def project_json(project: Project, chat_count: int) -> dict:
         "name": project.name,
         "updated_at": project.updated_at.isoformat(),
         "archived": project.archived_at is not None,
+        "instructions": project.instructions,
         # Archived chats count too: deleting the project deletes them all.
         "chat_count": chat_count,
     }
@@ -75,6 +76,8 @@ def update_project(
         projects.rename(project_id, request.name)
     if request.archived is not None:
         projects.set_archived(project_id, request.archived)
+    if request.instructions is not None:
+        projects.set_instructions(project_id, request.instructions)
     project = projects.get(project_id)
     return project_json(project, projects.chat_counts().get(project_id, 0))
 

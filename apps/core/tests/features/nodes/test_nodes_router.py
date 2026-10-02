@@ -28,6 +28,8 @@ from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
+from features.personalities.dependencies import get_personality_repository
+from features.personalities.repository import PersonalityRepository
 from features.projects.dependencies import get_project_repository
 from features.projects.repository import ProjectRepository
 from features.nodes.connection_registry import (
@@ -148,6 +150,10 @@ def command_records():
     )
     project_repository = ProjectRepository(engine)
     app.dependency_overrides[get_project_repository] = lambda: project_repository
+    personality_repository = PersonalityRepository(engine)
+    app.dependency_overrides[get_personality_repository] = (
+        lambda: personality_repository
+    )
     yield CommandRecordRepository(engine)
     engine.dispose()
 
@@ -1341,7 +1347,9 @@ class ToolBrain:
     def __init__(self, command: str) -> None:
         self.command = command
 
-    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply:
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
         return BrainReply(command=self.command)
 
 
@@ -1391,13 +1399,17 @@ def conversations(command_records: CommandRecordRepository) -> ConversationRepos
 
 
 class RecordingBrain:
-    """A brain that answers with words and remembers the history it was given."""
+    """A brain that answers with words and remembers what it was given."""
 
     def __init__(self) -> None:
         self.history: list[ChatTurn] | None = None
+        self.instructions: str | None = None
 
-    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply:
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
         self.history = history
+        self.instructions = instructions
         return BrainReply(text="Your name is Umar.")
 
 
@@ -1514,6 +1526,49 @@ def test_new_chat_in_archived_project_is_rejected(
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json()["detail"] == "Project is archived"
     assert conversations.list_all() == []
+
+
+def test_chat_sends_active_personality_to_the_brain(
+    conversations: ConversationRepository,
+):
+    personalities = app.dependency_overrides[get_personality_repository]()
+    personal = personalities.create("Personal", "Be flirty.")
+    personalities.create("Professional", "Be polite.")
+    personalities.activate(personal.id)
+    brain = RecordingBrain()
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hello"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert "Be flirty." in brain.instructions
+    assert "Be polite." not in brain.instructions
+
+
+def test_chat_moved_into_project_uses_its_instructions(
+    conversations: ConversationRepository,
+):
+    projects = app.dependency_overrides[get_project_repository]()
+    project = projects.create("Java")
+    projects.set_instructions(project.id, "Explain step by step.")
+    # Started outside the project, then moved in.
+    conversation_id = conversations.create("loops")
+    conversations.set_project(conversation_id, project.id)
+    brain = RecordingBrain()
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "what is a loop", "conversation_id": str(conversation_id)},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert brain.instructions.endswith("Explain step by step.")
 
 
 def test_chat_requires_owner():

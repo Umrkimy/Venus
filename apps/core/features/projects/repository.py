@@ -70,6 +70,17 @@ class ProjectRepository:
             session.commit()
         return project
 
+    def set_instructions(self, project_id: UUID, instructions: str) -> Project | None:
+        with Session(self.engine, expire_on_commit=False) as session:
+            project = session.get(Project, project_id)
+            if project is None:
+                return None
+            # An empty box means no instructions, stored as NULL.
+            project.instructions = instructions.strip() or None
+            project.updated_at = datetime.now(timezone.utc)
+            session.commit()
+        return project
+
     def delete(self, project_id: UUID) -> bool:
         with Session(self.engine) as session:
             project = session.get(Project, project_id)
