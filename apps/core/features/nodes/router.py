@@ -22,6 +22,8 @@ from features.auth.dependencies import require_owner
 from features.chat.dependencies import get_chat_provider
 from features.chat.provider import ChatProvider
 from features.chat.schemas import ChatRequest
+from features.conversations.dependencies import get_conversation_repository
+from features.conversations.repository import ConversationRepository
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -498,7 +500,19 @@ async def chat(
         Depends(get_shortcut_repository),
     ],
     provider: Annotated[ChatProvider, Depends(get_chat_provider)],
+    conversations: Annotated[
+        ConversationRepository,
+        Depends(get_conversation_repository),
+    ],
 ):
+    if request.conversation_id is not None and not conversations.exists(
+        request.conversation_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+
     apps = registry.apps_for(device_id)
     projects = registry.projects_for(device_id)
 
@@ -509,29 +523,48 @@ async def chat(
         )
 
     # Rules answer first; the brain only gets what they don't understand.
+    answer = None
     try:
         parsed = parse_command_text(
             request.message, apps, projects, search_sites(shortcuts.list_all()),
         )
     except NotUnderstoodError:
-        brain = await provider.reply(request.message, request.history)
+        # Until the web sends conversation_id, its own history keeps chats working.
+        history = request.history
+        if request.conversation_id is not None:
+            history = conversations.recent_turns(request.conversation_id)
+        brain = await provider.reply(request.message, history)
         if brain.command is None:
-            return {"type": "reply", "reply": brain.text}
-        # Luna picked a tool: run its choice through the same parser.
-        try:
-            parsed = parse_command_text(
-                brain.command, apps, projects, search_sites(shortcuts.list_all()),
-            )
-        except CommandTextError as exc:
-            return {"type": "reply", "reply": str(exc)}
+            answer = {"type": "reply", "reply": brain.text}
+        else:
+            # Luna picked a tool: run its choice through the same parser.
+            try:
+                parsed = parse_command_text(
+                    brain.command, apps, projects, search_sites(shortcuts.list_all()),
+                )
+            except CommandTextError as exc:
+                answer = {"type": "reply", "reply": str(exc)}
     except CommandTextError as exc:
         # "Which one: ...?" and "No app called ..." are answers in a chat.
-        return {"type": "reply", "reply": str(exc)}
+        answer = {"type": "reply", "reply": str(exc)}
 
-    response = await propose_parsed(
-        parsed, device_id, registry, result_registry, command_records, settings_repository,
-    )
-    return {"type": "command", **response}
+    if answer is None:
+        response = await propose_parsed(
+            parsed, device_id, registry, result_registry, command_records,
+            settings_repository,
+        )
+        answer = {"type": "command", **response}
+
+    # Saved only after the answer exists, so a failed reply leaves nothing behind.
+    conversation_id = request.conversation_id
+    if conversation_id is None:
+        conversation_id = conversations.create(request.message)
+    if answer["type"] == "command":
+        saved_reply = f"Proposed: {answer['label']}"
+    else:
+        saved_reply = answer["reply"] or ""
+    conversations.add_exchange(conversation_id, request.message, saved_reply)
+    return {**answer, "conversation_id": str(conversation_id)}
 
 
 def record_from_command(command: NodeCommand) -> CommandRecord:

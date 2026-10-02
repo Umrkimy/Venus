@@ -26,6 +26,8 @@ from features.chat.schemas import ChatTurn
 from features.commands.dependencies import get_command_record_repository
 from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
+from features.conversations.dependencies import get_conversation_repository
+from features.conversations.repository import ConversationRepository
 from features.nodes.connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
@@ -137,6 +139,10 @@ def command_records():
     shortcut_repository = ShortcutRepository(engine)
     app.dependency_overrides[get_shortcut_repository] = (
         lambda: shortcut_repository
+    )
+    conversation_repository = ConversationRepository(engine)
+    app.dependency_overrides[get_conversation_repository] = (
+        lambda: conversation_repository
     )
     yield CommandRecordRepository(engine)
     engine.dispose()
@@ -1303,11 +1309,11 @@ def test_chat_answers_parser_questions_without_the_brain(
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
+    body = response.json()
+
     assert response.status_code == 200
-    assert response.json() == {
-        "type": "reply",
-        "reply": "No app called zzz on this PC",
-    }
+    assert body["type"] == "reply"
+    assert body["reply"] == "No app called zzz on this PC"
 
 
 def test_chat_asks_the_brain_when_the_parser_does_not_understand():
@@ -1318,8 +1324,11 @@ def test_chat_asks_the_brain_when_the_parser_does_not_understand():
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
+    body = response.json()
+
     assert response.status_code == 200
-    assert response.json() == {"type": "reply", "reply": "Fake Venus: hello"}
+    assert body["type"] == "reply"
+    assert body["reply"] == "Fake Venus: hello"
 
 
 class ToolBrain:
@@ -1365,11 +1374,11 @@ def test_chat_brain_tool_choice_still_goes_through_parser_checks():
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
+    body = response.json()
+
     assert response.status_code == 200
-    assert response.json() == {
-        "type": "reply",
-        "reply": "No app called zzz on this PC",
-    }
+    assert body["type"] == "reply"
+    assert body["reply"] == "No app called zzz on this PC"
 
 
 def test_chat_rejects_unknown_history_role():
@@ -1397,6 +1406,89 @@ def test_chat_rejects_too_long_history():
         )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+@pytest.fixture
+def conversations(command_records: CommandRecordRepository) -> ConversationRepository:
+    return app.dependency_overrides[get_conversation_repository]()
+
+
+class RecordingBrain:
+    """A brain that answers with words and remembers the history it was given."""
+
+    def __init__(self) -> None:
+        self.history: list[ChatTurn] | None = None
+
+    async def reply(self, message: str, history: list[ChatTurn]) -> BrainReply:
+        self.history = history
+        return BrainReply(text="Your name is Umar.")
+
+
+def test_chat_starts_a_conversation_and_saves_both_lines(
+    conversations: ConversationRepository,
+):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hello"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    conversation_id = UUID(response.json()["conversation_id"])
+    saved = conversations.messages(conversation_id)
+
+    assert conversations.get(conversation_id).title == "hello"
+    assert [(m.role, m.content) for m in saved] == [
+        ("user", "hello"),
+        ("assistant", "Fake Venus: hello"),
+    ]
+
+
+def test_chat_sends_saved_turns_to_the_brain(conversations: ConversationRepository):
+    conversation_id = conversations.create("my name is umar")
+    conversations.add_exchange(conversation_id, "my name is umar", "Nice to meet you.")
+    brain = RecordingBrain()
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "whats my name", "conversation_id": str(conversation_id)},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.json()["conversation_id"] == str(conversation_id)
+    assert brain.history == [
+        ChatTurn(role="user", content="my name is umar"),
+        ChatTurn(role="assistant", content="Nice to meet you."),
+    ]
+    assert len(conversations.messages(conversation_id)) == 4
+
+
+def test_chat_saves_command_proposal_as_text(conversations: ConversationRepository):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open spot"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    conversation_id = UUID(response.json()["conversation_id"])
+    saved = conversations.messages(conversation_id)
+
+    assert saved[-1].content == "Proposed: Spotify"
+
+
+def test_chat_rejects_unknown_conversation(conversations: ConversationRepository):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hello", "conversation_id": str(uuid4())},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert conversations.list_all() == []
 
 
 def test_chat_requires_owner():

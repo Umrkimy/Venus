@@ -7,6 +7,7 @@ from alembic import context
 
 from config import get_settings
 from features.commands.models.command_record import CommandRecord
+from features.conversations.models.conversation import Conversation, Message
 from features.auth.models.owner_account import OwnerAccount
 from features.auth.models.owner_session import OwnerSession
 from features.settings.models.command_mode import CommandModeSetting
