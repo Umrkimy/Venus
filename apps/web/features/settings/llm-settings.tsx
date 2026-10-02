@@ -9,10 +9,11 @@ import { getJson } from "@/lib/get-json";
 
 import { FIELD_HOVER, LABEL_CLASS, SELECT_CLASS } from "./field-styles";
 
-type Provider = "fake" | "openai";
-type LlmResponse = { provider: Provider; model: string; has_key: boolean };
+// Core still answers "fake" when no AI is set up; the form only offers real ones.
+type Provider = "openai";
+type LlmResponse = { provider: string; model: string; has_key: boolean };
 
-const PROVIDERS: Provider[] = ["fake", "openai"];
+const PROVIDERS: Provider[] = ["openai"];
 
 export default function LlmSettings() {
   const llm = useQuery({
@@ -41,8 +42,11 @@ export default function LlmSettings() {
 }
 
 function LlmForm({ initial }: { initial: LlmResponse }) {
-  const [provider, setProvider] = useState<Provider>(initial.provider);
-  const [model, setModel] = useState(initial.model);
+  const known = PROVIDERS.includes(initial.provider as Provider);
+  const [provider, setProvider] = useState<Provider>(
+    known ? (initial.provider as Provider) : "openai",
+  );
+  const [model, setModel] = useState(known ? initial.model : "");
   const [apiKey, setApiKey] = useState("");
   const [hasKey, setHasKey] = useState(initial.has_key);
   const [busy, setBusy] = useState(false);

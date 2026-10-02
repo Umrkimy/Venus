@@ -20,6 +20,7 @@ import {
 import ChatPanel from "@/features/chat/chat-panel";
 import { useNewChat } from "@/features/chat/new-chat";
 import DeleteProjectDialog from "@/features/projects/delete-project-dialog";
+import ProjectInstructions from "@/features/projects/project-instructions";
 import ProjectNameDialog from "@/features/projects/project-name-dialog";
 import {
   type Project,
@@ -130,6 +131,7 @@ function ProjectHeader({ project }: { project: Project }) {
           {actions.error}
         </p>
       )}
+      <ProjectInstructions project={project} />
 
       <ProjectNameDialog
         open={renaming}

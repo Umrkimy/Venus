@@ -12,6 +12,8 @@ export type Project = {
   archived: boolean;
   // Archived chats count too: deleting the project deletes them all.
   chat_count: number;
+  // Extra rules Venus follows in this project's chats; null when there are none.
+  instructions: string | null;
 };
 
 export function useProjects() {
@@ -29,7 +31,7 @@ export function useArchivedProjects() {
   });
 }
 
-// Create, rename, archive and delete. Each returns null or false when it failed,
+// Create, rename, archive, instructions and delete. Each returns null or false when it failed,
 // and `error` says why.
 export function useProjectActions() {
   const queryClient = useQueryClient();
@@ -90,6 +92,19 @@ export function useProjectActions() {
     return response !== null;
   }
 
+  async function setInstructions(id: string, instructions: string) {
+    const response = await send(
+      `/api/projects/${id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instructions }),
+      },
+      "Couldn't save the instructions.",
+    );
+    return response !== null;
+  }
+
   async function remove(id: string) {
     const response = await send(
       `/api/projects/${id}`,
@@ -103,5 +118,5 @@ export function useProjectActions() {
     return response !== null;
   }
 
-  return { error, create, rename, setArchived, remove };
+  return { error, create, rename, setArchived, setInstructions, remove };
 }
