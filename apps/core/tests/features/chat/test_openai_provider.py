@@ -166,3 +166,20 @@ def test_openai_provider_never_returns_empty_text():
     reply = asyncio.run(provider.reply("hello", [], ""))
 
     assert reply.text
+
+
+def test_openai_provider_say_sends_no_tools():
+    client = FakeClient()
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    line = asyncio.run(provider.say("open spotify", "Be Venus. You opened Spotify."))
+
+    assert line == "Hi from Luna"
+    assert "tools" not in client.responses.calls[0]
+    assert client.responses.calls[0]["instructions"] == "Be Venus. You opened Spotify."
+
+
+def test_openai_provider_say_gives_nothing_on_api_error():
+    provider = OpenAIProvider(FakeClient(error=OpenAIError("boom")), "gpt-6-luna")
+
+    assert asyncio.run(provider.say("open spotify", "")) is None

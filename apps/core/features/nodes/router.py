@@ -541,11 +541,25 @@ async def chat(
             detail="Node is not connected",
         )
 
+    def instructions() -> str:
+        return chat_instructions(
+            request, conversations, projects, personalities,
+            list(search_sites(shortcuts.list_all())),
+            folders,
+            memories,
+        )
+
     # Rules answer first; the brain only gets what they don't understand.
     answer = None
     fact = memory_from_message(request.message)
     if fact is not None:
-        answer = remember(memories, fact)
+        saved = memories.create(fact).text
+        line = await luna_line(
+            provider, request.message, instructions(),
+            f"You just saved this about the owner: {saved}",
+            f"Saved: {saved}",
+        )
+        answer = memory_answer(saved, line)
     else:
         try:
             parsed = parse_command_text(
@@ -556,20 +570,12 @@ async def chat(
             history = []
             if request.conversation_id is not None:
                 history = conversations.recent_turns(request.conversation_id)
-            brain = await provider.reply(
-                request.message,
-                history,
-                chat_instructions(
-                    request, conversations, projects, personalities,
-                    list(search_sites(shortcuts.list_all())),
-                    folders,
-                    memories,
-                ),
-            )
+            brain = await provider.reply(request.message, history, instructions())
             if brain.memory is not None:
-                answer = remember(memories, brain.memory, brain.text)
+                saved = memories.create(brain.memory).text
+                answer = memory_answer(saved, brain.text or f"Saved: {saved}")
             elif brain.command is None:
-                answer = {"type": "reply", "reply": brain.text}
+                answer = {"type": "reply", "reply": brain.text, "actions": []}
             else:
                 # Luna picked a tool: run its choice through the same parser.
                 try:
@@ -577,27 +583,43 @@ async def chat(
                         brain.command, apps, folders, search_sites(shortcuts.list_all()),
                     )
                 except CommandTextError as exc:
-                    answer = {"type": "reply", "reply": str(exc)}
+                    answer = {"type": "reply", "reply": str(exc), "actions": []}
         except CommandTextError as exc:
             # "Which one: ...?" and "No app called ..." are answers in a chat.
-            answer = {"type": "reply", "reply": str(exc)}
+            answer = {"type": "reply", "reply": str(exc), "actions": []}
 
     if answer is None:
         response = await propose_parsed(
             parsed, device_id, registry, result_registry, command_records,
             settings_repository,
         )
-        answer = {"type": "command", **response}
+        label = response["label"]
+        if settings_repository.get_mode() == "full":
+            done = f"You are opening {label} on the owner's PC right now."
+        else:
+            done = (
+                f"You want to open {label} on the owner's PC and are waiting "
+                "for them to press Approve below."
+            )
+        line = await luna_line(
+            provider, request.message, instructions(), done, f"On it: {label}",
+        )
+        answer = {
+            "type": "command",
+            **response,
+            "reply": line,
+            "actions": [
+                {"kind": "command", "command_id": response["command_id"], "label": label},
+            ],
+        }
 
     # Saved only after the answer exists, so a failed reply leaves nothing behind.
     conversation_id = request.conversation_id
     if conversation_id is None:
         conversation_id = conversations.create(request.message, request.project_id)
-    if answer["type"] == "command":
-        saved_reply = f"Proposed: {answer['label']}"
-    else:
-        saved_reply = answer["reply"] or ""
-    conversations.add_exchange(conversation_id, request.message, saved_reply)
+    conversations.add_exchange(
+        conversation_id, request.message, answer["reply"] or "", answer["actions"],
+    )
     return {**answer, "conversation_id": str(conversation_id)}
 
 
@@ -626,13 +648,25 @@ def chat_instructions(
     )
 
 
-def remember(memories: MemoryRepository, fact: str, text: str | None = None) -> dict:
+def memory_answer(fact: str, reply: str) -> dict:
     # Kept by Core itself: no PC command, nothing to approve.
-    memory = memories.create(fact)
-    if not text:
-        return {"type": "reply", "reply": f"Saved: {memory.text}"}
-    # Luna still answers; the note shows what she kept.
-    return {"type": "reply", "reply": f"{text}\n\nSaved to memory: {memory.text}"}
+    return {"type": "reply", "reply": reply, "actions": [{"kind": "memory", "text": fact}]}
+
+
+async def luna_line(
+    provider: ChatProvider,
+    message: str,
+    instructions: str,
+    done: str,
+    fallback: str,
+) -> str:
+    # Luna tells the owner what she did, in the active personality.
+    line = await provider.say(
+        message,
+        f"{instructions}\n\n{done} Tell the owner in one short sentence. "
+        "Don't repeat the details shown below your reply.",
+    )
+    return line or fallback
 
 
 def record_from_command(command: NodeCommand) -> CommandRecord:

@@ -16,9 +16,15 @@ class ChatProvider(Protocol):
         self, message: str, history: list[ChatTurn], instructions: str,
     ) -> BrainReply: ...
 
+    async def say(self, message: str, instructions: str) -> str | None: ...
+
 
 class FakeProvider:
     async def reply(
         self, message: str, history: list[ChatTurn], instructions: str,
     ) -> BrainReply:
         return BrainReply(text=f"Fake Venus: {message}")
+
+    async def say(self, message: str, instructions: str) -> str | None:
+        # No AI to word it; Core uses its own plain line.
+        return None

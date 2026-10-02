@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Uuid
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from storage.base import Base
@@ -54,6 +54,8 @@ class Message(Base):
     role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # What Venus did for this reply (opened an app, saved a fact); empty for talk.
+    actions: Mapped[list[dict] | None] = mapped_column(JSON, default=None)
 
     def __init__(
         self,
@@ -61,8 +63,10 @@ class Message(Base):
         role: str,
         content: str,
         created_at: datetime,
+        actions: list[dict] | None = None,
     ) -> None:
         self.conversation_id = conversation_id
         self.role = role
         self.content = content
         self.created_at = created_at
+        self.actions = actions

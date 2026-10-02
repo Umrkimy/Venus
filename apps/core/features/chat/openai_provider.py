@@ -44,6 +44,18 @@ class OpenAIProvider:
         # Responses API returns text through output_text.
         return BrainReply(text=response.output_text or "I don't have an answer for that.")
 
+    async def say(self, message: str, instructions: str) -> str | None:
+        # No tools: a line about what was done can't start anything new.
+        try:
+            response = await self._client.responses.create(
+                model=self._model,
+                instructions=instructions,
+                input=[{"role": "user", "content": message}],
+            )
+        except OpenAIError:
+            return None
+        return response.output_text or None
+
     async def _answer_after_save(self, response_id: str, call_id: str) -> str | None:
         # The model stops at a tool call; tell it the fact is kept so it
         # goes on to answer the owner's message in its own words.
