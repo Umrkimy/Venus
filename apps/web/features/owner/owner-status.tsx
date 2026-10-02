@@ -6,13 +6,13 @@ export default function OwnerStatus({ owner }: { owner: OwnerState }) {
     return (
       <div role="status" className="mt-4">
         <span className="sr-only">Loading</span>
-        <div className="h-5 w-40 rounded-md bg-muted/20 motion-safe:animate-pulse" />
+        <div className="h-5 w-40 rounded-md bg-foreground/20 motion-safe:animate-pulse" />
       </div>
     );
   }
   if (owner.status === "unreachable") {
     return (
-      <p role="alert" className="mt-4 text-sm text-danger">
+      <p role="alert" className="mt-4 text-sm text-destructive">
         Can&apos;t reach Venus Core. Is it running?
       </p>
     );

@@ -1,0 +1,99 @@
+"use client";
+
+import { ArrowUp } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+
+export type ChatMessage = { from: "you" | "venus"; text: string };
+
+type ChatBoxProps = {
+  disabled: boolean;
+  placeholder: string;
+  messages: ChatMessage[];
+  onSend: (text: string) => void;
+};
+
+export default function ChatBox({
+  disabled,
+  placeholder,
+  messages,
+  onSend,
+}: ChatBoxProps) {
+  const [text, setText] = useState("");
+  const endRef = useRef<HTMLLIElement>(null);
+
+  // Keep the newest line in view, like any chat app.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onSend(text.trim());
+    setText("");
+  }
+
+  return (
+    <>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {messages.length === 0 ? (
+          <p className="mt-16 text-center text-3xl font-semibold tracking-tight text-balance">
+            What can I do for you?
+          </p>
+        ) : (
+          <ul role="log" className="space-y-3">
+            {/* Messages are only ever added, so the position is a safe key. */}
+            {messages.map((message, index) => (
+              <li
+                key={index}
+                className={
+                  message.from === "you"
+                    ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words"
+                    : "max-w-[85%] break-words"
+                }
+              >
+                <span className="sr-only">
+                  {message.from === "you" ? "You: " : "Venus: "}
+                </span>
+                {message.text}
+              </li>
+            ))}
+            <li ref={endRef} aria-hidden="true" />
+          </ul>
+        )}
+      </div>
+      <form onSubmit={handleSubmit} className="p-3">
+        <label htmlFor="chat-input" className="sr-only">
+          Message Venus
+        </label>
+        <div className="flex items-end gap-2 rounded-xl border border-input bg-background/60 p-2 focus-within:ring-2 focus-within:ring-ring">
+          <textarea
+            id="chat-input"
+            rows={1}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              // Enter sends, Shift+Enter makes a new line.
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder={placeholder}
+            autoComplete="off"
+            className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 outline-none placeholder:text-muted-foreground field-sizing-content"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={disabled || text.trim() === ""}
+            aria-label="Send"
+          >
+            <ArrowUp />
+          </Button>
+        </div>
+      </form>
+    </>
+  );
+}

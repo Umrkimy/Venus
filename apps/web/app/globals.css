@@ -1,40 +1,124 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+/* dark: classes follow the .dark class that the theme switch sets on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Venus colours (D-44): neutral zinc, one accent, crimson rose = primary.
+   shadcn names: muted = quiet background, muted-foreground = quiet text,
+   accent = hover background (not the brand colour). */
 :root {
   --background: var(--color-zinc-50);
   --foreground: var(--color-zinc-900);
-  --muted: var(--color-zinc-600);
-  --border: var(--color-zinc-500);
-  --accent: var(--color-rose-700);
-  --accent-foreground: var(--color-zinc-50);
-  --danger: var(--color-red-700);
+  --card: oklch(1 0 0 / 70%);
+  --card-foreground: var(--color-zinc-900);
+  --popover: var(--color-white);
+  --popover-foreground: var(--color-zinc-900);
+  --primary: var(--color-rose-700);
+  --primary-foreground: var(--color-zinc-50);
+  --secondary: var(--color-zinc-100);
+  --secondary-foreground: var(--color-zinc-900);
+  --muted: var(--color-zinc-100);
+  --muted-foreground: var(--color-zinc-600);
+  --accent: var(--color-zinc-200);
+  --accent-foreground: var(--color-zinc-900);
+  --destructive: var(--color-red-700);
+  --border: var(--color-zinc-300);
+  --input: var(--color-zinc-400);
+  --ring: var(--color-rose-700);
+  --radius: 0.625rem;
+  --sidebar: var(--color-zinc-100);
+  --sidebar-foreground: var(--color-zinc-900);
+  --sidebar-primary: var(--color-rose-700);
+  --sidebar-primary-foreground: var(--color-zinc-50);
+  --sidebar-accent: var(--color-zinc-200);
+  --sidebar-accent-foreground: var(--color-zinc-900);
+  --sidebar-border: var(--color-zinc-300);
+  --sidebar-ring: var(--color-rose-700);
+  /* Placeholder for the 3D scene layer. */
+  --scene-from: var(--color-rose-100);
+  --scene-to: var(--color-zinc-50);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: var(--color-zinc-950);
-    --foreground: var(--color-zinc-100);
-    --muted: var(--color-zinc-400);
-    --border: var(--color-zinc-500);
-    --accent: var(--color-rose-500);
-    --accent-foreground: var(--color-zinc-950);
-    --danger: var(--color-red-400);
-  }
+.dark {
+  --background: var(--color-zinc-950);
+  --foreground: var(--color-zinc-100);
+  --card: oklch(0.21 0.006 286 / 55%);
+  --card-foreground: var(--color-zinc-100);
+  --popover: var(--color-zinc-900);
+  --popover-foreground: var(--color-zinc-100);
+  --primary: var(--color-rose-500);
+  --primary-foreground: var(--color-zinc-950);
+  --secondary: var(--color-zinc-800);
+  --secondary-foreground: var(--color-zinc-100);
+  --muted: var(--color-zinc-800);
+  --muted-foreground: var(--color-zinc-400);
+  --accent: var(--color-zinc-800);
+  --accent-foreground: var(--color-zinc-100);
+  --destructive: var(--color-red-400);
+  --border: var(--color-zinc-700);
+  --input: var(--color-zinc-600);
+  --ring: var(--color-rose-500);
+  --sidebar: var(--color-zinc-900);
+  --sidebar-foreground: var(--color-zinc-100);
+  --sidebar-primary: var(--color-rose-500);
+  --sidebar-primary-foreground: var(--color-zinc-950);
+  --sidebar-accent: var(--color-zinc-800);
+  --sidebar-accent-foreground: var(--color-zinc-100);
+  --sidebar-border: var(--color-zinc-800);
+  --sidebar-ring: var(--color-rose-500);
+  --scene-from: oklch(0.27 0.09 12);
+  --scene-to: var(--color-zinc-950);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
-  --color-border: var(--border);
+  --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-danger: var(--danger);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-scene-from: var(--scene-from);
+  --color-scene-to: var(--scene-to);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
