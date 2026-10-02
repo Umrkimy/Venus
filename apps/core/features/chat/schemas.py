@@ -17,6 +17,8 @@ class ChatRequest(BaseModel):
     message: str
     # None starts a new conversation; Core sends back the id it made.
     conversation_id: UUID | None = None
+    # Only used when a new conversation starts: it is created in this project.
+    project_id: UUID | None = None
 
     @field_validator("message")
     @classmethod

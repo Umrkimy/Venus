@@ -28,6 +28,8 @@ from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
+from features.projects.dependencies import get_project_repository
+from features.projects.repository import ProjectRepository
 from features.nodes.connection_registry import (
     NodeConnectionRegistry,
     get_connection_registry,
@@ -144,6 +146,8 @@ def command_records():
     app.dependency_overrides[get_conversation_repository] = (
         lambda: conversation_repository
     )
+    project_repository = ProjectRepository(engine)
+    app.dependency_overrides[get_project_repository] = lambda: project_repository
     yield CommandRecordRepository(engine)
     engine.dispose()
 
@@ -1461,6 +1465,35 @@ def test_chat_rejects_unknown_conversation(conversations: ConversationRepository
         )
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert conversations.list_all() == []
+
+
+def test_chat_starts_new_conversation_inside_project(
+    conversations: ConversationRepository,
+):
+    project = app.dependency_overrides[get_project_repository]().create("Java")
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "explain loops", "project_id": str(project.id)},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    conversation_id = UUID(response.json()["conversation_id"])
+    assert conversations.get(conversation_id).project_id == project.id
+
+
+def test_chat_rejects_unknown_project(conversations: ConversationRepository):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hello", "project_id": str(uuid4())},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["detail"] == "Project not found"
     assert conversations.list_all() == []
 
 

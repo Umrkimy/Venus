@@ -24,6 +24,8 @@ from features.chat.provider import ChatProvider
 from features.chat.schemas import ChatRequest
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
+from features.projects.dependencies import get_project_repository
+from features.projects.repository import ProjectRepository
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -504,6 +506,7 @@ async def chat(
         ConversationRepository,
         Depends(get_conversation_repository),
     ],
+    projects: Annotated[ProjectRepository, Depends(get_project_repository)],
 ):
     if request.conversation_id is not None and not conversations.exists(
         request.conversation_id,
@@ -511,6 +514,12 @@ async def chat(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found",
+        )
+    new_in_project = request.conversation_id is None and request.project_id is not None
+    if new_in_project and not projects.exists(request.project_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
         )
 
     apps = registry.apps_for(device_id)
@@ -558,7 +567,7 @@ async def chat(
     # Saved only after the answer exists, so a failed reply leaves nothing behind.
     conversation_id = request.conversation_id
     if conversation_id is None:
-        conversation_id = conversations.create(request.message)
+        conversation_id = conversations.create(request.message, request.project_id)
     if answer["type"] == "command":
         saved_reply = f"Proposed: {answer['label']}"
     else:

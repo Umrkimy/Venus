@@ -15,18 +15,18 @@ class ConversationRepository:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
 
-    def create(self, first_message: str) -> UUID:
+    def create(self, first_message: str, project_id: UUID | None = None) -> UUID:
         conversation_id = uuid4()
         now = datetime.now(timezone.utc)
+        conversation = Conversation(
+            id=conversation_id,
+            title=first_message.strip()[:TITLE_LENGTH],
+            created_at=now,
+            updated_at=now,
+        )
+        conversation.project_id = project_id
         with Session(self.engine) as session:
-            session.add(
-                Conversation(
-                    id=conversation_id,
-                    title=first_message.strip()[:TITLE_LENGTH],
-                    created_at=now,
-                    updated_at=now,
-                ),
-            )
+            session.add(conversation)
             session.commit()
         return conversation_id
 
@@ -107,5 +107,14 @@ class ConversationRepository:
             conversation.archived_at = (
                 datetime.now(timezone.utc) if archived else None
             )
+            session.commit()
+        return True
+
+    def set_project(self, conversation_id: UUID, project_id: UUID | None) -> bool:
+        with Session(self.engine) as session:
+            conversation = session.get(Conversation, conversation_id)
+            if conversation is None:
+                return False
+            conversation.project_id = project_id
             session.commit()
         return True
