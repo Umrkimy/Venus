@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import OwnerStatus from "@/features/owner/owner-status";
+import LlmSettings from "@/features/settings/llm-settings";
 import ModeSwitch from "@/features/settings/mode-switch";
 import Shortcuts from "@/features/shortcuts/shortcuts";
 import { useOwner } from "@/lib/use-owner";
@@ -23,6 +24,7 @@ export default function SettingsPage() {
 
       {owner.status === "signed-in" && (
         <>
+          <LlmSettings />
           <ModeSwitch />
           <Shortcuts />
         </>
