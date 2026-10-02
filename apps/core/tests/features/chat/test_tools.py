@@ -1,6 +1,6 @@
 import pytest
 
-from features.chat.tools import tool_to_command
+from features.chat.tools import TOOLS, tool_to_command
 
 
 @pytest.mark.parametrize(
@@ -19,3 +19,7 @@ def test_tool_call_becomes_command_text(name, arguments, expected):
 def test_unknown_tool_is_rejected():
     with pytest.raises(ValueError):
         tool_to_command("delete_files", {"path": "C:/"})
+
+
+def test_save_memory_is_offered_to_luna():
+    assert "save_memory" in [tool["name"] for tool in TOOLS]

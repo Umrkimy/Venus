@@ -8,6 +8,7 @@ from features.chat.schemas import ChatTurn
 class BrainReply:
     text: str | None = None      # Luna answered with words
     command: str | None = None   # Luna chose a tool, written as parser text
+    memory: str | None = None    # Luna wants to remember a fact about the owner
 
 
 class ChatProvider(Protocol):

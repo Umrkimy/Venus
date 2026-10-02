@@ -25,6 +25,9 @@ from features.chat.provider import ChatProvider
 from features.chat.schemas import ChatRequest
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
+from features.memories.dependencies import get_memory_repository
+from features.memories.repository import MemoryRepository
+from features.memories.rule import memory_from_message
 from features.personalities.dependencies import get_personality_repository
 from features.personalities.repository import PersonalityRepository
 from features.projects.dependencies import get_project_repository
@@ -515,6 +518,7 @@ async def chat(
         PersonalityRepository,
         Depends(get_personality_repository),
     ],
+    memories: Annotated[MemoryRepository, Depends(get_memory_repository)],
 ):
     if request.conversation_id is not None and not conversations.exists(
         request.conversation_id,
@@ -539,37 +543,44 @@ async def chat(
 
     # Rules answer first; the brain only gets what they don't understand.
     answer = None
-    try:
-        parsed = parse_command_text(
-            request.message, apps, folders, search_sites(shortcuts.list_all()),
-        )
-    except NotUnderstoodError:
-        # Core holds the history: the saved lines of this conversation.
-        history = []
-        if request.conversation_id is not None:
-            history = conversations.recent_turns(request.conversation_id)
-        brain = await provider.reply(
-            request.message,
-            history,
-            chat_instructions(
-                request, conversations, projects, personalities,
-                list(search_sites(shortcuts.list_all())),
-                folders,
-            ),
-        )
-        if brain.command is None:
-            answer = {"type": "reply", "reply": brain.text}
-        else:
-            # Luna picked a tool: run its choice through the same parser.
-            try:
-                parsed = parse_command_text(
-                    brain.command, apps, folders, search_sites(shortcuts.list_all()),
-                )
-            except CommandTextError as exc:
-                answer = {"type": "reply", "reply": str(exc)}
-    except CommandTextError as exc:
-        # "Which one: ...?" and "No app called ..." are answers in a chat.
-        answer = {"type": "reply", "reply": str(exc)}
+    fact = memory_from_message(request.message)
+    if fact is not None:
+        answer = remember(memories, fact)
+    else:
+        try:
+            parsed = parse_command_text(
+                request.message, apps, folders, search_sites(shortcuts.list_all()),
+            )
+        except NotUnderstoodError:
+            # Core holds the history: the saved lines of this conversation.
+            history = []
+            if request.conversation_id is not None:
+                history = conversations.recent_turns(request.conversation_id)
+            brain = await provider.reply(
+                request.message,
+                history,
+                chat_instructions(
+                    request, conversations, projects, personalities,
+                    list(search_sites(shortcuts.list_all())),
+                    folders,
+                    memories,
+                ),
+            )
+            if brain.memory is not None:
+                answer = remember(memories, brain.memory, brain.text)
+            elif brain.command is None:
+                answer = {"type": "reply", "reply": brain.text}
+            else:
+                # Luna picked a tool: run its choice through the same parser.
+                try:
+                    parsed = parse_command_text(
+                        brain.command, apps, folders, search_sites(shortcuts.list_all()),
+                    )
+                except CommandTextError as exc:
+                    answer = {"type": "reply", "reply": str(exc)}
+        except CommandTextError as exc:
+            # "Which one: ...?" and "No app called ..." are answers in a chat.
+            answer = {"type": "reply", "reply": str(exc)}
 
     if answer is None:
         response = await propose_parsed(
@@ -597,6 +608,7 @@ def chat_instructions(
     personalities: PersonalityRepository,
     sites: list[str],
     folders: list[str],
+    memories: MemoryRepository,
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -610,7 +622,17 @@ def chat_instructions(
         project.instructions if project is not None else None,
         sites,
         folders,
+        [memory.text for memory in memories.newest(50)],
     )
+
+
+def remember(memories: MemoryRepository, fact: str, text: str | None = None) -> dict:
+    # Kept by Core itself: no PC command, nothing to approve.
+    memory = memories.create(fact)
+    if not text:
+        return {"type": "reply", "reply": f"Saved: {memory.text}"}
+    # Luna still answers; the note shows what she kept.
+    return {"type": "reply", "reply": f"{text}\n\nSaved to memory: {memory.text}"}
 
 
 def record_from_command(command: NodeCommand) -> CommandRecord:
