@@ -17,8 +17,6 @@ class ChatRequest(BaseModel):
     message: str
     # None starts a new conversation; Core sends back the id it made.
     conversation_id: UUID | None = None
-    # Used only without conversation_id; goes away once the web stops sending it.
-    history: list[ChatTurn] = Field(default=[], max_length=20)
 
     @field_validator("message")
     @classmethod
