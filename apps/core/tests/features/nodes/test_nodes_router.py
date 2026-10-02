@@ -1497,6 +1497,25 @@ def test_chat_rejects_unknown_project(conversations: ConversationRepository):
     assert conversations.list_all() == []
 
 
+def test_new_chat_in_archived_project_is_rejected(
+    conversations: ConversationRepository,
+):
+    projects = app.dependency_overrides[get_project_repository]()
+    project = projects.create("Old")
+    projects.set_archived(project.id, True)
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hello", "project_id": str(project.id)},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["detail"] == "Project is archived"
+    assert conversations.list_all() == []
+
+
 def test_chat_requires_owner():
     response = client.post("/nodes/PC-Umar/chat", json={"message": "hello"})
 

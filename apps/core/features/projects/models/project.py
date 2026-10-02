@@ -14,6 +14,11 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(60))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Empty means active; a time means the owner archived the project then.
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
 
     def __init__(
         self,

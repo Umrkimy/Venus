@@ -96,19 +96,83 @@ def test_rename_unknown_project_returns_404(projects):
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_delete_project_keeps_its_chats_ungrouped(engine, projects):
+def test_delete_project_deletes_its_chats_and_messages(engine, projects):
     project = projects.create("Venus")
     conversations = ConversationRepository(engine)
     inside = conversations.create("plan the sidebar", project.id)
+    conversations.add_exchange(inside, "plan the sidebar", "Projects first.")
+    outside = conversations.create("unrelated")
 
     response = client.delete(f"/projects/{project.id}", headers=OWNER_HEADERS)
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
     assert projects.list_all() == []
-    assert conversations.get(inside).project_id is None
+    assert conversations.get(inside) is None
+    assert conversations.messages(inside) == []
+    assert conversations.get(outside) is not None
     assert client.delete(
         f"/projects/{project.id}", headers=OWNER_HEADERS,
     ).status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_delete_project_also_deletes_archived_chats(engine, projects):
+    project = projects.create("Venus")
+    conversations = ConversationRepository(engine)
+    archived = conversations.create("old idea", project.id)
+    conversations.set_archived(archived, True)
+
+    client.delete(f"/projects/{project.id}", headers=OWNER_HEADERS)
+
+    assert conversations.get(archived) is None
+
+
+def test_project_json_counts_its_chats(engine, projects):
+    project = projects.create("Venus")
+    projects.create("Empty")
+    conversations = ConversationRepository(engine)
+    conversations.create("one", project.id)
+    archived = conversations.create("two", project.id)
+    conversations.set_archived(archived, True)
+    conversations.create("loose")
+
+    listed = client.get("/projects", headers=OWNER_HEADERS).json()
+
+    counts = {row["name"]: row["chat_count"] for row in listed}
+    assert counts == {"Venus": 2, "Empty": 0}
+
+
+def test_archive_project_hides_it_from_list_and_shows_in_archived(projects):
+    kept = projects.create("Kept")
+    project = projects.create("Old")
+
+    response = client.patch(
+        f"/projects/{project.id}",
+        json={"archived": True},
+        headers=OWNER_HEADERS,
+    )
+    active = client.get("/projects", headers=OWNER_HEADERS).json()
+    archived = client.get("/projects?archived=true", headers=OWNER_HEADERS).json()
+
+    assert response.status_code == 200
+    assert response.json()["archived"] is True
+    assert response.json()["name"] == "Old"
+    assert [row["id"] for row in active] == [str(kept.id)]
+    assert [row["id"] for row in archived] == [str(project.id)]
+
+
+def test_unarchive_project_brings_it_back(projects):
+    project = projects.create("Old")
+    projects.set_archived(project.id, True)
+
+    response = client.patch(
+        f"/projects/{project.id}",
+        json={"archived": False},
+        headers=OWNER_HEADERS,
+    )
+    active = client.get("/projects", headers=OWNER_HEADERS).json()
+
+    assert response.json()["archived"] is False
+    assert [row["id"] for row in active] == [str(project.id)]
 
 
 def test_projects_require_owner(projects):

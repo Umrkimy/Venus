@@ -269,3 +269,20 @@ def test_move_conversation_to_unknown_project_returns_404(conversations):
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Project not found"
     assert conversations.get(conversation_id).project_id is None
+
+
+def test_move_chat_into_archived_project_is_rejected(engine, conversations):
+    projects = ProjectRepository(engine)
+    project = projects.create("Old")
+    projects.set_archived(project.id, True)
+    conversation_id = conversations.create("misplaced")
+
+    response = client.patch(
+        f"/conversations/{conversation_id}",
+        json={"project_id": str(project.id)},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["detail"] == "Project is archived"
+    assert conversations.get(conversation_id).project_id is None
