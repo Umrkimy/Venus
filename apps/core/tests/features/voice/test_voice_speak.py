@@ -3,6 +3,7 @@ import json
 
 import httpx2
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -11,7 +12,10 @@ from sqlalchemy.pool import StaticPool
 from config import FISH_MODEL, CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
-from features.voice.dependencies import get_speaker
+from features.settings.dependencies import get_settings_repository
+from features.settings.repository import SettingsRepository
+from features.settings.secrets import encrypt_text
+from features.voice.dependencies import get_speaker, voice_choice
 from features.voice.router import MAX_SPEAK_CHARS
 from features.voice.speaker import FISH_TTS_URL, FishSpeaker
 from main import app
@@ -37,12 +41,16 @@ class FakeSpeaker:
         return b"mp3-bytes"
 
 
-def settings(fish_api_key: str = "") -> CoreSettings:
+SECRET_KEY = Fernet.generate_key().decode()
+
+
+def settings(fish_api_key: str = "", **changes) -> CoreSettings:
     return CoreSettings(
         dev_node_token="test-node-token",
         dev_owner_token=TEST_OWNER_TOKEN,
         database_url="postgresql+psycopg://venus:test-password@127.0.0.1:5432/venus",
         fish_api_key=fish_api_key,
+        **changes,
     )
 
 
@@ -54,8 +62,9 @@ def engine():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    app.dependency_overrides[get_settings] = settings
+    app.dependency_overrides[get_settings] = lambda: settings()
     app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
+    app.dependency_overrides[get_settings_repository] = lambda: SettingsRepository(engine)
     yield engine
     app.dependency_overrides.clear()
     engine.dispose()
@@ -118,8 +127,8 @@ def test_speak_without_fish_key_is_503(engine):
     assert response.json()["detail"] == "Voice reply needs a Fish Audio key"
 
 
-def test_speak_with_fish_key_builds_fish_speaker():
-    speaker = get_speaker(settings("fish-test"))
+def test_speak_with_fish_key_builds_fish_speaker(engine):
+    speaker = get_speaker(settings("fish-test"), SettingsRepository(engine))
 
     assert isinstance(speaker, FishSpeaker)
 
@@ -167,3 +176,24 @@ def test_fish_speaker_raises_on_fish_error():
 
     with pytest.raises(httpx2.HTTPError):
         asyncio.run(speaker.speak("hi"))
+
+
+def test_voice_choice_uses_env_when_nothing_saved(engine):
+    env = settings("fish-env", fish_voice_id="voice-env", fish_model="s1")
+
+    assert voice_choice(env, SettingsRepository(engine)) == ("fish-env", "voice-env", "s1")
+
+
+def test_voice_choice_prefers_saved_settings(engine):
+    repository = SettingsRepository(engine)
+    repository.set_voice("voice-web", "s2.1-pro", encrypt_text("fish-web", SECRET_KEY))
+    env = settings("fish-env", fish_voice_id="voice-env", secret_key=SECRET_KEY)
+
+    assert voice_choice(env, repository) == ("fish-web", "voice-web", "s2.1-pro")
+
+
+def test_voice_choice_keeps_env_key_when_none_saved(engine):
+    repository = SettingsRepository(engine)
+    repository.set_voice("voice-web", FISH_MODEL, None)
+
+    assert voice_choice(settings("fish-env"), repository) == ("fish-env", "voice-web", FISH_MODEL)
