@@ -5,9 +5,16 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getJson } from "@/lib/get-json";
 
-import { FIELD_HOVER, LABEL_CLASS, SELECT_CLASS } from "./field-styles";
+import { FIELD_HOVER, LABEL_CLASS, SELECT_TRIGGER_CLASS } from "./field-styles";
 
 // Core still answers "fake" when no AI is set up; the form only offers real ones.
 type Provider = "openai";
@@ -100,17 +107,18 @@ function LlmForm({ initial }: { initial: LlmResponse }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <label className={LABEL_CLASS}>
           Provider
-          <select
-            value={provider}
-            onChange={(event) => setProvider(event.target.value as Provider)}
-            className={SELECT_CLASS}
-          >
-            {PROVIDERS.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+          <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
+            <SelectTrigger className={SELECT_TRIGGER_CLASS}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROVIDERS.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         <label className={LABEL_CLASS}>
           Model

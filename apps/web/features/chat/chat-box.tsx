@@ -1,9 +1,11 @@
 "use client";
 
 import { ArrowUp } from "lucide-react";
+import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { fadeUp, springSoft, staggerDelay } from "@/lib/motion";
 import ActionCard, { type ChatAction } from "./action-card";
 import MicButton from "./mic-button";
 import { useReadingSettings } from "./reading-settings";
@@ -84,8 +86,13 @@ export default function ChatBox({
           <ul role="log" className="space-y-3">
             {/* Messages are only ever added, so the position is a safe key. */}
             {messages.map((message, index) => (
-              <li
+              <motion.li
                 key={index}
+                {...fadeUp}
+                transition={{
+                  ...springSoft,
+                  delay: message.live ? 0 : staggerDelay(index),
+                }}
                 className={
                   message.from === "you"
                     ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap"
@@ -119,7 +126,7 @@ export default function ChatBox({
                     playing={speaker.speaking?.id === index}
                   />
                 )}
-              </li>
+              </motion.li>
             ))}
             <li ref={endRef} aria-hidden="true" />
           </ul>

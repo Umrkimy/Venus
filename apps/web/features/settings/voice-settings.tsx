@@ -5,10 +5,17 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useReadingSettings } from "@/features/chat/reading-settings";
 import { getJson } from "@/lib/get-json";
 
-import { FIELD_HOVER, LABEL_CLASS, SELECT_CLASS } from "./field-styles";
+import { FIELD_HOVER, LABEL_CLASS, SELECT_TRIGGER_CLASS } from "./field-styles";
 
 type FishModel = "s2.1-pro-free" | "s2.1-pro" | "s2-pro" | "s1";
 type VoiceResponse = { voice_id: string; model: FishModel; has_key: boolean };
@@ -150,17 +157,18 @@ function VoiceForm({ initial }: { initial: VoiceResponse }) {
         </label>
         <label className={LABEL_CLASS}>
           Model
-          <select
-            value={model}
-            onChange={(event) => setModel(event.target.value as FishModel)}
-            className={SELECT_CLASS}
-          >
-            {MODELS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <Select value={model} onValueChange={(value) => setModel(value as FishModel)}>
+            <SelectTrigger className={SELECT_TRIGGER_CLASS}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MODELS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       </div>
       <label className={LABEL_CLASS}>
