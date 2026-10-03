@@ -24,6 +24,13 @@ def test_build_instructions_lists_sites_and_folders_after_base_rules():
     assert parts[3] == "Be flirty."
 
 
+def test_sites_line_keeps_open_and_search_of_one_site_to_one_call():
+    # Luna added open_app comix next to the search 5 times in 16 real runs.
+    text = build_instructions(None, None, ["comix"])
+
+    assert "same site is one search_site call, never also open_app" in text
+
+
 def test_build_instructions_lists_owner_facts_before_personality():
     text = build_instructions("Be flirty.", None, memories=["Owner name is Umar."])
     parts = text.split("\n\n")
