@@ -6,7 +6,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import ActionCard, { type ChatAction } from "./action-card";
 import MicButton from "./mic-button";
+import SpeakerButton from "./speaker-button";
 import { useRecorder } from "./use-recorder";
+import type { useSpeaker } from "./use-speaker";
 
 export type ChatMessage = {
   from: "you" | "venus";
@@ -21,6 +23,8 @@ type ChatBoxProps = {
   placeholder: string;
   messages: ChatMessage[];
   onSend: (text: string) => void;
+  // Luna's voice toggle sits next to the mic.
+  speaker: ReturnType<typeof useSpeaker>;
   // Shown instead of the greeting before the first message.
   emptyState?: ReactNode;
 };
@@ -30,6 +34,7 @@ export default function ChatBox({
   placeholder,
   messages,
   onSend,
+  speaker,
   emptyState,
 }: ChatBoxProps) {
   const [text, setText] = useState("");
@@ -112,6 +117,7 @@ export default function ChatBox({
             autoComplete="off"
             className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 outline-none placeholder:text-muted-foreground field-sizing-content"
           />
+          <SpeakerButton speaker={speaker} />
           <MicButton recorder={recorder} disabled={disabled} />
           <Button
             type="submit"
@@ -125,6 +131,11 @@ export default function ChatBox({
         {recorder.error && (
           <p role="alert" className="mt-1.5 px-2 text-sm text-destructive">
             {recorder.error}
+          </p>
+        )}
+        {speaker.error && (
+          <p role="alert" className="mt-1.5 px-2 text-sm text-destructive">
+            {speaker.error}
           </p>
         )}
       </form>
