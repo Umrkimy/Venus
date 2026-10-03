@@ -6,9 +6,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import ActionCard, { type ChatAction } from "./action-card";
 import MicButton from "./mic-button";
+import { useReadingSettings } from "./reading-settings";
+import ReplayButton from "./replay-button";
 import SpeakerButton from "./speaker-button";
+import TypedText from "./typed-text";
 import { useRecorder } from "./use-recorder";
-import type { useSpeaker } from "./use-speaker";
+import type { Speaking, useSpeaker } from "./use-speaker";
 
 export type ChatMessage = {
   from: "you" | "venus";
@@ -16,7 +19,16 @@ export type ChatMessage = {
   actions?: ChatAction[];
   // Sent in this visit (not loaded from a saved chat).
   live?: boolean;
+  // A new Luna reply: its words come out with her voice, or at your text speed.
+  reveal?: "voice" | "type";
 };
+
+// How many letters of this message Luna has said; null when she isn't typing it.
+function lettersSaid(speaking: Speaking | null, id: number): number | null {
+  if (!speaking || speaking.id !== id || !speaking.typing) return null;
+  const before = speaking.lines.slice(0, speaking.line).join("").length;
+  return before + Math.round(speaking.lines[speaking.line].length * speaking.fraction);
+}
 
 type ChatBoxProps = {
   disabled: boolean;
@@ -40,16 +52,18 @@ export default function ChatBox({
   const [text, setText] = useState("");
   const endRef = useRef<HTMLLIElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const reading = useReadingSettings();
   // What you said goes into the box; you check it and press Enter.
   const recorder = useRecorder((heard) => {
     setText((current) => (current.trim() ? `${current.trim()} ${heard}` : heard));
     inputRef.current?.focus();
   });
 
-  // Keep the newest line in view, like any chat app.
+  // Keep the newest line in view, like any chat app (also as Luna's lines come out).
+  const speakingLine = speaker.speaking?.line;
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
+  }, [messages.length, speakingLine]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,7 +89,7 @@ export default function ChatBox({
                 className={
                   message.from === "you"
                     ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap"
-                    : "max-w-[85%] break-words whitespace-pre-wrap"
+                    : "group max-w-[85%] break-words whitespace-pre-wrap"
                 }
               >
                 <span className="sr-only">
@@ -88,7 +102,23 @@ export default function ChatBox({
                     startOpen={message.live ?? false}
                   />
                 )}
-                {message.text}
+                {message.reveal ? (
+                  <TypedText
+                    text={message.text}
+                    reveal={message.reveal}
+                    said={lettersSaid(speaker.speaking, index)}
+                    speed={reading.textSpeed}
+                    instant={reading.instantText}
+                  />
+                ) : (
+                  message.text
+                )}
+                {message.from === "venus" && message.text && (
+                  <ReplayButton
+                    onReplay={() => speaker.replay(index, message.text)}
+                    playing={speaker.speaking?.id === index}
+                  />
+                )}
               </li>
             ))}
             <li ref={endRef} aria-hidden="true" />
