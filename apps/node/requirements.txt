@@ -4,3 +4,6 @@ tzdata==2026.4
 SQLAlchemy==2.0.54
 python-dotenv==1.2.2
 websockets==17.1
+numpy==2.4.6
+sounddevice==0.5.6
+vosk==0.3.45
