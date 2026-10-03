@@ -1737,6 +1737,30 @@ def test_chat_brain_several_tools_proposes_each(
     assert saved[-1].actions == body["actions"]
 
 
+def test_chat_remember_with_command_goes_to_luna(
+    command_records: CommandRecordRepository,
+):
+    memories = app.dependency_overrides[get_memory_repository]()
+    brain = SeveralToolsBrain(["open spotify"], ["Owner likes red"])
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "remember I like red and open spotify"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+
+    # The rule stepped aside, so the whole sentence isn't saved as a fact.
+    assert [memory.text for memory in memories.list_all()] == ["Owner likes red"]
+    assert body["actions"] == [
+        {"kind": "command", "command_id": body["command_id"], "label": "Spotify"},
+        {"kind": "memory", "text": "Owner likes red"},
+    ]
+
+
 def test_chat_brain_several_tools_full_mode_sends_each():
     app.dependency_overrides[get_settings_repository]().set_mode("full")
     brain = SeveralToolsBrain(["open spotify", "open code venus"], [])
