@@ -18,7 +18,7 @@ from venus_protocol.schemas.commands import (
 )
 from venus_protocol.schemas.connections import NodeHello
 
-from features.auth.dependencies import require_owner
+from features.auth.dependencies import require_owner, require_owner_or_node
 from features.chat.dependencies import get_chat_provider
 from features.chat.prompt import build_instructions
 from features.chat.provider import ChatProvider
@@ -484,7 +484,7 @@ async def propose_text_command(
     )
 
 
-@router.post("/nodes/{device_id}/chat", dependencies=[Depends(require_owner)])
+@router.post("/nodes/{device_id}/chat", dependencies=[Depends(require_owner_or_node)])
 async def chat(
     device_id: str,
     request: ChatRequest,

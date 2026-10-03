@@ -207,3 +207,15 @@ def test_openai_transcriber_sends_audio_and_model():
             "prompt": "Venus, comix",
         },
     ]
+
+
+def test_transcribe_accepts_the_node_token(transcriber: FakeTranscriber):
+    # "Hey Venus" on the PC sends its recording with the Node's token.
+    response = client.post(
+        "/voice/transcribe",
+        content=b"audio",
+        headers={"Authorization": "Bearer test-node-token", **WEBM},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"text": "open spotify"}
