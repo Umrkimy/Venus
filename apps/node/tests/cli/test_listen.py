@@ -4,6 +4,7 @@ from urllib.error import HTTPError
 import venus_node.cli.listen as listen
 from venus_node.config import NodeSettings
 from venus_node.voice.conversation import VoiceChat
+from venus_node.voice.status import SPEAKING, Status
 
 SETTINGS = NodeSettings(device_id="pc", core_dev_token="t", core_url="ws://core.test/nodes/connect")
 
@@ -74,3 +75,35 @@ def test_answer_turns_the_mic_back_on_if_playback_fails(monkeypatch):
         pass
 
     assert events[-1] == "mic on"
+
+
+def test_answer_tells_the_circle_thinking_then_speaking(monkeypatch):
+    events, voice = setup(monkeypatch)
+    status = Status()
+    seen = []
+    monkeypatch.setattr(listen, "play_mp3", lambda mp3: seen.append(status.snapshot()[0]))
+
+    listen.answer(SETTINGS, voice, b"pcm", FakeStream(events), status)
+
+    assert seen == [SPEAKING]
+
+
+def test_answer_cancel_asks_luna_nothing(monkeypatch, capsys):
+    events, _ = setup(monkeypatch, text="Never mind.")
+    asked = []
+
+    outcome = listen.answer(SETTINGS, VoiceChat(lambda m, c: asked.append(m)), b"pcm", FakeStream(events))
+
+    assert outcome is None
+    assert asked == [] and events == []
+    assert "Cancelled." in capsys.readouterr().out
+
+
+def test_answer_stop_listening_returns_sleep_without_luna(monkeypatch):
+    events, _ = setup(monkeypatch, text="Hey Venus, stop listening.")
+    asked = []
+
+    outcome = listen.answer(SETTINGS, VoiceChat(lambda m, c: asked.append(m)), b"pcm", FakeStream(events))
+
+    assert outcome == "sleep"
+    assert asked == [] and events == []
