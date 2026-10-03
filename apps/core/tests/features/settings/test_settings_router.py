@@ -161,3 +161,72 @@ def test_llm_settings_require_owner():
 
     assert get.status_code == 401
     assert put.status_code == 401
+
+
+def save_voice(**body):
+    return client.put("/settings/voice", json=body, headers=OWNER_HEADERS)
+
+
+def test_voice_settings_fall_back_to_env():
+    use_settings(fish_api_key="fish-env", fish_voice_id="voice-env", fish_model="s1")
+
+    response = client.get("/settings/voice", headers=OWNER_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == {"voice_id": "voice-env", "model": "s1", "has_key": True}
+
+
+def test_voice_settings_never_return_the_key():
+    use_settings(secret_key=SECRET_KEY)
+
+    put = save_voice(voice_id=" voice-123 ", model="s2.1-pro-free", api_key="fish-secret")
+    get = client.get("/settings/voice", headers=OWNER_HEADERS)
+
+    expected = {"voice_id": "voice-123", "model": "s2.1-pro-free", "has_key": True}
+    assert put.status_code == 200
+    assert put.json() == expected
+    assert get.json() == expected
+    assert "fish-secret" not in put.text + get.text
+
+
+def test_voice_settings_store_the_key_encrypted():
+    use_settings(secret_key=SECRET_KEY)
+    repository = app.dependency_overrides[get_settings_repository]()
+
+    save_voice(voice_id="voice-123", model="s2.1-pro-free", api_key="fish-secret")
+    stored = repository.get_voice().api_key_encrypted
+
+    assert "fish-secret" not in stored
+    assert decrypt_text(stored, SECRET_KEY) == "fish-secret"
+
+
+def test_voice_settings_put_without_key_keeps_old_key():
+    use_settings(secret_key=SECRET_KEY)
+    repository = app.dependency_overrides[get_settings_repository]()
+    save_voice(voice_id="voice-123", model="s2.1-pro-free", api_key="fish-secret")
+
+    response = save_voice(voice_id="voice-456", model="s2.1-pro")
+    stored = repository.get_voice()
+
+    assert response.json() == {"voice_id": "voice-456", "model": "s2.1-pro", "has_key": True}
+    assert decrypt_text(stored.api_key_encrypted, SECRET_KEY) == "fish-secret"
+
+
+def test_voice_settings_need_secret_key_for_api_key():
+    response = save_voice(voice_id="voice-123", model="s1", api_key="fish-secret")
+
+    assert response.status_code == 409
+
+
+def test_voice_settings_reject_unknown_model():
+    response = save_voice(voice_id="voice-123", model="s9-ultra")
+
+    assert response.status_code == 422
+
+
+def test_voice_settings_require_owner():
+    get = client.get("/settings/voice")
+    put = client.put("/settings/voice", json={"voice_id": "", "model": "s1"})
+
+    assert get.status_code == 401
+    assert put.status_code == 401
