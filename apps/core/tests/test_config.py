@@ -2,7 +2,7 @@ import pytest
 
 from pathlib import Path
 
-from config import load_settings
+from config import FISH_MODEL, load_settings
 
 
 def test_load_settings_reads_development_tokens(tmp_path: Path):
@@ -20,6 +20,24 @@ def test_load_settings_reads_development_tokens(tmp_path: Path):
     assert settings.database_url == (
         "postgresql+psycopg://venus:test-password@127.0.0.1:5432/venus"
     )
+
+
+def test_load_settings_reads_fish_voice(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "VENUS_CORE_DEV_NODE_TOKEN=test-node-token\n"
+        "VENUS_CORE_DEV_OWNER_TOKEN=test-owner-token\n"
+        "VENUS_CORE_DATABASE_URL=postgresql+psycopg://venus:test-password@127.0.0.1:5432/venus\n"
+        "VENUS_CORE_FISH_API_KEY=fish-test\n"
+        "VENUS_CORE_FISH_VOICE_ID=voice-123\n"
+    )
+
+    settings = load_settings(env_file)
+
+    assert settings.fish_api_key == "fish-test"
+    assert settings.fish_voice_id == "voice-123"
+    # No model in .env: the free one.
+    assert settings.fish_model == FISH_MODEL
 
 
 def test_load_settings_rejects_missing_dev_node_token(tmp_path: Path):
