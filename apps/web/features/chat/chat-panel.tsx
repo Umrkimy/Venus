@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { isFinal, useCommandStatus, type ChatAction } from "./action-card";
 import ChatBox, { type ChatMessage } from "./chat-box";
+import { useSpeaker } from "./use-speaker";
 import { getJson } from "@/lib/get-json";
 import { useNodes } from "@/lib/use-nodes";
 
@@ -99,6 +100,7 @@ export default function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const speaker = useSpeaker();
 
   // Venus has one PC for now: the chat talks to the first one online.
   const nodes = useNodes();
@@ -162,6 +164,8 @@ export default function ChatPanel({
         live: true,
       },
     ]);
+    // Only Luna's own words; the "On it" stand-in isn't worth a voice call.
+    if (data.reply) void speaker.speak(data.reply);
     // A command: Venus asks before opening anything (unless Full mode);
     // its card holds Approve and Deny.
     if (data.type === "command") setCommandId(data.command_id);
@@ -178,6 +182,7 @@ export default function ChatPanel({
         }
         messages={messages}
         onSend={chat}
+        speaker={speaker}
         emptyState={emptyState}
       />
 
