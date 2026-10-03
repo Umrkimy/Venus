@@ -21,15 +21,9 @@ type SavedConversation = {
   }[];
 };
 
-// The see-through card in front of the scene.
+// Full-size and see-through, so the scene (later the 3D Venus) shows behind the chat.
 function ChatCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col px-4 pb-4">
-      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-border/60 bg-card text-card-foreground shadow-lg backdrop-blur-xl">
-        {children}
-      </section>
-    </div>
-  );
+  return <section className="flex min-h-0 w-full flex-1 flex-col">{children}</section>;
 }
 
 // Loader for /chat/<id>: waits for the saved lines, then draws the chat
@@ -189,7 +183,7 @@ export default function ChatPanel({
         emptyState={emptyState}
       />
 
-      <div aria-live="polite" className="empty:hidden px-4 pb-3">
+      <div aria-live="polite" className="empty:hidden mx-auto w-full max-w-3xl px-4 pb-3">
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
