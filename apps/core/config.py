@@ -3,6 +3,9 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
+# Free Fish Audio model to start with; VENUS_CORE_FISH_MODEL=s2.1-pro is the paid one.
+FISH_MODEL = "s2.1-pro-free"
+
 
 @dataclass(frozen=True)
 class CoreSettings:
@@ -13,6 +16,9 @@ class CoreSettings:
     llm_model: str = ""
     llm_api_key: str = ""
     secret_key: str = ""
+    fish_api_key: str = ""
+    fish_voice_id: str = ""
+    fish_model: str = FISH_MODEL
 
 
 def get_settings() -> CoreSettings:
@@ -29,6 +35,9 @@ def load_settings(env_file: Path) -> CoreSettings:
     llm_model = values.get("VENUS_CORE_LLM_MODEL") or ""
     llm_api_key = values.get("VENUS_CORE_LLM_API_KEY") or ""
     secret_key = values.get("VENUS_CORE_SECRET_KEY") or ""
+    fish_api_key = values.get("VENUS_CORE_FISH_API_KEY") or ""
+    fish_voice_id = values.get("VENUS_CORE_FISH_VOICE_ID") or ""
+    fish_model = values.get("VENUS_CORE_FISH_MODEL") or FISH_MODEL
 
     if not node_token or not node_token.strip():
         raise ValueError("VENUS_CORE_DEV_NODE_TOKEN is required")
@@ -47,4 +56,7 @@ def load_settings(env_file: Path) -> CoreSettings:
         llm_model=llm_model,
         llm_api_key=llm_api_key,
         secret_key=secret_key,
+        fish_api_key=fish_api_key,
+        fish_voice_id=fish_voice_id,
+        fish_model=fish_model,
     )

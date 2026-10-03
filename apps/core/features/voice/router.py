@@ -1,17 +1,23 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import httpx2
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from openai import OpenAIError
+from pydantic import BaseModel
 
 from features.auth.dependencies import require_owner
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.repository import ShortcutRepository
-from features.voice.dependencies import get_transcriber
+from features.voice.dependencies import get_speaker, get_transcriber
 from features.voice.sound_alike import fix_keywords
+from features.voice.speaker import Speaker
 from features.voice.transcriber import Transcriber
 
 # Minutes of speech fit easily; stops a huge upload from running up a bill.
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
+
+# Luna's lines are short; a runaway reply can't burn Fish credit.
+MAX_SPEAK_CHARS = 1000
 
 router = APIRouter(prefix="/voice", dependencies=[Depends(require_owner)])
 
@@ -47,3 +53,34 @@ async def transcribe(
         ) from exc
     # "comics" and "comix" sound the same; the owner meant the shortcut.
     return {"text": fix_keywords(text, keywords)}
+
+
+class SpeakRequest(BaseModel):
+    text: str
+
+
+@router.post("/speak")
+async def speak(
+    body: SpeakRequest,
+    speaker: Annotated[Speaker, Depends(get_speaker)],
+):
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Nothing to say",
+        )
+    if len(text) > MAX_SPEAK_CHARS:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="Text is too long to speak",
+        )
+
+    try:
+        audio = await speaker.speak(text)
+    except httpx2.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Couldn't speak that",
+        ) from exc
+    return Response(content=audio, media_type="audio/mpeg")
