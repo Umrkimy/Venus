@@ -1,12 +1,17 @@
 from collections import deque
 from collections.abc import Iterator
+from functools import partial
 from pathlib import Path
+from urllib.error import HTTPError
 
 import numpy as np
 
-from venus_node.config import load_settings
-from venus_node.voice.core_client import transcribe
+from venus_node.config import NodeSettings, load_settings
+from venus_node.voice.conversation import VoiceChat
+from venus_node.voice.core_client import chat, speak, transcribe
+from venus_node.voice.player import play_mp3
 from venus_node.voice.recorder import record_until_silence
+from venus_node.voice.speakable import speakable
 from venus_node.voice.wake import WakeListener, grammar, wake_model_path
 from venus_node.voice.wav import to_wav
 
@@ -19,6 +24,39 @@ def mic_frames(stream) -> Iterator[np.ndarray]:
     while True:
         frame, _overflowed = stream.read(FRAME)
         yield frame[:, 0]
+
+
+def problem(exc: OSError) -> str:
+    if isinstance(exc, HTTPError) and exc.code == 409:
+        return "Venus isn't connected to this PC. Run start-venus.cmd first."
+    return f"Couldn't reach Core: {exc}"
+
+
+def answer(settings: NodeSettings, voice: VoiceChat, pcm: bytes, stream) -> None:
+    """Text from the recording, Luna's reply, then her voice."""
+    try:
+        text = transcribe(settings, to_wav(pcm, RATE))
+        print("You said:", text or "(nothing)")
+        if not text:
+            return
+        reply = voice.ask(text)
+        print("Luna:", reply)
+    except OSError as exc:
+        print(problem(exc))
+        return
+    if not reply:
+        return
+    try:
+        mp3 = speak(settings, speakable(reply))
+    except OSError as exc:
+        print("Luna's voice isn't available:", exc)
+        return
+    # The mic would hear her through the speakers ("...venus...") and wake.
+    stream.stop()
+    try:
+        play_mp3(mp3)
+    finally:
+        stream.start()
 
 
 def run_listen(env_file: Path) -> None:
@@ -34,6 +72,7 @@ def run_listen(env_file: Path) -> None:
     vosk.SetLogLevel(-1)
     recognizer = vosk.KaldiRecognizer(vosk.Model(str(path)), RATE, grammar(settings.wake_phrases))
     listener = WakeListener(recognizer, settings.wake_phrases)
+    voice = VoiceChat(partial(chat, settings))
     # The frames while the phrase was holding may already have "open ..." in them.
     recent: deque[np.ndarray] = deque(maxlen=5)
 
@@ -46,10 +85,7 @@ def run_listen(env_file: Path) -> None:
                 continue
             print("Listening...")
             pcm = b"".join(f.tobytes() for f in recent) + record_until_silence(frames)
-            try:
-                print("You said:", transcribe(settings, to_wav(pcm, RATE)) or "(nothing)")
-            except OSError as exc:
-                print("Couldn't reach Core:", exc)
+            answer(settings, voice, pcm, stream)
             listener.reset()
             recent.clear()
 
