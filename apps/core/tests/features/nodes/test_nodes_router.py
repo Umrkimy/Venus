@@ -1909,3 +1909,16 @@ def test_owner_shortcut_replaces_built_in_site(
 
     assert stored_record is not None
     assert stored_record.url == "https://music.youtube.com/search?q=lofi"
+
+
+def test_chat_accepts_the_node_token(command_records: CommandRecordRepository):
+    # The PC's voice loop chats for the owner sitting at it.
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open spot"},
+            headers={"Authorization": f"Bearer {TEST_NODE_TOKEN}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["label"] == "Spotify"

@@ -11,6 +11,7 @@ from features.auth.dependencies import (
     SESSION_COOKIE_NAME,
     get_auth_repository,
     require_owner,
+    require_owner_or_node,
 )
 from features.auth.passwords import hash_password
 from features.auth.repository import AuthRepository
@@ -23,6 +24,11 @@ app = FastAPI()
 
 @app.get("/protected", dependencies=[Depends(require_owner)])
 def protected():
+    return {"ok": True}
+
+
+@app.get("/voice-ish", dependencies=[Depends(require_owner_or_node)])
+def voice_ish():
     return {"ok": True}
 
 
@@ -93,3 +99,22 @@ def test_request_without_credentials_is_rejected(client):
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "Not authenticated"}
+
+
+def test_node_token_is_rejected_on_owner_only_routes(client):
+    response = client.get("/protected", headers={"Authorization": "Bearer test-node-token"})
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.parametrize("token", ["test-node-token", TEST_OWNER_TOKEN])
+def test_owner_or_node_accepts_node_and_owner_tokens(client, token):
+    response = client.get("/voice-ish", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == status.HTTP_200_OK
+
+
+def test_owner_or_node_rejects_other_tokens(client):
+    response = client.get("/voice-ish", headers={"Authorization": "Bearer wrong-token"})
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

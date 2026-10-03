@@ -53,3 +53,16 @@ def require_owner(
         detail="Not authenticated",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def require_owner_or_node(
+    request: Request,
+    settings: Annotated[CoreSettings, Depends(get_settings)],
+    repository: Annotated[AuthRepository, Depends(get_auth_repository)],
+) -> None:
+    # The Node's "Hey Venus" loop speaks for the owner sitting at that PC:
+    # it may hear, talk and chat, but not touch settings, keys or memories.
+    authorization = request.headers.get("authorization", "")
+    if hmac.compare_digest(authorization, f"Bearer {settings.dev_node_token}"):
+        return
+    require_owner(request, settings, repository)

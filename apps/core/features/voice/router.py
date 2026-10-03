@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from openai import OpenAIError
 from pydantic import BaseModel
 
-from features.auth.dependencies import require_owner
+from features.auth.dependencies import require_owner_or_node
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.repository import ShortcutRepository
 from features.voice.dependencies import get_speaker, get_transcriber
@@ -19,7 +19,7 @@ MAX_AUDIO_BYTES = 10 * 1024 * 1024
 # Luna's lines are short; a runaway reply can't burn Fish credit.
 MAX_SPEAK_CHARS = 1000
 
-router = APIRouter(prefix="/voice", dependencies=[Depends(require_owner)])
+router = APIRouter(prefix="/voice", dependencies=[Depends(require_owner_or_node)])
 
 
 @router.post("/transcribe")
