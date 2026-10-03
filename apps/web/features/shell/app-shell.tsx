@@ -1,5 +1,6 @@
 "use client";
 
+import { MotionConfig } from "motion/react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -17,24 +18,27 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const showScene = !usePathname().startsWith("/settings");
 
   return (
-    <NewChatProvider>
-      <SidebarProvider>
-        {signedIn && <AppSidebar username={owner.username} onLogout={logout} />}
-        <SidebarInset
-          className={`relative h-svh overflow-hidden ${showScene ? "bg-transparent" : "bg-background"}`}
-        >
-          {showScene && <SceneBackground />}
-          <header className="relative z-10 flex h-12 shrink-0 items-center px-3">
-            {signedIn && <SidebarTrigger />}
-          </header>
-          <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-            <div className="px-4">
-              <OwnerStatus owner={owner} />
+    // "user": skip movement when the OS asks for reduced motion.
+    <MotionConfig reducedMotion="user">
+      <NewChatProvider>
+        <SidebarProvider>
+          {signedIn && <AppSidebar username={owner.username} onLogout={logout} />}
+          <SidebarInset
+            className={`relative h-svh overflow-hidden ${showScene ? "bg-transparent" : "bg-background"}`}
+          >
+            {showScene && <SceneBackground />}
+            <header className="relative z-10 flex h-12 shrink-0 items-center px-3">
+              {signedIn && <SidebarTrigger />}
+            </header>
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+              <div className="px-4">
+                <OwnerStatus owner={owner} />
+              </div>
+              {signedIn && children}
             </div>
-            {signedIn && children}
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    </NewChatProvider>
+          </SidebarInset>
+        </SidebarProvider>
+      </NewChatProvider>
+    </MotionConfig>
   );
 }
