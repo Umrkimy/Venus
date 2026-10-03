@@ -41,8 +41,9 @@ def sites_line(sites: list[str]) -> str | None:
         f"Saved sites: {', '.join(sorted(sites))}. "
         "If the owner names something to find there (search, look up, find, "
         "a title), call search_site with its keyword and those words, even when "
-        "they also say open. Only when there is nothing to find, call open_app "
-        "with its keyword."
+        "they also say open. Opening and searching the same site is one "
+        "search_site call, never also open_app. Only when there is nothing to "
+        "find, call open_app with its keyword."
     )
 
 
