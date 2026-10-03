@@ -75,68 +75,71 @@ export default function ChatBox({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {messages.length === 0 ? (
-          (emptyState ?? (
-            <p className="mt-16 text-center text-3xl font-semibold tracking-tight text-balance">
-              What can I do for you?
-            </p>
-          ))
-        ) : (
-          <ul role="log" className="space-y-3">
-            {/* Messages are only ever added, so the position is a safe key. */}
-            {messages.map((message, index) => (
-              <motion.li
-                key={index}
-                {...fadeUp}
-                transition={{
-                  ...springSoft,
-                  delay: message.live ? 0 : staggerDelay(index),
-                }}
-                className={
-                  message.from === "you"
-                    ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap"
-                    : "group max-w-[85%] break-words whitespace-pre-wrap"
-                }
-              >
-                <span className="sr-only">
-                  {message.from === "you" ? "You: " : "Venus: "}
-                </span>
-                {/* What Venus did comes first, then what she says about it. */}
-                {message.actions && message.actions.length > 0 && (
-                  <ActionCard
-                    actions={message.actions}
-                    startOpen={message.live ?? false}
-                  />
-                )}
-                {message.reveal ? (
-                  <TypedText
-                    text={message.text}
-                    reveal={message.reveal}
-                    said={lettersSaid(speaker.speaking, index)}
-                    speed={reading.textSpeed}
-                    instant={reading.instantText}
-                  />
-                ) : (
-                  message.text
-                )}
-                {message.from === "venus" && message.text && (
-                  <ReplayButton
-                    onReplay={() => speaker.replay(index, message.text)}
-                    playing={speaker.speaking?.id === index}
-                  />
-                )}
-              </motion.li>
-            ))}
-            <li ref={endRef} aria-hidden="true" />
-          </ul>
-        )}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl px-4 py-4">
+          {messages.length === 0 ? (
+            (emptyState ?? (
+              <p className="mt-16 text-center text-3xl font-semibold tracking-tight text-balance">
+                What can I do for you?
+              </p>
+            ))
+          ) : (
+            <ul role="log" className="space-y-5">
+              {/* Messages are only ever added, so the position is a safe key. */}
+              {messages.map((message, index) => (
+                <motion.li
+                  key={index}
+                  {...fadeUp}
+                  transition={{
+                    ...springSoft,
+                    delay: message.live ? 0 : staggerDelay(index),
+                  }}
+                  className={
+                    message.from === "you"
+                      ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap"
+                      : "group max-w-[85%] break-words whitespace-pre-wrap drop-shadow-sm"
+                  }
+                >
+                  <span className="sr-only">
+                    {message.from === "you" ? "You: " : "Venus: "}
+                  </span>
+                  {/* What Venus did comes first, then what she says about it. */}
+                  {message.actions && message.actions.length > 0 && (
+                    <ActionCard
+                      actions={message.actions}
+                      startOpen={message.live ?? false}
+                    />
+                  )}
+                  {message.reveal ? (
+                    <TypedText
+                      text={message.text}
+                      reveal={message.reveal}
+                      said={lettersSaid(speaker.speaking, index)}
+                      speed={reading.textSpeed}
+                      instant={reading.instantText}
+                    />
+                  ) : (
+                    message.text
+                  )}
+                  {message.from === "venus" && message.text && (
+                    <ReplayButton
+                      onReplay={() => speaker.replay(index, message.text)}
+                      playing={speaker.speaking?.id === index}
+                    />
+                  )}
+                </motion.li>
+              ))}
+              <li ref={endRef} aria-hidden="true" />
+            </ul>
+          )}
+        </div>
       </div>
-      <form onSubmit={handleSubmit} className="p-3">
+      <form onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl px-4 pb-3">
         <label htmlFor="chat-input" className="sr-only">
           Message Venus
         </label>
-        <div className="flex items-end gap-2 rounded-xl border border-input bg-background/60 p-2 focus-within:ring-2 focus-within:ring-ring">
+        {/* Frosted pill: readable over the scene while it still shows through. */}
+        <div className="flex items-end gap-2 rounded-3xl border border-input bg-background/40 py-2 pr-2 pl-3 shadow-lg backdrop-blur-md focus-within:ring-2 focus-within:ring-ring">
           <textarea
             ref={inputRef}
             id="chat-input"
@@ -161,6 +164,7 @@ export default function ChatBox({
             size="icon"
             disabled={disabled || text.trim() === ""}
             aria-label="Send"
+            className="rounded-full"
           >
             <ArrowUp />
           </Button>
@@ -175,6 +179,9 @@ export default function ChatBox({
             {speaker.error}
           </p>
         )}
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Venus can make mistakes.
+        </p>
       </form>
     </>
   );
