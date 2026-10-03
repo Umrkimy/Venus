@@ -10,9 +10,9 @@ from features.chat.schemas import ChatTurn
 from features.chat.tools import TOOLS
 
 
-def function_call(name: str, arguments: str):
+def function_call(name: str, arguments: str, call_id: str = "call-1"):
     return SimpleNamespace(
-        type="function_call", name=name, arguments=arguments, call_id="call-1",
+        type="function_call", name=name, arguments=arguments, call_id=call_id,
     )
 
 
@@ -95,8 +95,66 @@ def test_openai_provider_turns_function_call_into_command():
     provider = OpenAIProvider(client, "gpt-6-luna")
 
     assert asyncio.run(provider.reply("can you open spotify", [], "")) == BrainReply(
-        command="open Spotify",
+        commands=["open Spotify"],
     )
+
+
+def test_openai_provider_reads_every_tool_call():
+    client = FakeClient(
+        output=[
+            function_call("open_app", '{"name": "Spotify"}', "call-1"),
+            function_call("search_site", '{"site": "comix", "words": "solo leveling"}', "call-2"),
+            function_call("save_memory", '{"fact": "Owner likes red"}', "call-3"),
+        ],
+        output_text="",
+    )
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    reply = asyncio.run(provider.reply("open spotify and comix, i like red", [], ""))
+
+    assert reply == BrainReply(
+        commands=["open Spotify", "comix solo leveling"],
+        memories=["Owner likes red"],
+    )
+    # Core words one line after running them, so no follow-up call here.
+    assert len(client.responses.calls) == 1
+
+
+def test_openai_provider_skips_broken_tool_call():
+    client = FakeClient(
+        output=[
+            function_call("delete_files", '{"path": "C:/"}', "call-1"),
+            function_call("open_app", '{"name": "Spotify"}', "call-2"),
+        ],
+        output_text="",
+    )
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    reply = asyncio.run(provider.reply("wipe C and open spotify", [], ""))
+
+    assert reply == BrainReply(commands=["open Spotify"])
+
+
+def test_openai_provider_answers_after_several_facts():
+    client = FakeClient(
+        output=[
+            function_call("save_memory", '{"fact": "Owner likes red"}', "call-1"),
+            function_call("save_memory", '{"fact": "Owner has black hair"}', "call-2"),
+        ],
+        output_text="",
+    )
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    reply = asyncio.run(provider.reply("i like red and my hair is black", [], ""))
+
+    assert reply == BrainReply(
+        text="Love that, Umar!", memories=["Owner likes red", "Owner has black hair"],
+    )
+    # Every tool call needs its result before Luna can answer.
+    assert client.responses.calls[1]["input"] == [
+        {"type": "function_call_output", "call_id": "call-1", "output": "Saved."},
+        {"type": "function_call_output", "call_id": "call-2", "output": "Saved."},
+    ]
 
 
 def test_openai_provider_saves_memory_and_still_answers():
@@ -108,7 +166,7 @@ def test_openai_provider_saves_memory_and_still_answers():
 
     reply = asyncio.run(provider.reply("i love lo-fi", [], ""))
 
-    assert reply == BrainReply(text="Love that, Umar!", memory="Owner likes lo-fi")
+    assert reply == BrainReply(text="Love that, Umar!", memories=["Owner likes lo-fi"])
     followup = client.responses.calls[1]
     assert followup["previous_response_id"] == "resp-1"
     assert followup["input"] == [
@@ -128,7 +186,7 @@ def test_openai_provider_keeps_memory_when_followup_fails():
 
     reply = asyncio.run(provider.reply("i love lo-fi", [], ""))
 
-    assert reply == BrainReply(memory="Owner likes lo-fi")
+    assert reply == BrainReply(memories=["Owner likes lo-fi"])
 
 
 @pytest.mark.parametrize(
@@ -145,8 +203,8 @@ def test_openai_provider_answers_when_function_call_is_broken(item):
 
     reply = asyncio.run(provider.reply("do something", [], ""))
 
-    assert reply.command is None
-    assert reply.memory is None
+    assert reply.commands == []
+    assert reply.memories == []
     assert reply.text
 
 

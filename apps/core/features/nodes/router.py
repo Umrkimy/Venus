@@ -551,67 +551,69 @@ async def chat(
 
     # Rules answer first; the brain only gets what they don't understand.
     answer = None
+    to_open: list[ParsedCommand] = []  # commands to propose, in order
+    facts: list[str] = []  # facts saved during this message
+    failures: list[str] = []  # why a command Luna chose can't run
     fact = memory_from_message(request.message)
     if fact is not None:
-        saved = memories.create(fact).text
-        line = await luna_line(
-            provider, request.message, instructions(),
-            f"You just saved this about the owner: {saved}",
-            f"Saved: {saved}",
-        )
-        answer = memory_answer(saved, line)
+        facts.append(memories.create(fact).text)
     else:
         try:
-            parsed = parse_command_text(
+            to_open.append(parse_command_text(
                 request.message, apps, folders, search_sites(shortcuts.list_all()),
-            )
+            ))
         except NotUnderstoodError:
             # Core holds the history: the saved lines of this conversation.
             history = []
             if request.conversation_id is not None:
                 history = conversations.recent_turns(request.conversation_id)
             brain = await provider.reply(request.message, history, instructions())
-            if brain.memory is not None:
-                saved = memories.create(brain.memory).text
-                answer = memory_answer(saved, brain.text or f"Saved: {saved}")
-            elif brain.command is None:
-                answer = {"type": "reply", "reply": brain.text, "actions": []}
-            else:
-                # Luna picked a tool: run its choice through the same parser.
+            facts = [memories.create(fact).text for fact in brain.memories]
+            # Luna picked tools: run each choice through the same parser.
+            for text in brain.commands:
                 try:
-                    parsed = parse_command_text(
-                        brain.command, apps, folders, search_sites(shortcuts.list_all()),
-                    )
+                    to_open.append(parse_command_text(
+                        text, apps, folders, search_sites(shortcuts.list_all()),
+                    ))
                 except CommandTextError as exc:
-                    answer = {"type": "reply", "reply": str(exc), "actions": []}
+                    failures.append(str(exc))
+            if not to_open and not failures:
+                if not facts:
+                    answer = {"type": "reply", "reply": brain.text, "actions": []}
+                elif brain.text:
+                    # Her own answer stays; the facts are actions.
+                    answer = memory_answer(facts, brain.text)
+            elif not to_open and not facts:
+                # "No app called ..." is an answer in a chat.
+                answer = {"type": "reply", "reply": " ".join(failures), "actions": []}
         except CommandTextError as exc:
             # "Which one: ...?" and "No app called ..." are answers in a chat.
             answer = {"type": "reply", "reply": str(exc), "actions": []}
 
     if answer is None:
-        response = await propose_parsed(
-            parsed, device_id, registry, result_registry, command_records,
-            settings_repository,
-        )
-        label = response["label"]
-        if settings_repository.get_mode() == "full":
-            done = f"You are opening {label} on the owner's PC right now."
-        else:
-            done = (
-                f"You want to open {label} on the owner's PC and are waiting "
-                "for them to press Approve below."
+        # Each command is its own record with its own Approve.
+        proposals = [
+            await propose_parsed(
+                parsed, device_id, registry, result_registry, command_records,
+                settings_repository,
             )
-        line = await luna_line(
-            provider, request.message, instructions(), done, f"On it: {label}",
+            for parsed in to_open
+        ]
+        labels = [proposal["label"] for proposal in proposals]
+        done, fallback = action_summary(
+            labels, facts, failures, settings_repository.get_mode() == "full",
         )
-        answer = {
-            "type": "command",
-            **response,
-            "reply": line,
-            "actions": [
-                {"kind": "command", "command_id": response["command_id"], "label": label},
-            ],
-        }
+        # One line from Luna about everything she did.
+        line = await luna_line(provider, request.message, instructions(), done, fallback)
+        actions = [
+            {"kind": "command", "command_id": proposal["command_id"], "label": proposal["label"]}
+            for proposal in proposals
+        ] + [{"kind": "memory", "text": fact} for fact in facts]
+        if proposals:
+            # The web waits on the newest command before unlocking the input.
+            answer = {"type": "command", **proposals[-1], "reply": line, "actions": actions}
+        else:
+            answer = {"type": "reply", "reply": line, "actions": actions}
 
     # Saved only after the answer exists, so a failed reply leaves nothing behind.
     conversation_id = request.conversation_id
@@ -648,9 +650,44 @@ def chat_instructions(
     )
 
 
-def memory_answer(fact: str, reply: str) -> dict:
+def memory_answer(facts: list[str], reply: str) -> dict:
     # Kept by Core itself: no PC command, nothing to approve.
-    return {"type": "reply", "reply": reply, "actions": [{"kind": "memory", "text": fact}]}
+    return {
+        "type": "reply",
+        "reply": reply,
+        "actions": [{"kind": "memory", "text": fact} for fact in facts],
+    }
+
+
+def and_list(items: list[str]) -> str:
+    # ["A", "B", "C"] -> "A, B and C"
+    if len(items) < 2:
+        return "".join(items)
+    return f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def action_summary(
+    labels: list[str], facts: list[str], failures: list[str], full_mode: bool,
+) -> tuple[str, str]:
+    # What Luna is told she did, and the plain line if she can't answer.
+    done: list[str] = []
+    fallback: list[str] = []
+    if labels:
+        if full_mode:
+            done.append(f"You are opening {and_list(labels)} on the owner's PC right now.")
+        else:
+            done.append(
+                f"You want to open {and_list(labels)} on the owner's PC and are "
+                "waiting for them to press Approve below."
+            )
+        fallback.append(f"On it: {', '.join(labels)}")
+    if facts:
+        done.append(f"You just saved this about the owner: {'; '.join(facts)}.")
+        fallback.append(f"Saved: {', '.join(facts)}")
+    if failures:
+        done.append(f"You couldn't do this part: {' '.join(failures)}")
+        fallback.append(" ".join(failures))
+    return " ".join(done), ". ".join(fallback)
 
 
 async def luna_line(

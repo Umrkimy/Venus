@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from features.chat.schemas import ChatTurn
@@ -6,9 +6,11 @@ from features.chat.schemas import ChatTurn
 
 @dataclass(frozen=True)
 class BrainReply:
-    text: str | None = None      # Luna answered with words
-    command: str | None = None   # Luna chose a tool, written as parser text
-    memory: str | None = None    # Luna wants to remember a fact about the owner
+    text: str | None = None  # Luna answered with words
+    # Tools Luna chose, written as parser text, in the order she asked.
+    commands: list[str] = field(default_factory=list)
+    # Facts about the owner Luna wants to remember.
+    memories: list[str] = field(default_factory=list)
 
 
 class ChatProvider(Protocol):

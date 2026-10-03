@@ -1374,7 +1374,7 @@ class ToolBrain:
     async def reply(
         self, message: str, history: list[ChatTurn], instructions: str,
     ) -> BrainReply:
-        return BrainReply(command=self.command)
+        return BrainReply(commands=[self.command])
 
     async def say(self, message: str, instructions: str) -> str | None:
         self.said = instructions
@@ -1636,7 +1636,7 @@ class MemoryBrain:
     async def reply(
         self, message: str, history: list[ChatTurn], instructions: str,
     ) -> BrainReply:
-        return BrainReply(text="Lo-fi is perfect for coding!", memory="Owner likes lo-fi")
+        return BrainReply(text="Lo-fi is perfect for coding!", memories=["Owner likes lo-fi"])
 
 
 def test_chat_remember_saves_fact_without_a_command(
@@ -1680,6 +1680,101 @@ def test_chat_brain_save_memory_saves_fact(conversations: ConversationRepository
     assert body["reply"] == "Lo-fi is perfect for coding!"
     assert body["actions"] == [{"kind": "memory", "text": "Owner likes lo-fi"}]
     assert [memory.text for memory in memories.list_all()] == ["Owner likes lo-fi"]
+
+
+class SeveralToolsBrain:
+    """A brain that asks for several things in one message."""
+
+    def __init__(self, commands: list[str], memories: list[str]) -> None:
+        self.commands = commands
+        self.memories = memories
+        self.said: list[str] = []
+
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
+        return BrainReply(commands=self.commands, memories=self.memories)
+
+    async def say(self, message: str, instructions: str) -> str | None:
+        self.said.append(instructions)
+        return "Opening both and noted, babe."
+
+
+def test_chat_brain_several_tools_proposes_each(
+    command_records: CommandRecordRepository,
+    conversations: ConversationRepository,
+):
+    memories = app.dependency_overrides[get_memory_repository]()
+    brain = SeveralToolsBrain(["open spotify", "open code venus"], ["Owner likes red"])
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open spotify and my venus code, and i like red"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+    commands = [action for action in body["actions"] if action["kind"] == "command"]
+    records = [command_records.get(UUID(action["command_id"])) for action in commands]
+
+    assert response.status_code == 200
+    assert body["type"] == "command"
+    assert [action["label"] for action in commands] == ["Spotify", "Venus in VS Code"]
+    # Each command waits for its own Approve.
+    assert [record.state for record in records] == ["awaiting_approval"] * 2
+    assert body["actions"][-1] == {"kind": "memory", "text": "Owner likes red"}
+    assert [memory.text for memory in memories.list_all()] == ["Owner likes red"]
+    # The newest command is the one the web waits on.
+    assert body["command_id"] == commands[-1]["command_id"]
+    # One line from Luna, told about all of it.
+    assert body["reply"] == "Opening both and noted, babe."
+    assert len(brain.said) == 1
+    assert "Spotify and Venus in VS Code" in brain.said[0]
+    assert "Owner likes red" in brain.said[0]
+    saved = conversations.messages(UUID(body["conversation_id"]))
+    assert saved[-1].actions == body["actions"]
+
+
+def test_chat_brain_several_tools_full_mode_sends_each():
+    app.dependency_overrides[get_settings_repository]().set_mode("full")
+    brain = SeveralToolsBrain(["open spotify", "open code venus"], [])
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar() as websocket:
+        client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open spotify and my venus code"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        sent = [websocket.receive_json(), websocket.receive_json()]
+
+    assert [message["kind"] for message in sent] == ["open_application", "open_project"]
+    assert "opening Spotify and Venus in VS Code" in brain.said[0]
+
+
+def test_chat_brain_failed_command_keeps_the_rest(
+    command_records: CommandRecordRepository,
+):
+    brain = SeveralToolsBrain(["open zzz", "open spotify"], [])
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "open zzz and spotify"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    body = response.json()
+
+    assert body["type"] == "command"
+    assert body["actions"] == [
+        {"kind": "command", "command_id": body["command_id"], "label": "Spotify"},
+    ]
+    # Luna hears what failed so her line can say so.
+    assert "No app called zzz on this PC" in brain.said[0]
 
 
 def test_chat_sends_saved_facts_to_the_brain(conversations: ConversationRepository):
