@@ -100,6 +100,31 @@ def test_transcribe_hints_saved_shortcuts(transcriber: FakeTranscriber, engine):
     assert "comix" in transcriber.calls[0][2]
 
 
+def test_transcribe_spells_shortcuts_like_the_owner(engine):
+    ShortcutRepository(engine).add(
+        SiteShortcut(keyword="comix", label="Comix", home_url="https://comix.to/", search_url=None),
+    )
+    app.dependency_overrides[get_transcriber] = lambda: HeardTranscriber(
+        "Search comics for Solo Leveling.",
+    )
+
+    response = client.post(
+        "/voice/transcribe", content=b"audio", headers={**OWNER_HEADERS, **WEBM},
+    )
+
+    assert response.json() == {"text": "Search comix for Solo Leveling."}
+
+
+class HeardTranscriber:
+    """Hears whatever sentence the test gives it."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    async def transcribe(self, audio: bytes, content_type: str, hint: str) -> str:
+        return self.text
+
+
 def test_transcribe_needs_owner(transcriber: FakeTranscriber):
     response = client.post("/voice/transcribe", content=b"audio", headers=WEBM)
 

@@ -7,6 +7,7 @@ from features.auth.dependencies import require_owner
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.repository import ShortcutRepository
 from features.voice.dependencies import get_transcriber
+from features.voice.sound_alike import fix_keywords
 from features.voice.transcriber import Transcriber
 
 # Minutes of speech fit easily; stops a huge upload from running up a bill.
@@ -35,7 +36,8 @@ async def transcribe(
         )
 
     content_type = request.headers.get("content-type", "audio/webm")
-    hint = ", ".join(["Venus"] + [shortcut.keyword for shortcut in shortcuts.list_all()])
+    keywords = [shortcut.keyword for shortcut in shortcuts.list_all()]
+    hint = ", ".join(["Venus"] + keywords)
     try:
         text = await transcriber.transcribe(audio, content_type, hint)
     except OpenAIError as exc:
@@ -43,4 +45,5 @@ async def transcribe(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Couldn't hear that",
         ) from exc
-    return {"text": text}
+    # "comics" and "comix" sound the same; the owner meant the shortcut.
+    return {"text": fix_keywords(text, keywords)}
