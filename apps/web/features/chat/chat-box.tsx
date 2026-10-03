@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import ActionCard, { type ChatAction } from "./action-card";
+import MicButton from "./mic-button";
+import { useRecorder } from "./use-recorder";
 
 export type ChatMessage = {
   from: "you" | "venus";
@@ -32,6 +34,12 @@ export default function ChatBox({
 }: ChatBoxProps) {
   const [text, setText] = useState("");
   const endRef = useRef<HTMLLIElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // What you said goes into the box; you check it and press Enter.
+  const recorder = useRecorder((heard) => {
+    setText((current) => (current.trim() ? `${current.trim()} ${heard}` : heard));
+    inputRef.current?.focus();
+  });
 
   // Keep the newest line in view, like any chat app.
   useEffect(() => {
@@ -88,6 +96,7 @@ export default function ChatBox({
         </label>
         <div className="flex items-end gap-2 rounded-xl border border-input bg-background/60 p-2 focus-within:ring-2 focus-within:ring-ring">
           <textarea
+            ref={inputRef}
             id="chat-input"
             rows={1}
             value={text}
@@ -103,6 +112,7 @@ export default function ChatBox({
             autoComplete="off"
             className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 outline-none placeholder:text-muted-foreground field-sizing-content"
           />
+          <MicButton recorder={recorder} disabled={disabled} />
           <Button
             type="submit"
             size="icon"
@@ -112,6 +122,11 @@ export default function ChatBox({
             <ArrowUp />
           </Button>
         </div>
+        {recorder.error && (
+          <p role="alert" className="mt-1.5 px-2 text-sm text-destructive">
+            {recorder.error}
+          </p>
+        )}
       </form>
     </>
   );
