@@ -139,6 +139,8 @@ export default function ChatPanel({
 
   async function chat(text: string) {
     if (!deviceId) return;
+    // Luna's reply lands after your line; the input is locked until then.
+    const replyId = messages.length + 1;
     // Show your message at once; the updater keeps both adds below.
     setMessages((old) => [...old, { from: "you", text }]);
     // No id yet means Core starts a new conversation and sends its id back.
@@ -162,10 +164,11 @@ export default function ChatPanel({
         text: data.reply ?? `On it: ${data.label}`,
         actions: data.actions,
         live: true,
+        reveal: data.reply && speaker.on ? "voice" : "type",
       },
     ]);
     // Only Luna's own words; the "On it" stand-in isn't worth a voice call.
-    if (data.reply) void speaker.speak(data.reply);
+    if (data.reply) speaker.speak(replyId, data.reply);
     // A command: Venus asks before opening anything (unless Full mode);
     // its card holds Approve and Deny.
     if (data.type === "command") setCommandId(data.command_id);

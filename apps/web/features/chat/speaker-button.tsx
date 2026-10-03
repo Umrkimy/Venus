@@ -12,7 +12,7 @@ type SpeakerButtonProps = {
 
 // On: Luna says her replies out loud. Off: text only, no voice credit used.
 export default function SpeakerButton({ speaker }: SpeakerButtonProps) {
-  const { on, playing, toggle } = speaker;
+  const { on, speaking, toggle } = speaker;
 
   return (
     <Button
@@ -22,7 +22,7 @@ export default function SpeakerButton({ speaker }: SpeakerButtonProps) {
       onClick={toggle}
       aria-pressed={on}
       aria-label={on ? "Venus speaks replies" : "Venus replies in text only"}
-      className={playing ? "motion-safe:animate-pulse" : undefined}
+      className={speaking ? "motion-safe:animate-pulse" : undefined}
     >
       {on ? <Volume2 /> : <VolumeX className="text-muted-foreground" />}
     </Button>
