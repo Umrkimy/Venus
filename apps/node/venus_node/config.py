@@ -1,7 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import dotenv_values
+
+WAKE_PHRASES = ("hey venus", "venus", "hey love")
 
 
 @dataclass(frozen=True)
@@ -11,6 +13,8 @@ class NodeSettings:
     core_url: str
     real_actions: bool = False
     projects_root: Path | None = None
+    wake_model: str = "models/vosk-model-small-en-us-0.15"
+    wake_phrases: list[str] = field(default_factory=lambda: list(WAKE_PHRASES))
 
 
 def load_settings(env_file: Path) -> NodeSettings:
@@ -22,6 +26,10 @@ def load_settings(env_file: Path) -> NodeSettings:
     raw_real_actions = (values.get("VENUS_NODE_REAL_ACTIONS") or "false").strip().lower()
     raw_projects_root = (values.get("VENUS_NODE_PROJECTS_ROOT") or "").strip()
     projects_root = Path(raw_projects_root) if raw_projects_root else None
+    wake_model = (values.get("VENUS_NODE_WAKE_MODEL") or "").strip() or "models/vosk-model-small-en-us-0.15"
+    # "hey venus, venus" -> ["hey venus", "venus"]; Vosk wants lowercase words.
+    raw_phrases = (values.get("VENUS_NODE_WAKE_PHRASES") or "").lower()
+    wake_phrases = [p.strip() for p in raw_phrases.split(",") if p.strip()] or list(WAKE_PHRASES)
 
     if not device_id.strip():
         raise ValueError("VENUS_NODE_DEVICE_ID is required")
@@ -46,4 +54,6 @@ def load_settings(env_file: Path) -> NodeSettings:
         core_url=core_url,
         real_actions=real_actions,
         projects_root=projects_root,
+        wake_model=wake_model,
+        wake_phrases=wake_phrases,
     )

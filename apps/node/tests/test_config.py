@@ -130,3 +130,27 @@ def test_load_settings_rejects_missing_projects_root(tmp_path: Path):
 
     with pytest.raises(ValueError, match="VENUS_NODE_PROJECTS_ROOT must be an existing folder"):
         load_settings(env_file)
+
+
+def test_load_settings_wake_defaults_to_vosk_and_venus_phrases(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES + "VENUS_NODE_WAKE_MODEL=\n")
+
+    settings = load_settings(env_file)
+
+    assert settings.wake_model == "models/vosk-model-small-en-us-0.15"
+    assert settings.wake_phrases == ["hey venus", "venus", "hey love"]
+
+
+def test_load_settings_reads_wake_model_and_phrases(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        NODE_VALUES
+        + "VENUS_NODE_WAKE_MODEL=D:/wake/vosk\n"
+        + "VENUS_NODE_WAKE_PHRASES= Hey Venus, babe venus ,,\n"
+    )
+
+    settings = load_settings(env_file)
+
+    assert settings.wake_model == "D:/wake/vosk"
+    assert settings.wake_phrases == ["hey venus", "babe venus"]

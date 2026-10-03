@@ -32,3 +32,6 @@ __pycache__/
 #local start scripts
 start-venus.cmd
 start-venus.ps1
+
+# Wake word models (Vosk download), too big for git
+apps/node/models/
