@@ -64,6 +64,21 @@ def test_answer_explains_when_venus_is_not_running(monkeypatch, capsys):
     assert events == []
 
 
+def test_answer_says_when_core_heard_only_silence(monkeypatch, capsys):
+    events, voice = setup(monkeypatch)
+    body = io.BytesIO(b'{"detail": "Check your mic is plugged in and not muted."}')
+
+    def silence(settings, wav):
+        raise HTTPError("http://core.test/voice/transcribe", 422, "Unprocessable", {}, body)
+
+    monkeypatch.setattr(listen, "transcribe", silence)
+
+    listen.answer(SETTINGS, voice, b"pcm", FakeStream(events))
+
+    assert "Check your mic is plugged in" in capsys.readouterr().out
+    assert events == []
+
+
 def test_answer_turns_the_mic_back_on_if_playback_fails(monkeypatch):
     events, voice = setup(monkeypatch)
 

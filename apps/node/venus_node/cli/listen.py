@@ -1,3 +1,4 @@
+import json
 import signal
 import threading
 import time
@@ -35,6 +36,12 @@ def mic_frames(stream) -> Iterator[np.ndarray]:
 def problem(exc: OSError) -> str:
     if isinstance(exc, HTTPError) and exc.code == 409:
         return "Venus isn't connected to this PC. Run start-venus.cmd first."
+    if isinstance(exc, HTTPError) and exc.code == 422:
+        # Core's own words, e.g. "I couldn't hear anything. Check your mic..."
+        try:
+            return json.loads(exc.read())["detail"]
+        except (ValueError, KeyError, TypeError):
+            pass
     return f"Couldn't reach Core: {exc}"
 
 

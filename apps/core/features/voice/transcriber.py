@@ -1,3 +1,4 @@
+import re
 from typing import Protocol
 
 from openai import AsyncOpenAI
@@ -34,3 +35,17 @@ class OpenAITranscriber:
             prompt=hint,
         )
         return result.text.strip()
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def is_hint_echo(text: str, hint: str) -> bool:
+    """True when the model only repeated the hint back.
+
+    With silence (no mic, a muted mic, a virtual mic) it often returns the
+    prompt word for word: "Venus, asurascans, comix".
+    """
+    heard = _words(text)
+    return bool(heard) and heard == _words(hint)
