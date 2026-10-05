@@ -1949,3 +1949,33 @@ def test_chat_uses_luna_line_from_the_tool_call_without_a_second_call():
     assert brain.said is None  # say() never ran
     # Ask mode: she was told nothing opens before Approve.
     assert "Approve" in brain.instructions
+
+
+class PeekingBrain:
+    """Looks at the saved chat while Luna is still thinking."""
+
+    def __init__(self, conversations: ConversationRepository) -> None:
+        self.conversations = conversations
+        self.seen: list[tuple[str, str]] = []
+
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
+        [conversation] = self.conversations.list_all()
+        self.seen = [(m.role, m.content) for m in self.conversations.messages(conversation.id)]
+        return BrainReply(text="Good, you?")
+
+
+def test_chat_saves_your_line_before_luna_answers(conversations: ConversationRepository):
+    # The web polls the chat, so a voice line from the PC shows while she thinks.
+    brain = PeekingBrain(conversations)
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "how are you"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert brain.seen == [("user", "how are you")]

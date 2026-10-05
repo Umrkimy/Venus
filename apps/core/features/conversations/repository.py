@@ -41,13 +41,20 @@ class ConversationRepository:
         reply: str,
         actions: list[dict] | None = None,
     ) -> None:
-        # Both lines in one commit: a question is never saved without its answer.
+        # Chat saves the two lines separately now; this stays for tests and seeds.
+        self.add_message(conversation_id, "user", message)
+        self.add_message(conversation_id, "assistant", reply, actions)
+
+    def add_message(
+        self,
+        conversation_id: UUID,
+        role: str,
+        content: str,
+        actions: list[dict] | None = None,
+    ) -> None:
         now = datetime.now(timezone.utc)
         with Session(self.engine) as session:
-            session.add(Message(conversation_id, "user", message, now))
-            session.add(
-                Message(conversation_id, "assistant", reply, now, actions or None),
-            )
+            session.add(Message(conversation_id, role, content, now, actions or None))
             conversation = session.get(Conversation, conversation_id)
             conversation.updated_at = now
             session.commit()

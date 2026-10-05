@@ -541,6 +541,17 @@ async def chat(
             detail="Node is not connected",
         )
 
+    # Core holds the history: the saved lines before this one.
+    history = []
+    if request.conversation_id is not None:
+        history = conversations.recent_turns(request.conversation_id)
+    # Your line is saved now, before Luna answers: the web (polling) shows it
+    # while she is still thinking, e.g. after "Hey Venus" on the PC.
+    conversation_id = request.conversation_id
+    if conversation_id is None:
+        conversation_id = conversations.create(request.message, request.project_id)
+    conversations.add_message(conversation_id, "user", request.message)
+
     full_mode = settings_repository.get_mode() == "full"
 
     def instructions() -> str:
@@ -567,10 +578,6 @@ async def chat(
                 request.message, apps, folders, search_sites(shortcuts.list_all()),
             ))
         except NotUnderstoodError:
-            # Core holds the history: the saved lines of this conversation.
-            history = []
-            if request.conversation_id is not None:
-                history = conversations.recent_turns(request.conversation_id)
             brain = await provider.reply(request.message, history, instructions())
             facts = [memories.create(fact).text for fact in brain.memories]
             if brain.commands:
@@ -623,12 +630,8 @@ async def chat(
         else:
             answer = {"type": "reply", "reply": line, "actions": actions}
 
-    # Saved only after the answer exists, so a failed reply leaves nothing behind.
-    conversation_id = request.conversation_id
-    if conversation_id is None:
-        conversation_id = conversations.create(request.message, request.project_id)
-    conversations.add_exchange(
-        conversation_id, request.message, answer["reply"] or "", answer["actions"],
+    conversations.add_message(
+        conversation_id, "assistant", answer["reply"] or "", answer["actions"],
     )
     return {**answer, "conversation_id": str(conversation_id)}
 

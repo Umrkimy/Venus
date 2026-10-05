@@ -41,7 +41,26 @@ type ChatBoxProps = {
   speaker: ReturnType<typeof useSpeaker>;
   // Shown instead of the greeting before the first message.
   emptyState?: ReactNode;
+  // Luna is working on a reply (asked here or by voice on the PC).
+  thinking?: boolean;
 };
+
+function ThinkingLine() {
+  return (
+    <motion.li {...fadeUp} transition={springSoft} role="status" className="flex items-center gap-2 text-sm text-foreground/70">
+      <span>Luna is thinking</span>
+      <span aria-hidden="true" className="flex gap-1">
+        {[0, 150, 300].map((delay) => (
+          <span
+            key={delay}
+            className="size-1.5 rounded-full bg-foreground/60 motion-safe:animate-bounce"
+            style={{ animationDelay: `${delay}ms` }}
+          />
+        ))}
+      </span>
+    </motion.li>
+  );
+}
 
 export default function ChatBox({
   disabled,
@@ -50,6 +69,7 @@ export default function ChatBox({
   onSend,
   speaker,
   emptyState,
+  thinking = false,
 }: ChatBoxProps) {
   const [text, setText] = useState("");
   const endRef = useRef<HTMLLIElement>(null);
@@ -65,7 +85,7 @@ export default function ChatBox({
   const speakingLine = speaker.speaking?.line;
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, speakingLine]);
+  }, [messages.length, speakingLine, thinking]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -129,6 +149,7 @@ export default function ChatBox({
                   )}
                 </motion.li>
               ))}
+              {thinking && <ThinkingLine />}
               <li ref={endRef} aria-hidden="true" />
             </ul>
           )}

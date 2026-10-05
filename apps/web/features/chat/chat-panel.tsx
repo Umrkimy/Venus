@@ -2,24 +2,35 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { isFinal, useCommandStatus, type ChatAction } from "./action-card";
 import ChatBox, { type ChatMessage } from "./chat-box";
 import { useSpeaker } from "./use-speaker";
 import { getJson } from "@/lib/get-json";
+import { POLL_MS } from "@/lib/poll";
 import { useNodes } from "@/lib/use-nodes";
+
+type SavedMessage = {
+  role: "user" | "assistant";
+  content: string;
+  actions?: ChatAction[];
+};
 
 type SavedConversation = {
   id: string;
   title: string;
-  messages: {
-    role: "user" | "assistant";
-    content: string;
-    actions?: ChatAction[];
-  }[];
+  messages: SavedMessage[];
 };
+
+function toChatMessage(m: SavedMessage): ChatMessage {
+  return { from: m.role === "user" ? "you" : "venus", text: m.content, actions: m.actions };
+}
+
+function getConversation(id: string) {
+  return getJson<SavedConversation>(`/api/conversations/${id}`);
+}
 
 // Full-size and see-through, so the scene (later the 3D Venus) shows behind the chat.
 function ChatCard({ children }: { children: React.ReactNode }) {
@@ -31,8 +42,7 @@ function ChatCard({ children }: { children: React.ReactNode }) {
 export function SavedChat({ conversationId }: { conversationId: string }) {
   const saved = useQuery({
     queryKey: ["conversation", conversationId],
-    queryFn: () =>
-      getJson<SavedConversation>(`/api/conversations/${conversationId}`),
+    queryFn: () => getConversation(conversationId),
     refetchOnMount: "always",
   });
 
@@ -64,11 +74,7 @@ export function SavedChat({ conversationId }: { conversationId: string }) {
   return (
     <ChatPanel
       conversationId={conversationId}
-      initialMessages={saved.data.messages.map((m) => ({
-        from: m.role === "user" ? "you" : "venus",
-        text: m.content,
-        actions: m.actions,
-      }))}
+      initialMessages={saved.data.messages.map(toChatMessage)}
     />
   );
 }
@@ -93,8 +99,34 @@ export default function ChatPanel({
   const [commandId, setCommandId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // From typing a line until Luna's reply is on screen.
+  const [sending, setSending] = useState(false);
+  // Your line arrived from the PC (voice) and Luna's reply hasn't yet.
+  const [thinkingElsewhere, setThinkingElsewhere] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const speaker = useSpeaker();
+
+  // Lines added elsewhere (a voice turn on the PC) appear without a reload.
+  const synced = useQuery({
+    queryKey: ["conversation", conversationId],
+    queryFn: () => getConversation(conversationId!),
+    enabled: conversationId !== null,
+    refetchInterval: POLL_MS,
+  });
+  const savedLines = synced.data?.messages;
+  // Not while sending: the saved copy of our own line would show twice.
+  if (savedLines && !sending && savedLines.length > messages.length) {
+    const added = savedLines.slice(messages.length).map(toChatMessage);
+    setMessages([...messages, ...added]);
+    setThinkingElsewhere(added[added.length - 1].from === "you");
+  }
+
+  // If her reply never comes (Core error), don't show the dots forever.
+  useEffect(() => {
+    if (!thinkingElsewhere) return;
+    const timer = setTimeout(() => setThinkingElsewhere(false), 60_000);
+    return () => clearTimeout(timer);
+  }, [thinkingElsewhere]);
 
   // Venus has one PC for now: the chat talks to the first one online.
   const nodes = useNodes();
@@ -133,6 +165,15 @@ export default function ChatPanel({
 
   async function chat(text: string) {
     if (!deviceId) return;
+    setSending(true);
+    try {
+      await send(deviceId, text);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function send(deviceId: string, text: string) {
     // Luna's reply lands after your line; the input is locked until then.
     const replyId = messages.length + 1;
     // Show your message at once; the updater keeps both adds below.
@@ -181,6 +222,7 @@ export default function ChatPanel({
         onSend={chat}
         speaker={speaker}
         emptyState={emptyState}
+        thinking={sending || thinkingElsewhere}
       />
 
       <div aria-live="polite" className="empty:hidden mx-auto w-full max-w-3xl px-4 pb-3">
