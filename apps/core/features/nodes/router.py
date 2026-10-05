@@ -33,6 +33,7 @@ from features.personalities.repository import PersonalityRepository
 from features.projects.dependencies import get_project_repository
 from features.projects.repository import ProjectRepository
 from features.projects.router import require_open_project
+from features.voice.live import LiveVoice, get_live_voice
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -519,6 +520,7 @@ async def chat(
         Depends(get_personality_repository),
     ],
     memories: Annotated[MemoryRepository, Depends(get_memory_repository)],
+    live: Annotated[LiveVoice, Depends(get_live_voice)],
 ):
     if request.conversation_id is not None and not conversations.exists(
         request.conversation_id,
@@ -541,12 +543,28 @@ async def chat(
             detail="Node is not connected",
         )
 
+    # Core holds the history: the saved lines before this one.
+    history = []
+    if request.conversation_id is not None:
+        history = conversations.recent_turns(request.conversation_id)
+    # Your line is saved now, before Luna answers: the web (polling) shows it
+    # while she is still thinking, e.g. after "Hey Venus" on the PC.
+    conversation_id = request.conversation_id
+    if conversation_id is None:
+        conversation_id = conversations.create(request.message, request.project_id)
+    conversations.add_message(conversation_id, "user", request.message)
+    if request.voice:
+        live.voice_chat(str(conversation_id))
+
+    full_mode = settings_repository.get_mode() == "full"
+
     def instructions() -> str:
         return chat_instructions(
             request, conversations, projects, personalities,
             list(search_sites(shortcuts.list_all())),
             folders,
             memories,
+            full_mode,
         )
 
     # Rules answer first; the brain only gets what they don't understand.
@@ -554,6 +572,7 @@ async def chat(
     to_open: list[ParsedCommand] = []  # commands to propose, in order
     facts: list[str] = []  # facts saved during this message
     failures: list[str] = []  # why a command Luna chose can't run
+    brain_line = None  # Luna's line written with her tool call
     fact = memory_from_message(request.message)
     if fact is not None:
         facts.append(memories.create(fact).text)
@@ -563,12 +582,10 @@ async def chat(
                 request.message, apps, folders, search_sites(shortcuts.list_all()),
             ))
         except NotUnderstoodError:
-            # Core holds the history: the saved lines of this conversation.
-            history = []
-            if request.conversation_id is not None:
-                history = conversations.recent_turns(request.conversation_id)
             brain = await provider.reply(request.message, history, instructions())
             facts = [memories.create(fact).text for fact in brain.memories]
+            if brain.commands:
+                brain_line = brain.text
             # Luna picked tools: run each choice through the same parser.
             for text in brain.commands:
                 try:
@@ -600,11 +617,13 @@ async def chat(
             for parsed in to_open
         ]
         labels = [proposal["label"] for proposal in proposals]
-        done, fallback = action_summary(
-            labels, facts, failures, settings_repository.get_mode() == "full",
-        )
-        # One line from Luna about everything she did.
-        line = await luna_line(provider, request.message, instructions(), done, fallback)
+        done, fallback = action_summary(labels, facts, failures, full_mode)
+        if brain_line and proposals and not facts and not failures:
+            # She already said it with the tool call; saves a second model call.
+            line = brain_line
+        else:
+            # One line from Luna about everything she did.
+            line = await luna_line(provider, request.message, instructions(), done, fallback)
         actions = [
             {"kind": "command", "command_id": proposal["command_id"], "label": proposal["label"]}
             for proposal in proposals
@@ -615,12 +634,8 @@ async def chat(
         else:
             answer = {"type": "reply", "reply": line, "actions": actions}
 
-    # Saved only after the answer exists, so a failed reply leaves nothing behind.
-    conversation_id = request.conversation_id
-    if conversation_id is None:
-        conversation_id = conversations.create(request.message, request.project_id)
-    conversations.add_exchange(
-        conversation_id, request.message, answer["reply"] or "", answer["actions"],
+    conversations.add_message(
+        conversation_id, "assistant", answer["reply"] or "", answer["actions"],
     )
     return {**answer, "conversation_id": str(conversation_id)}
 
@@ -633,6 +648,7 @@ def chat_instructions(
     sites: list[str],
     folders: list[str],
     memories: MemoryRepository,
+    full_mode: bool = True,
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -647,6 +663,7 @@ def chat_instructions(
         sites,
         folders,
         [memory.text for memory in memories.newest(50)],
+        approve_first=not full_mode,
     )
 
 

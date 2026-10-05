@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { useNewChat } from "@/features/chat/new-chat";
 import { getJson } from "@/lib/get-json";
+import { POLL_MS } from "@/lib/poll";
 
 export type ConversationSummary = {
   id: string;
@@ -20,6 +21,8 @@ export function useConversations() {
   return useQuery({
     queryKey: ["conversations"],
     queryFn: () => getJson<ConversationSummary[]>("/api/conversations"),
+    // Chats started by voice on the PC show up without a reload.
+    refetchInterval: POLL_MS,
   });
 }
 

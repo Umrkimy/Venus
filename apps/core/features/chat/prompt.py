@@ -4,10 +4,20 @@ import re
 BASE_PROMPT = (
     "Your name is Venus. Never say you are ChatGPT. "
     "Use a tool when the owner asks to open something. "
+    # History shows earlier asks; without this, "thanks" after "open comix" opened it again.
+    "Earlier requests in the chat are already done: only use a tool for something the "
+    "owner asks in their newest message, never to redo an earlier one. "
+    "When you use a tool, also write one short sentence telling the owner what you're doing. "
     "Talk like a real person texting, not an assistant: natural, casual words. "
     "Use only commas, periods, question marks and exclamation marks. "
     "Never semicolons or dashes. No emoji. "
     "Never use assistant phrases like \"How can I assist you?\" or \"As an AI\"."
+)
+
+# Not in Full mode: her line is written before anything opens.
+APPROVE_FIRST = (
+    "Nothing opens until the owner presses Approve, so say you're ready to open it, "
+    "not that it's open."
 )
 
 # A semicolon, a long dash, or a hyphen with spaces around it, used as a pause.
@@ -20,10 +30,12 @@ def build_instructions(
     sites: list[str] | None = None,
     folders: list[str] | None = None,
     memories: list[str] | None = None,
+    approve_first: bool = False,
 ) -> str:
     """Base rules, what's on the PC and the owner, then who Venus is, then the project."""
     parts = [
         BASE_PROMPT,
+        APPROVE_FIRST if approve_first else None,
         sites_line(sites or []),
         folders_line(folders or []),
         memories_line(memories or []),

@@ -5,14 +5,15 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import MuteButton from "@/features/voice/mute-button";
+import type { VoiceStateName } from "@/features/voice/use-voice-state";
+import VoiceOrb from "@/features/voice/voice-orb";
 import { fadeUp, springSoft, staggerDelay } from "@/lib/motion";
 import ActionCard, { type ChatAction } from "./action-card";
-import MicButton from "./mic-button";
 import { useReadingSettings } from "./reading-settings";
 import ReplayButton from "./replay-button";
 import SpeakerButton from "./speaker-button";
 import TypedText from "./typed-text";
-import { useRecorder } from "./use-recorder";
 import type { Speaking, useSpeaker } from "./use-speaker";
 
 export type ChatMessage = {
@@ -37,11 +38,57 @@ type ChatBoxProps = {
   placeholder: string;
   messages: ChatMessage[];
   onSend: (text: string) => void;
-  // Luna's voice toggle sits next to the mic.
+  // Luna's voice toggle sits next to the mute button.
   speaker: ReturnType<typeof useSpeaker>;
   // Shown instead of the greeting before the first message.
   emptyState?: ReactNode;
+  // Luna is working on a reply (asked here or by voice on the PC).
+  thinking?: boolean;
+  // You're talking to Venus right now; your words land here next.
+  listening?: boolean;
+  // Hands-free in this tab (null when off), and how to stop its turn.
+  localVoice?: VoiceStateName | null;
+  onStopVoice?: () => void;
 };
+
+function Dots() {
+  return (
+    <span aria-hidden="true" className="flex gap-1">
+      {[0, 150, 300].map((delay) => (
+        <span
+          key={delay}
+          className="size-1.5 rounded-full bg-foreground/60 motion-safe:animate-bounce"
+          style={{ animationDelay: `${delay}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function ThinkingLine() {
+  return (
+    <motion.li {...fadeUp} transition={springSoft} role="status" className="flex items-center gap-2 text-sm text-foreground/70">
+      <span>Luna is thinking</span>
+      <Dots />
+    </motion.li>
+  );
+}
+
+// Your side of the chat while you speak: a bubble that fills in with your words
+// once they're heard.
+function ListeningLine() {
+  return (
+    <motion.li
+      {...fadeUp}
+      transition={springSoft}
+      role="status"
+      className="ml-auto flex w-fit items-center gap-2 rounded-2xl bg-foreground/10 px-4 py-2 text-sm text-foreground/70"
+    >
+      <span>Listening</span>
+      <Dots />
+    </motion.li>
+  );
+}
 
 export default function ChatBox({
   disabled,
@@ -50,22 +97,21 @@ export default function ChatBox({
   onSend,
   speaker,
   emptyState,
+  thinking = false,
+  listening = false,
+  localVoice = null,
+  onStopVoice = () => {},
 }: ChatBoxProps) {
   const [text, setText] = useState("");
   const endRef = useRef<HTMLLIElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const reading = useReadingSettings();
-  // What you said goes into the box; you check it and press Enter.
-  const recorder = useRecorder((heard) => {
-    setText((current) => (current.trim() ? `${current.trim()} ${heard}` : heard));
-    inputRef.current?.focus();
-  });
 
   // Keep the newest line in view, like any chat app (also as Luna's lines come out).
   const speakingLine = speaker.speaking?.line;
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, speakingLine]);
+  }, [messages.length, speakingLine, thinking, listening]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,7 +123,7 @@ export default function ChatBox({
     <>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4 py-4">
-          {messages.length === 0 ? (
+          {messages.length === 0 && !listening && !thinking ? (
             (emptyState ?? (
               <p className="mt-16 text-center text-3xl font-semibold tracking-tight text-balance">
                 What can I do for you?
@@ -129,11 +175,14 @@ export default function ChatBox({
                   )}
                 </motion.li>
               ))}
+              {listening && <ListeningLine />}
+              {thinking && <ThinkingLine />}
               <li ref={endRef} aria-hidden="true" />
             </ul>
           )}
         </div>
       </div>
+      <VoiceOrb local={localVoice} onStopLocal={onStopVoice} />
       <form onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl px-4 pb-3">
         <label htmlFor="chat-input" className="sr-only">
           Message Venus
@@ -158,7 +207,7 @@ export default function ChatBox({
             className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 outline-none placeholder:text-muted-foreground field-sizing-content"
           />
           <SpeakerButton speaker={speaker} />
-          <MicButton recorder={recorder} disabled={disabled} />
+          <MuteButton />
           <Button
             type="submit"
             size="icon"
@@ -169,11 +218,6 @@ export default function ChatBox({
             <ArrowUp />
           </Button>
         </div>
-        {recorder.error && (
-          <p role="alert" className="mt-1.5 px-2 text-sm text-destructive">
-            {recorder.error}
-          </p>
-        )}
         {speaker.error && (
           <p role="alert" className="mt-1.5 px-2 text-sm text-destructive">
             {speaker.error}

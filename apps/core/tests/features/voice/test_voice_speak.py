@@ -17,7 +17,7 @@ from features.settings.repository import SettingsRepository
 from features.settings.secrets import encrypt_text
 from features.voice.dependencies import get_speaker, voice_choice
 from features.voice.router import MAX_SPEAK_CHARS
-from features.voice.speaker import FISH_TTS_URL, FishSpeaker
+from features.voice.speaker import FISH_TTS_URL, SAMPLE_RATE, FishSpeaker
 from main import app
 from storage.base import Base
 
@@ -39,6 +39,13 @@ class FakeSpeaker:
         if self.error is not None:
             raise self.error
         return b"mp3-bytes"
+
+    async def stream(self, text: str):
+        self.calls.append(text)
+        if self.error is not None:
+            raise self.error
+        for piece in (b"pcm-1", b"pcm-2"):
+            yield piece
 
 
 SECRET_KEY = Fernet.generate_key().decode()
@@ -197,3 +204,45 @@ def test_voice_choice_keeps_env_key_when_none_saved(engine):
     repository.set_voice("voice-web", FISH_MODEL, None)
 
     assert voice_choice(settings("fish-env"), repository) == ("fish-env", "voice-web", FISH_MODEL)
+
+
+def test_speak_stream_sends_pieces_with_the_sample_rate(speaker: FakeSpeaker):
+    response = client.post("/voice/speak/stream", json={"text": " hi "}, headers=OWNER_HEADERS)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/pcm"
+    assert response.headers["x-sample-rate"] == str(SAMPLE_RATE)
+    assert response.content == b"pcm-1pcm-2"
+    assert speaker.calls == ["hi"]
+
+
+def test_speak_stream_fish_error_is_502_before_any_audio(engine):
+    app.dependency_overrides[get_speaker] = lambda: FakeSpeaker(httpx2.HTTPError("boom"))
+
+    response = client.post("/voice/speak/stream", json={"text": "hi"}, headers=OWNER_HEADERS)
+
+    assert response.status_code == status.HTTP_502_BAD_GATEWAY
+
+
+def test_speak_stream_checks_text_like_speak(speaker: FakeSpeaker):
+    response = client.post("/voice/speak/stream", json={"text": "  "}, headers=OWNER_HEADERS)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert speaker.calls == []
+
+
+def test_fish_speaker_stream_asks_for_fast_raw_pcm():
+    requests: list[httpx2.Request] = []
+    speaker = FishSpeaker("fish-test", "voice-123", FISH_MODEL, fish_transport(requests))
+
+    async def collect():
+        return b"".join([chunk async for chunk in speaker.stream("hi babe")])
+
+    assert asyncio.run(collect()) == b"mp3-bytes"
+    assert json.loads(requests[0].content) == {
+        "text": "hi babe",
+        "format": "pcm",
+        "reference_id": "voice-123",
+        "sample_rate": SAMPLE_RATE,
+        "latency": "balanced",
+    }

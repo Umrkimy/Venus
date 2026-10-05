@@ -54,8 +54,12 @@ class OpenAIProvider:
             text = await self._answer_after_save(response.id, outputs)
             return BrainReply(text=text, memories=memories)
         if calls:
-            # Core writes one line about everything once it has run.
-            return BrainReply(commands=commands, memories=memories)
+            # Her line comes with the tool call: one call to the model, not two.
+            return BrainReply(
+                text=plain_punctuation(final_text(response)) or None,
+                commands=commands,
+                memories=memories,
+            )
 
         return BrainReply(
             text=plain_punctuation(final_text(response)) or "I don't have an answer for that.",

@@ -6,7 +6,14 @@ from datetime import datetime
 from pathlib import Path
 
 from venus_node.app.autostart import launch_command
-from venus_node.app.single import CONNECTION, LISTENER, already_running_message, claim
+from venus_node.app.single import (
+    CONNECTION,
+    LISTENER,
+    already_running_message,
+    claim,
+    quit_signal,
+    wait_for_quit,
+)
 from venus_node.app.tray import Tray
 from venus_node.cli.dev_connect import run_connect
 from venus_node.cli.listen import start_listening, wake_listeners
@@ -43,6 +50,11 @@ def run_app(node_directory: Path) -> None:
         print("Quitting.")
         status.close()  # The orb window closes on its next tick.
 
+    # A restart from a script quits like the tray's Quit, so the icon is removed.
+    # Killing the process instead leaves a dead icon by the clock until you hover it.
+    signal = quit_signal()
+    threading.Thread(target=lambda: (wait_for_quit(signal), quit()), daemon=True).start()
+
     tray = Tray(
         muted,
         open_venus=lambda: webbrowser.open(settings.web_url),
@@ -51,6 +63,7 @@ def run_app(node_directory: Path) -> None:
             node_directory / "venus.pyw",
         ),
         quit=quit,
+        stop_talking=status.request_stop,
     )
 
     def connected(hello: NodeHello) -> None:
@@ -67,7 +80,7 @@ def run_app(node_directory: Path) -> None:
 
     listeners = wake_listeners(env_file, settings)
     if listeners is not None:
-        start_listening(settings, *listeners, status, muted)
+        start_listening(settings, *listeners, status, muted, tray.mute)
 
     # setup runs once the icon is up: a toast, or a new icon is easy to miss under "^".
     tray.icon.run_detached(setup=announce)

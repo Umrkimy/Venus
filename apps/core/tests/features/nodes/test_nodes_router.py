@@ -43,6 +43,7 @@ from features.settings.repository import SettingsRepository
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.shortcuts.repository import ShortcutRepository
+from features.voice.live import LiveVoice, get_live_voice
 from storage.base import Base
 
 from venus_protocol.schemas.commands import (
@@ -1922,3 +1923,83 @@ def test_chat_accepts_the_node_token(command_records: CommandRecordRepository):
 
     assert response.status_code == 200
     assert response.json()["label"] == "Spotify"
+
+
+class TalkingToolBrain(ToolBrain):
+    """Writes her line with the tool call, like the real model now does."""
+
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
+        self.instructions = instructions
+        return BrainReply(text="Ready to open Spotify, love.", commands=[self.command])
+
+
+def test_chat_uses_luna_line_from_the_tool_call_without_a_second_call():
+    brain = TalkingToolBrain("open spotify")
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "can you open spotify for me"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.json()["reply"] == "Ready to open Spotify, love."
+    assert brain.said is None  # say() never ran
+    # Ask mode: she was told nothing opens before Approve.
+    assert "Approve" in brain.instructions
+
+
+class PeekingBrain:
+    """Looks at the saved chat while Luna is still thinking."""
+
+    def __init__(self, conversations: ConversationRepository) -> None:
+        self.conversations = conversations
+        self.seen: list[tuple[str, str]] = []
+
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
+        [conversation] = self.conversations.list_all()
+        self.seen = [(m.role, m.content) for m in self.conversations.messages(conversation.id)]
+        return BrainReply(text="Good, you?")
+
+
+def test_chat_saves_your_line_before_luna_answers(conversations: ConversationRepository):
+    # The web polls the chat, so a voice line from the PC shows while she thinks.
+    brain = PeekingBrain(conversations)
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "how are you"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert brain.seen == [("user", "how are you")]
+
+
+def test_voice_chat_tells_the_web_which_chat_to_open(conversations: ConversationRepository):
+    live = LiveVoice()
+    app.dependency_overrides[get_live_voice] = lambda: live
+
+    with connected_pc_umar():
+        typed = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "typed line"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        # A typed line is already on screen: nothing to follow.
+        assert live.conversation_id is None
+        spoken = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hey venus how are you", "voice": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert typed.status_code == spoken.status_code == 200
+    assert live.conversation_id == spoken.json()["conversation_id"]
+

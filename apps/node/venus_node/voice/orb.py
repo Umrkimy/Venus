@@ -5,7 +5,7 @@ import numpy as np
 
 from venus_node.voice.status import LISTENING, SLEEPING, SPEAKING, THINKING
 
-SIZE = 112
+SIZE = 84
 COUNT = 1500
 # Screen top to bottom, like the reference: cool blue, purple, pink, warm orange.
 GRADIENT = np.array(

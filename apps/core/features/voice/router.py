@@ -1,16 +1,18 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx2
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import StreamingResponse
 from openai import OpenAIError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from features.auth.dependencies import require_owner_or_node
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.repository import ShortcutRepository
 from features.voice.dependencies import get_speaker, get_transcriber
+from features.voice.live import LiveVoice, get_live_voice
 from features.voice.sound_alike import fix_keywords
-from features.voice.speaker import Speaker
+from features.voice.speaker import SAMPLE_RATE, Speaker
 from features.voice.transcriber import Transcriber, is_hint_echo
 
 # Minutes of speech fit easily; stops a huge upload from running up a bill.
@@ -67,11 +69,7 @@ class SpeakRequest(BaseModel):
     text: str
 
 
-@router.post("/speak")
-async def speak(
-    body: SpeakRequest,
-    speaker: Annotated[Speaker, Depends(get_speaker)],
-):
+def checked_text(body: SpeakRequest) -> str:
     text = body.text.strip()
     if not text:
         raise HTTPException(
@@ -83,7 +81,15 @@ async def speak(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Text is too long to speak",
         )
+    return text
 
+
+@router.post("/speak")
+async def speak(
+    body: SpeakRequest,
+    speaker: Annotated[Speaker, Depends(get_speaker)],
+):
+    text = checked_text(body)
     try:
         audio = await speaker.speak(text)
     except httpx2.HTTPError as exc:
@@ -92,3 +98,92 @@ async def speak(
             detail="Couldn't speak that",
         ) from exc
     return Response(content=audio, media_type="audio/mpeg")
+
+
+@router.post("/speak/stream")
+async def speak_stream(
+    body: SpeakRequest,
+    speaker: Annotated[Speaker, Depends(get_speaker)],
+):
+    """Luna's voice as raw PCM pieces, so the PC starts playing before Fish is done."""
+    chunks = speaker.stream(checked_text(body))
+    try:
+        # A Fish error (no credit, bad key) shows up before the first piece:
+        # still time to answer 502 instead of a broken stream.
+        first = await anext(chunks)
+    except StopAsyncIteration:
+        first = b""
+    except httpx2.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Couldn't speak that",
+        ) from exc
+
+    async def audio():
+        yield first
+        async for chunk in chunks:
+            yield chunk
+
+    return StreamingResponse(
+        audio(), media_type="audio/pcm", headers={"X-Sample-Rate": str(SAMPLE_RATE)},
+    )
+
+
+VoiceStateName = Literal["idle", "listening", "thinking", "speaking", "sleeping"]
+
+
+class VoiceReport(BaseModel):
+    state: VoiceStateName
+    subtitle: str = Field(default="", max_length=MAX_SPEAK_CHARS)
+    muted: bool = False
+
+
+class VoiceReportReply(BaseModel):
+    web_watching: bool
+    web_listening: bool
+    stop: bool
+
+
+class VoiceState(BaseModel):
+    state: VoiceStateName
+    subtitle: str
+    muted: bool
+    online: bool
+    conversation_id: str | None
+
+
+@router.put("/state")
+async def report_state(
+    body: VoiceReport,
+    live: Annotated[LiveVoice, Depends(get_live_voice)],
+) -> VoiceReportReply:
+    """The PC's orb reports here. The answer says if a web tab shows the orb
+    (and listens) instead, and passes on the web's stop button."""
+    reply = live.report(body.state, body.subtitle, body.muted)
+    return VoiceReportReply(
+        web_watching=reply.web_watching, web_listening=reply.web_listening, stop=reply.stop,
+    )
+
+
+@router.get("/state")
+async def watch_state(
+    response: Response,
+    live: Annotated[LiveVoice, Depends(get_live_voice)],
+    listening: bool = False,
+) -> VoiceState:
+    """The web tab in front asks here; asking also hides the PC's orb for a moment.
+
+    listening=true: the tab listens with the browser mic, so the PC pauses "Hey Venus".
+    """
+    response.headers["Cache-Control"] = "no-store"
+    seen = live.watch(listening)
+    return VoiceState(
+        state=seen.state, subtitle=seen.subtitle, muted=seen.muted,
+        online=seen.online, conversation_id=seen.conversation_id,
+    )
+
+
+@router.post("/stop", status_code=status.HTTP_204_NO_CONTENT)
+async def stop(live: Annotated[LiveVoice, Depends(get_live_voice)]) -> None:
+    """The web's stop button: Luna on the PC stops talking (or drops her answer)."""
+    live.wish_stop()
