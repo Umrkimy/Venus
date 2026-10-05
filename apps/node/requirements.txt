@@ -8,3 +8,5 @@ miniaudio==1.71
 numpy==2.4.6
 sounddevice==0.5.6
 vosk==0.3.45
+pystray==0.19.5
+Pillow==12.3.0

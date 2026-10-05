@@ -154,3 +154,17 @@ def test_load_settings_reads_wake_model_and_phrases(tmp_path: Path):
 
     assert settings.wake_model == "D:/wake/vosk"
     assert settings.wake_phrases == ["hey venus", "babe venus"]
+
+
+def test_load_settings_web_url_defaults_to_local_web(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES)
+
+    assert load_settings(env_file).web_url == "http://localhost:3000"
+
+
+def test_load_settings_reads_web_url(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES + "VENUS_NODE_WEB_URL= http://venus.home:3000 \n")
+
+    assert load_settings(env_file).web_url == "http://venus.home:3000"
