@@ -75,3 +75,10 @@ def test_plain_punctuation_drops_tool_calls_typed_as_words():
 def test_build_instructions_tells_luna_to_wait_for_approve_outside_full_mode():
     assert "Approve" in build_instructions(None, None, approve_first=True)
     assert "Approve" not in build_instructions(None, None)
+
+
+def test_base_prompt_says_earlier_requests_are_done():
+    # Real-model check (S18): "thanks" after "open comix" re-opened Comix 2 of 2
+    # times without this rule, 0 of 6 with it; "open it again" still opened (4 of 4).
+    assert "never to redo an earlier one" in BASE_PROMPT
+
