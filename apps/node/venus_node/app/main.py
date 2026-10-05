@@ -67,7 +67,7 @@ def run_app(node_directory: Path) -> None:
 
     listeners = wake_listeners(env_file, settings)
     if listeners is not None:
-        start_listening(settings, *listeners, status, muted)
+        start_listening(settings, *listeners, status, muted, tray.mute)
 
     # setup runs once the icon is up: a toast, or a new icon is easy to miss under "^".
     tray.icon.run_detached(setup=announce)

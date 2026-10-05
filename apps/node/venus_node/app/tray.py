@@ -87,9 +87,14 @@ class Tray:
         if self.muted.is_set():
             self.muted.clear()
             print("Mic on.")
+            self.refresh()
         else:
-            self.muted.set()
-            print("Mic muted.")
+            self.mute()
+
+    def mute(self) -> None:
+        # Also called from the mic thread when you say "mute the mic".
+        self.muted.set()
+        print("Mic muted.")
         self.refresh()
 
     def toggle_autostart(self) -> None:
