@@ -168,3 +168,12 @@ def test_load_settings_reads_web_url(tmp_path: Path):
     env_file.write_text(NODE_VALUES + "VENUS_NODE_WEB_URL= http://venus.home:3000 \n")
 
     assert load_settings(env_file).web_url == "http://venus.home:3000"
+
+
+def test_load_settings_reads_mic_name(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES + "VENUS_NODE_MIC= Realtek \n")
+
+    assert load_settings(env_file).mic == "Realtek"
+    env_file.write_text(NODE_VALUES)
+    assert load_settings(env_file).mic == ""

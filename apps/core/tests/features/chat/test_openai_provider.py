@@ -54,6 +54,19 @@ def test_openai_provider_returns_model_text():
     assert asyncio.run(provider.reply("hello", [], "")) == BrainReply(text="Hi from Luna")
 
 
+def message(text: str):
+    return SimpleNamespace(type="message", content=[SimpleNamespace(type="output_text", text=text)])
+
+
+def test_openai_provider_keeps_only_the_last_message():
+    # output_text joins both messages; the owner heard the line twice.
+    line = "Opening Spotify for you now, babe."
+    client = FakeClient(output=[message(line), message(line)], output_text=line + line)
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    assert asyncio.run(provider.say("open spotify", "")) == line
+
+
 def test_openai_provider_sends_model_instructions_message_and_tools():
     client = FakeClient()
     provider = OpenAIProvider(client, "gpt-6-luna")

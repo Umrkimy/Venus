@@ -17,6 +17,7 @@ class NodeSettings:
     wake_model: str = "models/vosk-model-small-en-us-0.15"
     wake_phrases: list[str] = field(default_factory=lambda: list(WAKE_PHRASES))
     web_url: str = WEB_URL
+    mic: str = ""
 
 
 def load_settings(env_file: Path) -> NodeSettings:
@@ -34,6 +35,8 @@ def load_settings(env_file: Path) -> NodeSettings:
     wake_phrases = [p.strip() for p in raw_phrases.split(",") if p.strip()] or list(WAKE_PHRASES)
     # Where the tray's "Open Venus" goes.
     web_url = (values.get("VENUS_NODE_WEB_URL") or "").strip() or WEB_URL
+    # Part of the mic's name, e.g. "Realtek"; empty = the Windows default mic.
+    mic = (values.get("VENUS_NODE_MIC") or "").strip()
 
     if not device_id.strip():
         raise ValueError("VENUS_NODE_DEVICE_ID is required")
@@ -61,4 +64,5 @@ def load_settings(env_file: Path) -> NodeSettings:
         wake_model=wake_model,
         wake_phrases=wake_phrases,
         web_url=web_url,
+        mic=mic,
     )

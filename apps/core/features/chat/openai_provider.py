@@ -57,9 +57,8 @@ class OpenAIProvider:
             # Core writes one line about everything once it has run.
             return BrainReply(commands=commands, memories=memories)
 
-        # Responses API returns text through output_text.
         return BrainReply(
-            text=plain_punctuation(response.output_text) or "I don't have an answer for that.",
+            text=plain_punctuation(final_text(response)) or "I don't have an answer for that.",
         )
 
     async def say(self, message: str, instructions: str) -> str | None:
@@ -72,7 +71,7 @@ class OpenAIProvider:
             )
         except OpenAIError:
             return None
-        return plain_punctuation(response.output_text) or None
+        return plain_punctuation(final_text(response)) or None
 
     async def _answer_after_save(
         self, response_id: str, outputs: list[tuple[str, str]],
@@ -92,4 +91,18 @@ class OpenAIProvider:
             )
         except OpenAIError:
             return None
-        return plain_punctuation(followup.output_text) or None
+        return plain_punctuation(final_text(followup)) or None
+
+
+def final_text(response) -> str:
+    """Text of the model's last message only.
+
+    output_text joins every message in the response, so a model that
+    sends two messages ("Opening Spotify." twice) would be said twice.
+    """
+    messages = [item for item in response.output if getattr(item, "type", None) == "message"]
+    if not messages:
+        return response.output_text
+    return "".join(
+        part.text for part in messages[-1].content if getattr(part, "type", None) == "output_text"
+    )

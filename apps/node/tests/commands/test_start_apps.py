@@ -1,4 +1,6 @@
-from venus_node.commands.start_apps import StartApp, parse_start_apps
+import subprocess
+
+from venus_node.commands.start_apps import StartApp, parse_start_apps, run_powershell
 
 
 def test_parse_start_apps_reads_name_and_app_id():
@@ -27,3 +29,16 @@ def test_parse_start_apps_accepts_single_object():
 
 def test_parse_start_apps_returns_empty_for_blank_output():
     assert parse_start_apps("") == []
+
+
+def test_run_powershell_opens_no_window(monkeypatch):
+    calls = []
+
+    def fake_run(args, **options):
+        calls.append(options)
+        return subprocess.CompletedProcess(args, 0, stdout="[]")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_powershell("Get-StartApps") == "[]"
+    assert calls[0]["creationflags"] == subprocess.CREATE_NO_WINDOW

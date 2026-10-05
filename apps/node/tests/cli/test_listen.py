@@ -193,3 +193,24 @@ def test_listen_loop_reopens_the_mic_after_unmute(monkeypatch):
     listen.listen_loop(SETTINGS, FakeListener(mute_once), FakeListener(), status, muted, open_stream)
 
     assert events == ["open", "close", "open", "close"]
+
+
+DEVICES = [
+    {"name": "Speakers (Realtek(R) Audio)", "max_input_channels": 0},
+    {"name": "Microphone (Micstream Virtual A", "max_input_channels": 1},
+    {"name": "Microphone (Realtek(R) Audio)", "max_input_channels": 2},
+]
+
+
+def test_find_mic_picks_the_named_input():
+    assert listen.find_mic("realtek", DEVICES) == 2  # Not the speakers with the same name.
+
+
+def test_find_mic_empty_means_windows_default():
+    assert listen.find_mic("", DEVICES) is None
+
+
+def test_find_mic_unknown_name_falls_back_to_default(capsys):
+    assert listen.find_mic("blue yeti", DEVICES) is None
+    assert "using the Windows default mic" in capsys.readouterr().out
+
