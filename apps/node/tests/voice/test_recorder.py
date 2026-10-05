@@ -1,6 +1,6 @@
 import numpy as np
 
-from venus_node.voice.recorder import is_quiet, record_until_silence, trim_silence
+from venus_node.voice.recorder import heard_speech, is_quiet, record_until_silence, trim_silence
 
 QUIET = np.full(1280, 10, dtype=np.int16)
 LOUD = np.full(1280, 5000, dtype=np.int16)
@@ -65,3 +65,12 @@ def test_trim_silence_leaves_all_quiet_audio_alone():
     pcm = QUIET.tobytes() * 4
 
     assert trim_silence(pcm) == pcm
+
+
+
+def test_heard_speech_only_when_something_was_loud():
+    quiet = np.zeros(1280 * 3, dtype=np.int16).tobytes()
+    loud = np.full(1280, 3000, dtype=np.int16).tobytes()
+
+    assert heard_speech(quiet) is False
+    assert heard_speech(quiet + loud) is True

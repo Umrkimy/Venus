@@ -6,10 +6,13 @@ from ctypes import wintypes
 import numpy as np
 
 from venus_node.voice.orb import SIZE, Orb
-from venus_node.voice.status import IDLE, Status
+from venus_node.voice.status import IDLE, SPEAKING, Status
+from venus_node.voice.subtitle import subtitle_pixels
 
 TICK_MS = 33  # About 30 frames a second.
 MARGIN = 16  # Gap to the screen corner.
+WIDTH = 440  # Orb on the right, Luna's subtitle to its left.
+TEXT_WIDTH = WIDTH - SIZE - 8
 
 GWL_EXSTYLE = -20
 WS_EX_LAYERED = 0x80000  # Per-pixel see-through.
@@ -75,7 +78,10 @@ def windows_api():
 
 
 class Circle:
-    """Glowing orb in the bottom-right corner that shows the Status."""
+    """Glowing orb in the bottom-right corner that shows the Status, with subtitles.
+
+    It fades out while a Venus tab is in front: the web shows the orb then.
+    """
 
     def __init__(self, status: Status) -> None:
         self.status = status
@@ -88,8 +94,8 @@ class Circle:
         # Bottom-right of the work area: the screen minus the taskbar.
         area = wintypes.RECT()
         self.user32.SystemParametersInfoW(SPI_GETWORKAREA, 0, ctypes.byref(area), 0)
-        self.position = wintypes.POINT(area.right - SIZE - MARGIN, area.bottom - SIZE - MARGIN)
-        self.root.geometry(f"{SIZE}x{SIZE}+{self.position.x}+{self.position.y}")
+        self.position = wintypes.POINT(area.right - WIDTH - MARGIN, area.bottom - SIZE - MARGIN)
+        self.root.geometry(f"{WIDTH}x{SIZE}+{self.position.x}+{self.position.y}")
         self.root.update_idletasks()
 
         self.hwnd = self.user32.GetParent(self.root.winfo_id())
@@ -103,7 +109,7 @@ class Circle:
         self.screen_dc = self.user32.GetDC(None)
         self.memory_dc = gdi32.CreateCompatibleDC(self.screen_dc)
         header = BITMAPINFOHEADER(
-            biSize=ctypes.sizeof(BITMAPINFOHEADER), biWidth=SIZE, biHeight=-SIZE,  # Top row first.
+            biSize=ctypes.sizeof(BITMAPINFOHEADER), biWidth=WIDTH, biHeight=-SIZE,  # Top row first.
             biPlanes=1, biBitCount=32, biCompression=0,
         )
         self.bits = ctypes.c_void_p()
@@ -113,30 +119,39 @@ class Circle:
         self.start = time.monotonic()
         self.shown = 0.0  # Fades between 0 (hidden) and 1.
         self.last_state = IDLE
-        self.show(np.zeros((SIZE, SIZE, 4), dtype=np.uint8))
+        self.subtitle = ""  # The line drawn now, so it's only drawn again when it changes.
+        self.subtitle_image = subtitle_pixels("", TEXT_WIDTH, SIZE)
+        self.show(np.zeros((SIZE, WIDTH, 4), dtype=np.uint8))
 
     def show(self, pixels: np.ndarray) -> None:
         ctypes.memmove(self.bits, pixels.ctypes.data, pixels.nbytes)
         blend = BLENDFUNCTION(0, 0, 255, AC_SRC_ALPHA)
         self.user32.UpdateLayeredWindow(
-            self.hwnd, self.screen_dc, ctypes.byref(self.position), ctypes.byref(wintypes.SIZE(SIZE, SIZE)),
+            self.hwnd, self.screen_dc, ctypes.byref(self.position), ctypes.byref(wintypes.SIZE(WIDTH, SIZE)),
             self.memory_dc, ctypes.byref(wintypes.POINT(0, 0)), 0, ctypes.byref(blend), ULW_ALPHA,
         )
 
     def draw(self) -> None:
         state, level = self.status.snapshot()
+        _, subtitle = self.status.report()
         if state != IDLE:
             self.last_state = state
-        target = 0.0 if state == IDLE else 1.0
+            if subtitle != self.subtitle:
+                self.subtitle = subtitle
+                self.subtitle_image = subtitle_pixels(subtitle, TEXT_WIDTH, SIZE)
+        target = 0.0 if state == IDLE or self.status.web_watching else 1.0
         if self.shown == 0.0 and target == 0.0:
             return  # Already hidden: nothing to redraw.
         self.shown += (target - self.shown) * 0.25
         if self.shown < 0.02 and target == 0.0:
             self.shown = 0.0
-            self.show(np.zeros((SIZE, SIZE, 4), dtype=np.uint8))
+            self.show(np.zeros((SIZE, WIDTH, 4), dtype=np.uint8))
             return
         # While fading out keep drawing the last state, just dimmer.
-        pixels = self.orb.frame(self.last_state, level, time.monotonic() - self.start)
+        pixels = np.zeros((SIZE, WIDTH, 4), dtype=np.uint8)
+        pixels[:, WIDTH - SIZE:] = self.orb.frame(self.last_state, level, time.monotonic() - self.start)
+        if self.last_state == SPEAKING:
+            pixels[:, :TEXT_WIDTH] = self.subtitle_image
         if self.shown < 1.0:
             pixels = (pixels * self.shown).astype(np.uint8)
         self.show(np.ascontiguousarray(pixels))

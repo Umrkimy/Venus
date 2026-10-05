@@ -37,6 +37,14 @@ def record_until_silence(
     return b"".join(frame.tobytes() for frame in kept)
 
 
+def heard_speech(pcm: bytes, frame_size: int = 1280) -> bool:
+    """Any loud frame at all? All quiet means nobody spoke: nothing to send."""
+    samples = np.frombuffer(pcm, dtype=np.int16)
+    return any(
+        not is_quiet(samples[i : i + frame_size]) for i in range(0, len(samples), frame_size)
+    )
+
+
 def trim_silence(pcm: bytes, frame_size: int = 1280, pad: int = 3) -> bytes:
     """Drop the quiet start and end, keeping `pad` frames (240 ms) each side.
 

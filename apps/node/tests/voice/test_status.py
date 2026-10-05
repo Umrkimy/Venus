@@ -1,7 +1,9 @@
 import numpy as np
 
 from venus_node.voice.status import (
+    IDLE,
     LISTENING,
+    SPEAKING,
     THINKING,
     Status,
     loudness_level,
@@ -41,3 +43,22 @@ def test_close_is_seen_by_the_window():
     status.close()
 
     assert status.closed
+
+
+def test_subtitle_shows_only_with_its_line():
+    status = Status()
+    status.set(SPEAKING, "hi babe")
+    assert status.report() == (SPEAKING, "hi babe")
+
+    status.set(IDLE)
+    assert status.report() == (IDLE, "")
+
+
+def test_set_and_close_wake_the_reporter():
+    status = Status()
+    status.set(SPEAKING, "hi")
+    assert status.changed.is_set()
+
+    status.changed.clear()
+    status.close()
+    assert status.changed.is_set()

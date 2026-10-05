@@ -43,6 +43,7 @@ from features.settings.repository import SettingsRepository
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.shortcuts.repository import ShortcutRepository
+from features.voice.live import LiveVoice, get_live_voice
 from storage.base import Base
 
 from venus_protocol.schemas.commands import (
@@ -1979,3 +1980,26 @@ def test_chat_saves_your_line_before_luna_answers(conversations: ConversationRep
         )
 
     assert brain.seen == [("user", "how are you")]
+
+
+def test_voice_chat_tells_the_web_which_chat_to_open(conversations: ConversationRepository):
+    live = LiveVoice()
+    app.dependency_overrides[get_live_voice] = lambda: live
+
+    with connected_pc_umar():
+        typed = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "typed line"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+        # A typed line is already on screen: nothing to follow.
+        assert live.conversation_id is None
+        spoken = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "hey venus how are you", "voice": True},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert typed.status_code == spoken.status_code == 200
+    assert live.conversation_id == spoken.json()["conversation_id"]
+

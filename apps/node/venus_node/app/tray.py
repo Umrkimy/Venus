@@ -35,6 +35,7 @@ class Tray:
         autostart_command: str,
         quit: Callable[[], None],
         autostart_key: str = autostart.RUN_KEY,
+        stop_talking: Callable[[], None] = lambda: None,
     ) -> None:
         self._lock = Lock()
         self._connected = False
@@ -42,6 +43,7 @@ class Tray:
         self._open_venus = open_venus
         self.autostart_command = autostart_command
         self._quit = quit
+        self._stop_talking = stop_talking
         self.autostart_key = autostart_key
         self.icon = pystray.Icon("Venus", icon_image(GREY), "Venus", self.menu())
 
@@ -62,6 +64,7 @@ class Tray:
             pystray.Menu.SEPARATOR,
             # default=True: a left click on the icon does this too.
             pystray.MenuItem("Open Venus", self.open_venus, default=True),
+            pystray.MenuItem("Stop talking", self.stop_talking),
             pystray.MenuItem("Mute mic", self.toggle_mute, checked=lambda item: self.muted.is_set()),
             pystray.MenuItem(
                 "Start with Windows",
@@ -83,13 +86,21 @@ class Tray:
     def open_venus(self) -> None:
         self._open_venus()
 
+    def stop_talking(self) -> None:
+        # Luna stops mid-sentence, or drops an answer that hasn't started.
+        self._stop_talking()
+
     def toggle_mute(self) -> None:
-        if self.muted.is_set():
+        self.set_muted(not self.muted.is_set())
+
+    def set_muted(self, muted: bool) -> None:
+        """Mute or unmute; the web's orb button arrives here too."""
+        if muted:
+            self.mute()
+        elif self.muted.is_set():
             self.muted.clear()
             print("Mic on.")
             self.refresh()
-        else:
-            self.mute()
 
     def mute(self) -> None:
         # Also called from the mic thread when you say "mute the mic".

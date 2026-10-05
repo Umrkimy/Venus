@@ -33,6 +33,7 @@ from features.personalities.repository import PersonalityRepository
 from features.projects.dependencies import get_project_repository
 from features.projects.repository import ProjectRepository
 from features.projects.router import require_open_project
+from features.voice.live import LiveVoice, get_live_voice
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -519,6 +520,7 @@ async def chat(
         Depends(get_personality_repository),
     ],
     memories: Annotated[MemoryRepository, Depends(get_memory_repository)],
+    live: Annotated[LiveVoice, Depends(get_live_voice)],
 ):
     if request.conversation_id is not None and not conversations.exists(
         request.conversation_id,
@@ -551,6 +553,8 @@ async def chat(
     if conversation_id is None:
         conversation_id = conversations.create(request.message, request.project_id)
     conversations.add_message(conversation_id, "user", request.message)
+    if request.voice:
+        live.voice_chat(str(conversation_id))
 
     full_mode = settings_repository.get_mode() == "full"
 

@@ -19,6 +19,8 @@ class ChatRequest(BaseModel):
     conversation_id: UUID | None = None
     # Only used when a new conversation starts: it is created in this project.
     project_id: UUID | None = None
+    # Said out loud on the PC ("Hey Venus"): the web opens this chat to follow along.
+    voice: bool = False
 
     @field_validator("message")
     @classmethod

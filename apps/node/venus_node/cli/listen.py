@@ -16,16 +16,31 @@ from venus_node.config import NodeSettings, load_settings
 from venus_node.voice.conversation import VoiceChat
 from venus_node.voice.core_client import chat, speak_stream, transcribe
 from venus_node.voice.player import play_pcm
-from venus_node.voice.recorder import record_until_silence, trim_silence
+from venus_node.voice.recorder import heard_speech, record_until_silence, trim_silence
+from venus_node.voice.reporter import report_loop
 from venus_node.voice.speakable import speakable
 from venus_node.voice.status import IDLE, LISTENING, SLEEPING, SPEAKING, THINKING, Status, metered
-from venus_node.voice.stop_words import CANCEL, MUTE, SLEEP, control_word, resume_phrases
+from venus_node.voice.stop_words import (
+    CANCEL,
+    GOODBYE,
+    MUTE,
+    SLEEP,
+    STOP_TALKING_PHRASES,
+    control_word,
+    resume_phrases,
+)
 from venus_node.voice.timing import Timer
 from venus_node.voice.wake import WakeListener, grammar, wake_model_path
 from venus_node.voice.wav import to_wav
 
 RATE = 16000
 FRAME = 1280  # 80 ms
+# After Luna answers, how long Venus waits for your next sentence without
+# "Hey Venus" (100 x 80 ms = 8 s). Quiet that long ends the conversation.
+FOLLOW_UP_FRAMES = 100
+# Ends the conversation: you said bye, cancelled, or nothing came through.
+NOTHING = "nothing"
+ENDS_CONVERSATION = {GOODBYE, CANCEL, NOTHING}
 
 
 def mic_frames(stream) -> Iterator[np.ndarray]:
@@ -47,6 +62,16 @@ def problem(exc: OSError) -> str:
     return f"Couldn't reach Core: {exc}"
 
 
+def watch_for_stop(stream, listener: WakeListener, stop: Event, done: Event) -> None:
+    """Listen for "stop venus" while Luna thinks and talks."""
+    listener.reset()
+    while not done.is_set() and not stop.is_set():
+        frame, _overflowed = stream.read(FRAME)
+        if listener.heard(frame[:, 0]):
+            print("Stopped by voice.")
+            stop.set()
+
+
 def answer(
     settings: NodeSettings,
     voice: VoiceChat,
@@ -54,25 +79,55 @@ def answer(
     stream,
     status: Status | None = None,
     timer: Timer | None = None,
+    stop_listener: WakeListener | None = None,
 ) -> str | None:
     """Text from the recording, Luna's reply, then her voice.
 
-    Returns SLEEP when you asked Venus to stop listening, MUTE to mute the mic.
+    Returns SLEEP when you asked Venus to stop listening, MUTE to mute the mic,
+    GOODBYE / CANCEL / NOTHING when the conversation should end.
+    With `stop_listener`, the mic stays on to hear "stop venus"; without it,
+    the mic is off while she talks (or it would hear her and wake).
     """
     status = status or Status()
     timer = timer or Timer()
+    status.stop.clear()  # A stop from before this turn doesn't count.
     status.set(THINKING)
+    done = Event()
+    watcher = None
+    if stop_listener is not None:
+        watcher = threading.Thread(
+            target=watch_for_stop, args=(stream, stop_listener, status.stop, done), daemon=True,
+        )
+        watcher.start()
+    try:
+        return speak_reply(settings, voice, pcm, stream, status, timer, stop_listener is None)
+    finally:
+        done.set()
+        # Two threads must never read the mic at once: wait for its last frame.
+        if watcher is not None:
+            watcher.join(timeout=1)
+
+
+def speak_reply(
+    settings: NodeSettings,
+    voice: VoiceChat,
+    pcm: bytes,
+    stream,
+    status: Status,
+    timer: Timer,
+    mic_off_while_speaking: bool,
+) -> str | None:
     try:
         text = transcribe(settings, to_wav(trim_silence(pcm), RATE))
         timer.lap("transcribe")
         print("You said:", text or "(nothing)")
         if not text:
-            return None
+            return NOTHING
         # Checked here, before Luna: free, instant, works with Core's LLM down.
         word = control_word(text, settings.wake_phrases)
         if word == CANCEL:
             print("Cancelled.")
-            return None
+            return CANCEL
         if word == SLEEP:
             print(f"Sleeping. Say \"{resume_phrases(settings.wake_phrases)[0]}\" to wake me.")
             return SLEEP
@@ -84,26 +139,33 @@ def answer(
         print("Luna:", reply)
     except OSError as exc:
         print(problem(exc))
-        return None
+        return NOTHING
     if not reply:
         return None
+    # "Goodbye": Luna still says bye back, then the conversation ends.
+    outcome = GOODBYE if word == GOODBYE else None
+    if status.stop.is_set():
+        print("Stopped before Luna spoke.")
+        return outcome
 
     def started() -> None:
         timer.lap("voice")  # Wait until her first sound.
-        status.set(SPEAKING)
+        status.set(SPEAKING, reply)  # Her line shows as a subtitle while she talks.
 
     # The mic would hear her through the speakers ("...venus...") and wake.
-    stream.stop()
+    if mic_off_while_speaking:
+        stream.stop()
     try:
         rate, pieces = speak_stream(settings, speakable(reply))
-        play_pcm(pieces, rate, on_start=started)
+        play_pcm(pieces, rate, on_start=started, stop=status.stop)
         timer.lap("playback")
     except (OSError, HTTPException) as exc:
         # HTTPException: the stream broke halfway (Core restarted, Wi-Fi dropped).
         print("Luna's voice isn't available:", exc)
     finally:
-        stream.start()
-    return None
+        if mic_off_while_speaking:
+            stream.start()
+    return outcome
 
 
 def find_mic(name: str, devices: list[dict]) -> int | None:
@@ -133,6 +195,7 @@ def listen_loop(
     muted: Event | None = None,
     open_stream: Callable | None = None,
     mute: Callable[[], None] | None = None,
+    stopper: WakeListener | None = None,
 ) -> None:
     muted = muted if muted is not None else Event()
     open_stream = open_stream or partial(open_mic, settings.mic)
@@ -143,7 +206,7 @@ def listen_loop(
             time.sleep(0.2)
             continue
         with open_stream() as stream:
-            hear(settings, voice, listener, resume, status, stream, muted, mute)
+            hear(settings, voice, listener, resume, status, stream, muted, mute, stopper)
 
 
 def hear(
@@ -155,6 +218,7 @@ def hear(
     stream,
     muted: Event,
     mute: Callable[[], None] | None = None,
+    stopper: WakeListener | None = None,
 ) -> None:
     """Wake, record, answer, until muted or closed.
 
@@ -167,11 +231,20 @@ def hear(
     resume.reset()
     print(f"Say {' / '.join(settings.wake_phrases)}... (Ctrl+C to stop)")
     asleep = False
+    paused = False  # A Venus tab in front listens with the browser mic instead.
     dim_frames = 0  # How much longer the dim "sleeping" circle shows.
     for frame in frames:
         if muted.is_set() or status.closed:
             status.set(IDLE)
             return
+        if status.web_listening:
+            # Both mics would hear you and Venus would answer twice.
+            paused = True
+            continue
+        if paused:
+            paused = False
+            listener.reset()
+            recent.clear()
         recent.append(frame)
         if dim_frames:
             dim_frames -= 1
@@ -193,10 +266,27 @@ def hear(
         try:
             pcm = b"".join(f.tobytes() for f in recent) + record_until_silence(frames)
             timer.lap("record")
-            outcome = answer(settings, voice, pcm, stream, status, timer)
+            outcome = answer(settings, voice, pcm, stream, status, timer, stopper)
+            print(timer.report())
+            # A conversation: keep listening without "Hey Venus" until you
+            # say bye or stop, or go quiet.
+            while outcome is None and not (muted.is_set() or status.closed or status.web_listening):
+                status.set(LISTENING)
+                timer = Timer()
+                pcm = record_until_silence(
+                    frames, start_frames=FOLLOW_UP_FRAMES, max_frames=FOLLOW_UP_FRAMES + 125,
+                )
+                timer.lap("record")
+                if not heard_speech(pcm):
+                    # Free: silence never goes to Core.
+                    print(f"Quiet, so the conversation ended. Say {settings.wake_phrases[0]} to talk again.")
+                    break
+                outcome = answer(settings, voice, pcm, stream, status, timer, stopper)
+                print(timer.report())
+            if outcome in ENDS_CONVERSATION:
+                print("Conversation ended.")
         finally:
             status.set(IDLE)
-            print(timer.report())
         if outcome == MUTE and mute is not None:
             mute()
             status.set(IDLE)
@@ -210,8 +300,10 @@ def hear(
         recent.clear()
 
 
-def wake_listeners(env_file: Path, settings: NodeSettings) -> tuple[WakeListener, WakeListener] | None:
-    """The "Hey Venus" listener and the "start listening" one, or None without a model."""
+def wake_listeners(
+    env_file: Path, settings: NodeSettings,
+) -> tuple[WakeListener, WakeListener, WakeListener] | None:
+    """The "Hey Venus", "start listening" and "stop venus" listeners, or None without a model."""
     import vosk
 
     path = wake_model_path(env_file.parent, settings.wake_model)
@@ -225,20 +317,25 @@ def wake_listeners(env_file: Path, settings: NodeSettings) -> tuple[WakeListener
     # A second recognizer on the same model hears only "<wake phrase> start listening".
     wake_up = resume_phrases(settings.wake_phrases)
     resume = WakeListener(vosk.KaldiRecognizer(model, RATE, grammar(wake_up)), wake_up)
-    return listener, resume
+    # A third one, free on the same model: "stop venus" while she talks.
+    stopper = WakeListener(
+        vosk.KaldiRecognizer(model, RATE, grammar(STOP_TALKING_PHRASES)), STOP_TALKING_PHRASES,
+    )
+    return listener, resume, stopper
 
 
 def start_listening(
     settings: NodeSettings,
     listener: WakeListener,
     resume: WakeListener,
+    stopper: WakeListener,
     status: Status,
     muted: Event | None = None,
     mute: Callable[[], None] | None = None,
 ) -> threading.Thread:
     def loop() -> None:
         try:
-            listen_loop(settings, listener, resume, status, muted, mute=mute)
+            listen_loop(settings, listener, resume, status, muted, mute=mute, stopper=stopper)
         finally:
             # A mic error ends the loop; take the circle down with it.
             status.close()
@@ -246,6 +343,8 @@ def start_listening(
     # The window must own the main thread, so the mic loop runs beside it.
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
+    # The web's orb follows this one through Core.
+    threading.Thread(target=report_loop, args=(settings, status, muted), daemon=True).start()
     return thread
 
 
