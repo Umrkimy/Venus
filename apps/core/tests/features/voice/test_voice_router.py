@@ -17,8 +17,8 @@ from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.shortcuts.repository import ShortcutRepository
 from features.voice.dependencies import get_transcriber
-from features.voice.router import MAX_AUDIO_BYTES
-from features.voice.transcriber import TRANSCRIBE_MODEL, OpenAITranscriber
+from features.voice.router import MAX_AUDIO_BYTES, NOTHING_HEARD
+from features.voice.transcriber import TRANSCRIBE_MODEL, OpenAITranscriber, is_hint_echo
 from main import app
 from storage.base import Base
 
@@ -113,6 +113,32 @@ def test_transcribe_spells_shortcuts_like_the_owner(engine):
     )
 
     assert response.json() == {"text": "Search comix for Solo Leveling."}
+
+
+def test_transcribe_turns_a_repeated_hint_into_a_mic_problem(engine):
+    # Silence makes the model read the hint back; that must not reach the chat box.
+    for keyword in ("asurascans", "comix"):
+        ShortcutRepository(engine).add(
+            SiteShortcut(keyword=keyword, label=keyword, home_url=f"https://{keyword}.com/", search_url=None),
+        )
+    app.dependency_overrides[get_transcriber] = lambda: HeardTranscriber("Venus, asurascans, comix")
+
+    response = client.post(
+        "/voice/transcribe", content=b"audio", headers={**OWNER_HEADERS, **WEBM},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": NOTHING_HEARD}
+
+
+def test_is_hint_echo_only_matches_the_whole_hint():
+    hint = "Venus, asurascans, comix"
+
+    assert is_hint_echo("Venus, asurascans, comix.", hint)
+    assert is_hint_echo("venus asurascans comix", hint)
+    assert not is_hint_echo("Open comix.", hint)
+    assert not is_hint_echo("comix", hint)
+    assert not is_hint_echo("", hint)
 
 
 class HeardTranscriber:

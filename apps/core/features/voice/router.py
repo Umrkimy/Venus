@@ -11,10 +11,12 @@ from features.shortcuts.repository import ShortcutRepository
 from features.voice.dependencies import get_speaker, get_transcriber
 from features.voice.sound_alike import fix_keywords
 from features.voice.speaker import Speaker
-from features.voice.transcriber import Transcriber
+from features.voice.transcriber import Transcriber, is_hint_echo
 
 # Minutes of speech fit easily; stops a huge upload from running up a bill.
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
+
+NOTHING_HEARD = "I couldn't hear anything. Check your mic is plugged in and not muted."
 
 # Luna's lines are short; a runaway reply can't burn Fish credit.
 MAX_SPEAK_CHARS = 1000
@@ -51,6 +53,12 @@ async def transcribe(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Couldn't hear that",
         ) from exc
+    if is_hint_echo(text, hint):
+        # Silence, not words: say so instead of typing the hint into the chat.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=NOTHING_HEARD,
+        )
     # "comics" and "comix" sound the same; the owner meant the shortcut.
     return {"text": fix_keywords(text, keywords)}
 

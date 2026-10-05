@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
 
 from venus_node.config import NodeSettings, load_settings
@@ -12,7 +13,11 @@ from venus_node.connection.client import keep_connected
 from venus_protocol.schemas.connections import NodeHello
 
 
-def run_connect(env_file: Path) -> None:
+def run_connect(
+    env_file: Path,
+    on_connected: Callable[[NodeHello], None] | None = None,
+    on_retry: Callable[[], None] | None = None,
+) -> None:
     settings = load_settings(env_file)
     database_path = env_file.parent / "data" / "node.db"
     database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -25,8 +30,8 @@ def run_connect(env_file: Path) -> None:
     asyncio.run(
         keep_connected(
             settings,
-            on_connected=print_connected,
-            on_retry=print_retry,
+            on_connected=on_connected or print_connected,
+            on_retry=on_retry or print_retry,
             execute_payload=executor.execute_payload,
             list_apps=list_reported_apps,
             list_projects=lambda: list_reported_projects(settings),
@@ -53,6 +58,11 @@ def list_reported_projects(settings: NodeSettings) -> list[str]:
 
 
 def main() -> None:
+    from venus_node.app.single import CONNECTION, already_running_message, claim
+
+    if not claim(CONNECTION):
+        print(already_running_message("Connection"))
+        return
     node_directory = Path(__file__).resolve().parent.parent.parent
     run_connect(node_directory / ".env")
 

@@ -1,9 +1,12 @@
+import json
 import signal
 import threading
+import time
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from functools import partial
 from pathlib import Path
+from threading import Event
 from urllib.error import HTTPError
 
 import numpy as np
@@ -33,6 +36,12 @@ def mic_frames(stream) -> Iterator[np.ndarray]:
 def problem(exc: OSError) -> str:
     if isinstance(exc, HTTPError) and exc.code == 409:
         return "Venus isn't connected to this PC. Run start-venus.cmd first."
+    if isinstance(exc, HTTPError) and exc.code == 422:
+        # Core's own words, e.g. "I couldn't hear anything. Check your mic..."
+        try:
+            return json.loads(exc.read())["detail"]
+        except (ValueError, KeyError, TypeError):
+            pass
     return f"Couldn't reach Core: {exc}"
 
 
@@ -84,66 +93,93 @@ def answer(
     return None
 
 
+def open_mic():
+    # Imported here so tests and the connect command don't need a mic.
+    import sounddevice as sd
+
+    return sd.InputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=FRAME)
+
+
 def listen_loop(
     settings: NodeSettings,
     listener: WakeListener,
     resume: WakeListener,
     status: Status,
+    muted: Event | None = None,
+    open_stream: Callable = open_mic,
 ) -> None:
-    # Imported here so tests and the connect command don't need a mic.
-    import sounddevice as sd
-
+    muted = muted if muted is not None else Event()
     voice = VoiceChat(partial(chat, settings))
+    while not status.closed:
+        if muted.is_set():
+            # Mic closed while muted, so Windows' mic light goes off too.
+            time.sleep(0.2)
+            continue
+        with open_stream() as stream:
+            hear(settings, voice, listener, resume, status, stream, muted)
+
+
+def hear(
+    settings: NodeSettings,
+    voice: VoiceChat,
+    listener: WakeListener,
+    resume: WakeListener,
+    status: Status,
+    stream,
+    muted: Event,
+) -> None:
+    """Wake, record, answer, until muted or closed."""
     # The frames while the phrase was holding may already have "open ..." in them.
     recent: deque[np.ndarray] = deque(maxlen=5)
-
-    with sd.InputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=FRAME) as stream:
-        frames = metered(mic_frames(stream), status)
-        print(f"Say {' / '.join(settings.wake_phrases)}... (Ctrl+C to stop)")
-        asleep = False
-        dim_frames = 0  # How much longer the dim "sleeping" circle shows.
-        for frame in frames:
-            recent.append(frame)
-            if dim_frames:
-                dim_frames -= 1
-                if dim_frames == 0:
-                    status.set(IDLE)
-            if asleep:
-                # Asleep: only the local "start listening" check runs, nothing goes to Core.
-                if resume.heard(frame):
-                    asleep = False
-                    resume.reset()
-                    listener.reset()
-                    print("Listening again.")
-                continue
-            if not listener.heard(frame):
-                continue
-            print("Listening...")
-            status.set(LISTENING)
-            try:
-                pcm = b"".join(f.tobytes() for f in recent) + record_until_silence(frames)
-                outcome = answer(settings, voice, pcm, stream, status)
-            finally:
+    frames = metered(mic_frames(stream), status)
+    listener.reset()
+    resume.reset()
+    print(f"Say {' / '.join(settings.wake_phrases)}... (Ctrl+C to stop)")
+    asleep = False
+    dim_frames = 0  # How much longer the dim "sleeping" circle shows.
+    for frame in frames:
+        if muted.is_set() or status.closed:
+            status.set(IDLE)
+            return
+        recent.append(frame)
+        if dim_frames:
+            dim_frames -= 1
+            if dim_frames == 0:
                 status.set(IDLE)
-            if outcome == SLEEP:
-                asleep = True
-                status.set(SLEEPING)
-                dim_frames = 15  # About 1.2 s.
+        if asleep:
+            # Asleep: only the local "start listening" check runs, nothing goes to Core.
+            if resume.heard(frame):
+                asleep = False
                 resume.reset()
-            listener.reset()
-            recent.clear()
+                listener.reset()
+                print("Listening again.")
+            continue
+        if not listener.heard(frame):
+            continue
+        print("Listening...")
+        status.set(LISTENING)
+        try:
+            pcm = b"".join(f.tobytes() for f in recent) + record_until_silence(frames)
+            outcome = answer(settings, voice, pcm, stream, status)
+        finally:
+            status.set(IDLE)
+        if outcome == SLEEP:
+            asleep = True
+            status.set(SLEEPING)
+            dim_frames = 15  # About 1.2 s.
+            resume.reset()
+        listener.reset()
+        recent.clear()
 
 
-def run_listen(env_file: Path) -> None:
+def wake_listeners(env_file: Path, settings: NodeSettings) -> tuple[WakeListener, WakeListener] | None:
+    """The "Hey Venus" listener and the "start listening" one, or None without a model."""
     import vosk
 
-    from venus_node.voice.circle import Circle
-
-    settings = load_settings(env_file)
     path = wake_model_path(env_file.parent, settings.wake_model)
     if not path.is_dir():
         print(f"No Vosk model at {path}. Set VENUS_NODE_WAKE_MODEL.")
-        return
+        return None
     vosk.SetLogLevel(-1)
     model = vosk.Model(str(path))
     recognizer = vosk.KaldiRecognizer(model, RATE, grammar(settings.wake_phrases))
@@ -151,23 +187,49 @@ def run_listen(env_file: Path) -> None:
     # A second recognizer on the same model hears only "<wake phrase> start listening".
     wake_up = resume_phrases(settings.wake_phrases)
     resume = WakeListener(vosk.KaldiRecognizer(model, RATE, grammar(wake_up)), wake_up)
-    status = Status()
+    return listener, resume
 
+
+def start_listening(
+    settings: NodeSettings,
+    listener: WakeListener,
+    resume: WakeListener,
+    status: Status,
+    muted: Event | None = None,
+) -> threading.Thread:
     def loop() -> None:
         try:
-            listen_loop(settings, listener, resume, status)
+            listen_loop(settings, listener, resume, status, muted)
         finally:
             # A mic error ends the loop; take the circle down with it.
             status.close()
 
     # The window must own the main thread, so the mic loop runs beside it.
-    threading.Thread(target=loop, daemon=True).start()
+    thread = threading.Thread(target=loop, daemon=True)
+    thread.start()
+    return thread
+
+
+def run_listen(env_file: Path) -> None:
+    from venus_node.voice.circle import Circle
+
+    settings = load_settings(env_file)
+    listeners = wake_listeners(env_file, settings)
+    if listeners is None:
+        return
+    status = Status()
+    start_listening(settings, *listeners, status)
     # Ctrl+C would be swallowed by the window loop; ask it to close instead.
     signal.signal(signal.SIGINT, lambda signum, frame: status.close())
     Circle(status).run()
 
 
 def main() -> None:
+    from venus_node.app.single import LISTENER, already_running_message, claim
+
+    if not claim(LISTENER):
+        print(already_running_message("Listening"))
+        return
     node_directory = Path(__file__).resolve().parent.parent.parent
     run_listen(node_directory / ".env")
 
