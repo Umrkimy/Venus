@@ -58,7 +58,8 @@ def parse_command_text(
     projects: list[str],
     sites: dict[str, SearchSite] = SEARCH_SITES,
 ) -> ParsedCommand:
-    text = text.strip()
+    # Speech adds a full stop: "Open Spotify." is not the website "Spotify."
+    text = text.strip().rstrip(".!?,;:").strip()
     lowered = text.lower()
 
     if not text:

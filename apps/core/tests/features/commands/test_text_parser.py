@@ -138,3 +138,16 @@ def test_text_venus_does_not_understand_is_rejected(text: str):
         parse(text)
 
     assert str(error.value) == "Venus didn't understand that"
+
+
+@pytest.mark.parametrize("text", ["Open Spotify.", "open spotify!", "Open Spotify?"])
+def test_spoken_full_stop_still_opens_the_app(text):
+    # Speech-to-text ends sentences with a dot; "Spotify." was opened as a website.
+    parsed = parse(text)
+
+    assert parsed.application_id == "spotify"
+    assert parsed.url is None
+
+
+def test_spoken_full_stop_after_a_website_keeps_the_website():
+    assert parse("Open github.com.").url == "https://github.com"
