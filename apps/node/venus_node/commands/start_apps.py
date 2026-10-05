@@ -39,6 +39,9 @@ def run_powershell(script: str) -> str:
         encoding="utf-8",
         check=True,
         timeout=15,
+        # The tray app has no console, so Windows would open a new
+        # PowerShell window on every "open ..." command.
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
     return completed.stdout
 
