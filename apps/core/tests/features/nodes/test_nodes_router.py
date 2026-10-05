@@ -1922,3 +1922,30 @@ def test_chat_accepts_the_node_token(command_records: CommandRecordRepository):
 
     assert response.status_code == 200
     assert response.json()["label"] == "Spotify"
+
+
+class TalkingToolBrain(ToolBrain):
+    """Writes her line with the tool call, like the real model now does."""
+
+    async def reply(
+        self, message: str, history: list[ChatTurn], instructions: str,
+    ) -> BrainReply:
+        self.instructions = instructions
+        return BrainReply(text="Ready to open Spotify, love.", commands=[self.command])
+
+
+def test_chat_uses_luna_line_from_the_tool_call_without_a_second_call():
+    brain = TalkingToolBrain("open spotify")
+    app.dependency_overrides[get_chat_provider] = lambda: brain
+
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "can you open spotify for me"},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    assert response.json()["reply"] == "Ready to open Spotify, love."
+    assert brain.said is None  # say() never ran
+    # Ask mode: she was told nothing opens before Approve.
+    assert "Approve" in brain.instructions

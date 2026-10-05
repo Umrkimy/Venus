@@ -261,3 +261,15 @@ def test_openai_provider_cleans_bot_punctuation():
 
     assert asyncio.run(provider.reply("hi", [], "")).text == "Hi babe, missed you, a lot"
     assert asyncio.run(provider.say("hi", "")) == "Hi babe, missed you, a lot"
+
+
+def test_openai_provider_keeps_luna_line_written_with_the_tool_call():
+    client = FakeClient(
+        output=[message("Opening Spotify, love."), function_call("open_app", '{"name": "Spotify"}')],
+        output_text="Opening Spotify, love.",
+    )
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    reply = asyncio.run(provider.reply("open spotify", [], ""))
+
+    assert reply == BrainReply(text="Opening Spotify, love.", commands=["open Spotify"])

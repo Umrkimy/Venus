@@ -1,4 +1,5 @@
 import json
+from collections.abc import Iterator
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
@@ -13,7 +14,7 @@ def core_http_url(ws_url: str) -> str:
     return f"{HTTP_SCHEMES.get(parts.scheme, parts.scheme)}://{parts.netloc}"
 
 
-def _post(settings: NodeSettings, path: str, data: bytes, content_type: str) -> bytes:
+def _open(settings: NodeSettings, path: str, data: bytes, content_type: str):
     request = Request(
         f"{core_http_url(settings.core_url)}{path}",
         data=data,
@@ -24,7 +25,11 @@ def _post(settings: NodeSettings, path: str, data: bytes, content_type: str) -> 
         },
     )
     # Luna can take a few seconds (her answer plus a line after a command).
-    with urlopen(request, timeout=60) as response:
+    return urlopen(request, timeout=60)
+
+
+def _post(settings: NodeSettings, path: str, data: bytes, content_type: str) -> bytes:
+    with _open(settings, path, data, content_type) as response:
         return response.read()
 
 
@@ -39,7 +44,19 @@ def chat(settings: NodeSettings, message: str, conversation_id: str | None) -> d
     return json.loads(_post(settings, path, json.dumps(body).encode(), "application/json"))
 
 
-def speak(settings: NodeSettings, text: str) -> bytes:
-    """Luna's voice for the text, as mp3."""
+def speak_stream(settings: NodeSettings, text: str) -> tuple[int, Iterator[bytes]]:
+    """Luna's voice as raw 16-bit mono PCM pieces, and their sample rate.
+
+    The pieces come while Fish is still making the rest, so playing can start at once.
+    """
     body = json.dumps({"text": text}).encode()
-    return _post(settings, "/voice/speak", body, "application/json")
+    response = _open(settings, "/voice/speak/stream", body, "application/json")
+    rate = int(response.headers.get("X-Sample-Rate", 44100))
+
+    def pieces() -> Iterator[bytes]:
+        with response:
+            # About 50 ms of audio per piece.
+            while piece := response.read(4096):
+                yield piece
+
+    return rate, pieces()

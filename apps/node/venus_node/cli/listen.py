@@ -1,5 +1,6 @@
 import json
 import signal
+from http.client import HTTPException
 import threading
 import time
 from collections import deque
@@ -13,12 +14,13 @@ import numpy as np
 
 from venus_node.config import NodeSettings, load_settings
 from venus_node.voice.conversation import VoiceChat
-from venus_node.voice.core_client import chat, speak, transcribe
-from venus_node.voice.player import play_mp3
-from venus_node.voice.recorder import record_until_silence
+from venus_node.voice.core_client import chat, speak_stream, transcribe
+from venus_node.voice.player import play_pcm
+from venus_node.voice.recorder import record_until_silence, trim_silence
 from venus_node.voice.speakable import speakable
 from venus_node.voice.status import IDLE, LISTENING, SLEEPING, SPEAKING, THINKING, Status, metered
-from venus_node.voice.stop_words import CANCEL, SLEEP, control_word, resume_phrases
+from venus_node.voice.stop_words import CANCEL, MUTE, SLEEP, control_word, resume_phrases
+from venus_node.voice.timing import Timer
 from venus_node.voice.wake import WakeListener, grammar, wake_model_path
 from venus_node.voice.wav import to_wav
 
@@ -51,15 +53,18 @@ def answer(
     pcm: bytes,
     stream,
     status: Status | None = None,
+    timer: Timer | None = None,
 ) -> str | None:
     """Text from the recording, Luna's reply, then her voice.
 
-    Returns SLEEP when you asked Venus to stop listening.
+    Returns SLEEP when you asked Venus to stop listening, MUTE to mute the mic.
     """
     status = status or Status()
+    timer = timer or Timer()
     status.set(THINKING)
     try:
-        text = transcribe(settings, to_wav(pcm, RATE))
+        text = transcribe(settings, to_wav(trim_silence(pcm), RATE))
+        timer.lap("transcribe")
         print("You said:", text or "(nothing)")
         if not text:
             return None
@@ -71,23 +76,31 @@ def answer(
         if word == SLEEP:
             print(f"Sleeping. Say \"{resume_phrases(settings.wake_phrases)[0]}\" to wake me.")
             return SLEEP
+        if word == MUTE:
+            print("Muting the mic. Unmute from the tray icon.")
+            return MUTE
         reply = voice.ask(text)
+        timer.lap("chat")
         print("Luna:", reply)
     except OSError as exc:
         print(problem(exc))
         return None
     if not reply:
         return None
-    try:
-        mp3 = speak(settings, speakable(reply))
-    except OSError as exc:
-        print("Luna's voice isn't available:", exc)
-        return None
+
+    def started() -> None:
+        timer.lap("voice")  # Wait until her first sound.
+        status.set(SPEAKING)
+
     # The mic would hear her through the speakers ("...venus...") and wake.
     stream.stop()
-    status.set(SPEAKING)
     try:
-        play_mp3(mp3)
+        rate, pieces = speak_stream(settings, speakable(reply))
+        play_pcm(pieces, rate, on_start=started)
+        timer.lap("playback")
+    except (OSError, HTTPException) as exc:
+        # HTTPException: the stream broke halfway (Core restarted, Wi-Fi dropped).
+        print("Luna's voice isn't available:", exc)
     finally:
         stream.start()
     return None
@@ -119,6 +132,7 @@ def listen_loop(
     status: Status,
     muted: Event | None = None,
     open_stream: Callable | None = None,
+    mute: Callable[[], None] | None = None,
 ) -> None:
     muted = muted if muted is not None else Event()
     open_stream = open_stream or partial(open_mic, settings.mic)
@@ -129,7 +143,7 @@ def listen_loop(
             time.sleep(0.2)
             continue
         with open_stream() as stream:
-            hear(settings, voice, listener, resume, status, stream, muted)
+            hear(settings, voice, listener, resume, status, stream, muted, mute)
 
 
 def hear(
@@ -140,8 +154,12 @@ def hear(
     status: Status,
     stream,
     muted: Event,
+    mute: Callable[[], None] | None = None,
 ) -> None:
-    """Wake, record, answer, until muted or closed."""
+    """Wake, record, answer, until muted or closed.
+
+    `mute` is the tray's Mute mic; without a tray (dev window) "mute" sleeps instead.
+    """
     # The frames while the phrase was holding may already have "open ..." in them.
     recent: deque[np.ndarray] = deque(maxlen=5)
     frames = metered(mic_frames(stream), status)
@@ -171,12 +189,19 @@ def hear(
             continue
         print("Listening...")
         status.set(LISTENING)
+        timer = Timer()
         try:
             pcm = b"".join(f.tobytes() for f in recent) + record_until_silence(frames)
-            outcome = answer(settings, voice, pcm, stream, status)
+            timer.lap("record")
+            outcome = answer(settings, voice, pcm, stream, status, timer)
         finally:
             status.set(IDLE)
-        if outcome == SLEEP:
+            print(timer.report())
+        if outcome == MUTE and mute is not None:
+            mute()
+            status.set(IDLE)
+            return
+        if outcome in (SLEEP, MUTE):
             asleep = True
             status.set(SLEEPING)
             dim_frames = 15  # About 1.2 s.
@@ -209,10 +234,11 @@ def start_listening(
     resume: WakeListener,
     status: Status,
     muted: Event | None = None,
+    mute: Callable[[], None] | None = None,
 ) -> threading.Thread:
     def loop() -> None:
         try:
-            listen_loop(settings, listener, resume, status, muted)
+            listen_loop(settings, listener, resume, status, muted, mute=mute)
         finally:
             # A mic error ends the loop; take the circle down with it.
             status.close()

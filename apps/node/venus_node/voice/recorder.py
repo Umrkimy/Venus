@@ -11,11 +11,11 @@ def is_quiet(frame: np.ndarray, level: int = 500) -> bool:
 
 def record_until_silence(
     frames: Iterable[np.ndarray],
-    quiet_frames: int = 12,
+    quiet_frames: int = 9,
     max_frames: int = 125,
     start_frames: int = 40,
 ) -> bytes:
-    """Keep frames until about a second of quiet (12 x 80 ms) or 10 seconds.
+    """Keep frames until about 0.7 s of quiet (9 x 80 ms) or 10 seconds.
 
     Before you start talking it waits longer (40 x 80 ms, about 3 s): people
     pause after "Hey Venus", and stopping then sent only silence to Core.
@@ -35,3 +35,18 @@ def record_until_silence(
         if quiet_in_a_row >= limit or len(kept) >= max_frames:
             break
     return b"".join(frame.tobytes() for frame in kept)
+
+
+def trim_silence(pcm: bytes, frame_size: int = 1280, pad: int = 3) -> bytes:
+    """Drop the quiet start and end, keeping `pad` frames (240 ms) each side.
+
+    Less audio to upload and transcribe. All quiet: unchanged, so Core can say it heard nothing.
+    """
+    samples = np.frombuffer(pcm, dtype=np.int16)
+    frames = [samples[i : i + frame_size] for i in range(0, len(samples), frame_size)]
+    loud = [i for i, frame in enumerate(frames) if not is_quiet(frame)]
+    if not loud:
+        return pcm
+    first = max(loud[0] - pad, 0)
+    last = min(loud[-1] + pad, len(frames) - 1)
+    return b"".join(frame.tobytes() for frame in frames[first : last + 1])

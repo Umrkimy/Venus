@@ -7,7 +7,8 @@ import numpy as np
 import venus_node.cli.listen as listen
 from venus_node.config import NodeSettings
 from venus_node.voice.conversation import VoiceChat
-from venus_node.voice.status import SPEAKING, Status
+from venus_node.voice.status import SPEAKING, THINKING, Status
+from venus_node.voice.timing import Timer
 
 SETTINGS = NodeSettings(device_id="pc", core_dev_token="t", core_url="ws://core.test/nodes/connect")
 
@@ -26,8 +27,15 @@ class FakeStream:
 def setup(monkeypatch, text="open spotify", reply="Opening Spotify, love."):
     events = []
     monkeypatch.setattr(listen, "transcribe", lambda settings, wav: text)
-    monkeypatch.setattr(listen, "speak", lambda settings, said: events.append(f"speak {said}") or b"mp3")
-    monkeypatch.setattr(listen, "play_mp3", lambda mp3: events.append("play"))
+    monkeypatch.setattr(
+        listen, "speak_stream", lambda settings, said: events.append(f"speak {said}") or (44100, iter([b"pc"])),
+    )
+
+    def play(pieces, rate, on_start):
+        on_start()
+        events.append("play")
+
+    monkeypatch.setattr(listen, "play_pcm", play)
     voice = VoiceChat(lambda message, conversation_id: {"reply": reply, "conversation_id": "c1"})
     return events, voice
 
@@ -35,9 +43,9 @@ def setup(monkeypatch, text="open spotify", reply="Opening Spotify, love."):
 def test_answer_says_luna_reply_with_the_mic_off(monkeypatch, capsys):
     events, voice = setup(monkeypatch)
 
-    listen.answer(SETTINGS, voice, b"pcm", FakeStream(events))
+    listen.answer(SETTINGS, voice, b"pc", FakeStream(events))
 
-    assert events == ["speak Opening Spotify, love.", "mic off", "play", "mic on"]
+    assert events == ["mic off", "speak Opening Spotify, love.", "play", "mic on"]
     assert "Luna: Opening Spotify, love." in capsys.readouterr().out
 
 
@@ -46,7 +54,7 @@ def test_answer_skips_chat_when_nothing_was_heard(monkeypatch):
     asked = []
     voice = VoiceChat(lambda message, conversation_id: asked.append(message))
 
-    listen.answer(SETTINGS, voice, b"pcm", FakeStream(events))
+    listen.answer(SETTINGS, voice, b"pc", FakeStream(events))
 
     assert asked == []
     assert events == []
@@ -58,7 +66,7 @@ def test_answer_explains_when_venus_is_not_running(monkeypatch, capsys):
     def not_connected(message, conversation_id):
         raise HTTPError("http://core.test/nodes/pc/chat", 409, "Conflict", {}, io.BytesIO())
 
-    listen.answer(SETTINGS, VoiceChat(not_connected), b"pcm", FakeStream(events))
+    listen.answer(SETTINGS, VoiceChat(not_connected), b"pc", FakeStream(events))
 
     assert "Run start-venus.cmd first" in capsys.readouterr().out
     assert events == []
@@ -73,7 +81,7 @@ def test_answer_says_when_core_heard_only_silence(monkeypatch, capsys):
 
     monkeypatch.setattr(listen, "transcribe", silence)
 
-    listen.answer(SETTINGS, voice, b"pcm", FakeStream(events))
+    listen.answer(SETTINGS, voice, b"pc", FakeStream(events))
 
     assert "Check your mic is plugged in" in capsys.readouterr().out
     assert events == []
@@ -82,13 +90,13 @@ def test_answer_says_when_core_heard_only_silence(monkeypatch, capsys):
 def test_answer_turns_the_mic_back_on_if_playback_fails(monkeypatch):
     events, voice = setup(monkeypatch)
 
-    def broken_speakers(mp3):
+    def broken_speakers(pieces, rate, on_start):
         raise RuntimeError("no output device")
 
-    monkeypatch.setattr(listen, "play_mp3", broken_speakers)
+    monkeypatch.setattr(listen, "play_pcm", broken_speakers)
 
     try:
-        listen.answer(SETTINGS, voice, b"pcm", FakeStream(events))
+        listen.answer(SETTINGS, voice, b"pc", FakeStream(events))
     except RuntimeError:
         pass
 
@@ -99,18 +107,23 @@ def test_answer_tells_the_circle_thinking_then_speaking(monkeypatch):
     events, voice = setup(monkeypatch)
     status = Status()
     seen = []
-    monkeypatch.setattr(listen, "play_mp3", lambda mp3: seen.append(status.snapshot()[0]))
+    def play(pieces, rate, on_start):
+        seen.append(status.snapshot()[0])  # Still thinking: no sound yet.
+        on_start()
+        seen.append(status.snapshot()[0])
 
-    listen.answer(SETTINGS, voice, b"pcm", FakeStream(events), status)
+    monkeypatch.setattr(listen, "play_pcm", play)
 
-    assert seen == [SPEAKING]
+    listen.answer(SETTINGS, voice, b"pc", FakeStream(events), status)
+
+    assert seen == [THINKING, SPEAKING]
 
 
 def test_answer_cancel_asks_luna_nothing(monkeypatch, capsys):
     events, _ = setup(monkeypatch, text="Never mind.")
     asked = []
 
-    outcome = listen.answer(SETTINGS, VoiceChat(lambda m, c: asked.append(m)), b"pcm", FakeStream(events))
+    outcome = listen.answer(SETTINGS, VoiceChat(lambda m, c: asked.append(m)), b"pc", FakeStream(events))
 
     assert outcome is None
     assert asked == [] and events == []
@@ -121,7 +134,7 @@ def test_answer_stop_listening_returns_sleep_without_luna(monkeypatch):
     events, _ = setup(monkeypatch, text="Hey Venus, stop listening.")
     asked = []
 
-    outcome = listen.answer(SETTINGS, VoiceChat(lambda m, c: asked.append(m)), b"pcm", FakeStream(events))
+    outcome = listen.answer(SETTINGS, VoiceChat(lambda m, c: asked.append(m)), b"pc", FakeStream(events))
 
     assert outcome == "sleep"
     assert asked == [] and events == []
@@ -214,3 +227,58 @@ def test_find_mic_unknown_name_falls_back_to_default(capsys):
     assert listen.find_mic("blue yeti", DEVICES) is None
     assert "using the Windows default mic" in capsys.readouterr().out
 
+
+def test_answer_logs_time_per_step(monkeypatch):
+    events, voice = setup(monkeypatch)
+    timer = Timer(clock=lambda: 0.0)
+
+    listen.answer(SETTINGS, voice, b"pc", FakeStream(events), timer=timer)
+
+    assert timer.report() == "Timing: transcribe 0.0 s, chat 0.0 s, voice 0.0 s, playback 0.0 s"
+
+
+def test_answer_mute_asks_luna_nothing(monkeypatch):
+    events, _ = setup(monkeypatch, text="Hey Venus, mute the mic for me.")
+    asked = []
+
+    outcome = listen.answer(SETTINGS, VoiceChat(lambda m, c: asked.append(m)), b"pc", FakeStream(events))
+
+    assert outcome == "mute"
+    assert asked == [] and events == []
+
+
+class HearsOnce(FakeListener):
+    def __init__(self):
+        super().__init__()
+        self.done = False
+
+    def heard(self, frame):
+        heard, self.done = not self.done, True
+        return heard
+
+
+def test_hear_calls_the_tray_mute_when_you_say_mute(monkeypatch):
+    monkeypatch.setattr(listen, "answer", lambda *args: "mute")
+    muted = Event()
+    status = Status()
+
+    listen.hear(SETTINGS, None, HearsOnce(), FakeListener(), status, FakeMic([]), muted, muted.set)
+
+    assert muted.is_set()
+    assert status.snapshot()[0] == "idle"
+
+
+def test_answer_says_so_when_the_voice_stream_breaks(monkeypatch, capsys):
+    from http.client import IncompleteRead
+
+    events, voice = setup(monkeypatch)
+
+    def cut_off(pieces, rate, on_start):
+        raise IncompleteRead(b"")
+
+    monkeypatch.setattr(listen, "play_pcm", cut_off)
+
+    listen.answer(SETTINGS, voice, b"pc", FakeStream(events))
+
+    assert "Luna's voice isn't available" in capsys.readouterr().out
+    assert events[-1] == "mic on"

@@ -70,3 +70,8 @@ def test_plain_punctuation_drops_tool_calls_typed_as_words():
     )
 
     assert plain_punctuation(text) == "Done, babe, Spotify and Comix are open for you."
+
+
+def test_build_instructions_tells_luna_to_wait_for_approve_outside_full_mode():
+    assert "Approve" in build_instructions(None, None, approve_first=True)
+    assert "Approve" not in build_instructions(None, None)

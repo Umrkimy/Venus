@@ -541,12 +541,15 @@ async def chat(
             detail="Node is not connected",
         )
 
+    full_mode = settings_repository.get_mode() == "full"
+
     def instructions() -> str:
         return chat_instructions(
             request, conversations, projects, personalities,
             list(search_sites(shortcuts.list_all())),
             folders,
             memories,
+            full_mode,
         )
 
     # Rules answer first; the brain only gets what they don't understand.
@@ -554,6 +557,7 @@ async def chat(
     to_open: list[ParsedCommand] = []  # commands to propose, in order
     facts: list[str] = []  # facts saved during this message
     failures: list[str] = []  # why a command Luna chose can't run
+    brain_line = None  # Luna's line written with her tool call
     fact = memory_from_message(request.message)
     if fact is not None:
         facts.append(memories.create(fact).text)
@@ -569,6 +573,8 @@ async def chat(
                 history = conversations.recent_turns(request.conversation_id)
             brain = await provider.reply(request.message, history, instructions())
             facts = [memories.create(fact).text for fact in brain.memories]
+            if brain.commands:
+                brain_line = brain.text
             # Luna picked tools: run each choice through the same parser.
             for text in brain.commands:
                 try:
@@ -600,11 +606,13 @@ async def chat(
             for parsed in to_open
         ]
         labels = [proposal["label"] for proposal in proposals]
-        done, fallback = action_summary(
-            labels, facts, failures, settings_repository.get_mode() == "full",
-        )
-        # One line from Luna about everything she did.
-        line = await luna_line(provider, request.message, instructions(), done, fallback)
+        done, fallback = action_summary(labels, facts, failures, full_mode)
+        if brain_line and proposals and not facts and not failures:
+            # She already said it with the tool call; saves a second model call.
+            line = brain_line
+        else:
+            # One line from Luna about everything she did.
+            line = await luna_line(provider, request.message, instructions(), done, fallback)
         actions = [
             {"kind": "command", "command_id": proposal["command_id"], "label": proposal["label"]}
             for proposal in proposals
@@ -633,6 +641,7 @@ def chat_instructions(
     sites: list[str],
     folders: list[str],
     memories: MemoryRepository,
+    full_mode: bool = True,
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -647,6 +656,7 @@ def chat_instructions(
         sites,
         folders,
         [memory.text for memory in memories.newest(50)],
+        approve_first=not full_mode,
     )
 
 
