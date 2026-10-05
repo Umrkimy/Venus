@@ -1,8 +1,12 @@
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 
 from config import CoreSettings, get_settings
+from features.auth.dependencies import get_auth_repository
+from features.auth.repository import AuthRepository
 from features.voice.live import LiveVoice, get_live_voice
 from main import app
 
@@ -35,9 +39,14 @@ def live(clock: Clock) -> LiveVoice:
         dev_owner_token="test-owner-token",
         database_url="postgresql+psycopg://venus:test-password@127.0.0.1:5432/venus",
     )
+    # A throwaway database for logins: without it the real one (and .env) is used,
+    # which CI doesn't have.
+    engine = create_engine("sqlite+pysqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
     app.dependency_overrides[get_live_voice] = lambda: fake
     yield fake
     app.dependency_overrides.clear()
+    engine.dispose()
 
 
 def report(state: str = "listening", subtitle: str = "", muted: bool = False) -> dict:
