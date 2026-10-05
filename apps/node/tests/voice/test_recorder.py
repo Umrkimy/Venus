@@ -33,3 +33,20 @@ def test_record_until_silence_stops_at_max_frames():
     pcm = record_until_silence(iter([LOUD] * 50), max_frames=5)
 
     assert len(pcm) == 5 * LOUD.nbytes
+
+
+def test_record_until_silence_waits_for_you_to_start_talking():
+    # A pause after "Hey Venus" longer than the end-of-sentence quiet.
+    frames = [QUIET] * 5 + [LOUD, LOUD] + [QUIET] * 3
+
+    pcm = record_until_silence(iter(frames), quiet_frames=3, start_frames=8)
+
+    assert len(pcm) == len(frames) * LOUD.nbytes
+
+
+def test_record_until_silence_gives_up_if_you_never_talk():
+    frames = iter([QUIET] * 20)
+
+    pcm = record_until_silence(frames, quiet_frames=3, start_frames=8)
+
+    assert len(pcm) == 8 * QUIET.nbytes

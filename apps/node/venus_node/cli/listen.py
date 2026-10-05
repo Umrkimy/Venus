@@ -93,11 +93,23 @@ def answer(
     return None
 
 
-def open_mic():
+def find_mic(name: str, devices: list[dict]) -> int | None:
+    """Index of the first input device whose name contains `name`, or None for the default."""
+    if not name:
+        return None
+    for index, device in enumerate(devices):
+        if device["max_input_channels"] > 0 and name.lower() in device["name"].lower():
+            return index
+    print(f'No mic named "{name}"; using the Windows default mic.')
+    return None
+
+
+def open_mic(name: str = ""):
     # Imported here so tests and the connect command don't need a mic.
     import sounddevice as sd
 
-    return sd.InputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=FRAME)
+    device = find_mic(name, list(sd.query_devices()))
+    return sd.InputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=FRAME, device=device)
 
 
 def listen_loop(
@@ -106,9 +118,10 @@ def listen_loop(
     resume: WakeListener,
     status: Status,
     muted: Event | None = None,
-    open_stream: Callable = open_mic,
+    open_stream: Callable | None = None,
 ) -> None:
     muted = muted if muted is not None else Event()
+    open_stream = open_stream or partial(open_mic, settings.mic)
     voice = VoiceChat(partial(chat, settings))
     while not status.closed:
         if muted.is_set():
