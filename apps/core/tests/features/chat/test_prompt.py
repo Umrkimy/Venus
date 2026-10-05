@@ -59,3 +59,14 @@ def test_plain_punctuation_swaps_bot_pauses_for_commas(text, expected):
 
 def test_plain_punctuation_keeps_hyphenated_words():
     assert plain_punctuation("I like lo-fi and sci-fi.") == "I like lo-fi and sci-fi."
+
+
+def test_plain_punctuation_drops_tool_calls_typed_as_words():
+    # Seen live: Luna's one-line summary started with her tool calls as text.
+    text = (
+        '{"keyword":"spotify"} to=open_app\n'
+        '{"keyword":"comix"} to=open_app\n'
+        "Done, babe, Spotify and Comix are open for you."
+    )
+
+    assert plain_punctuation(text) == "Done, babe, Spotify and Comix are open for you."

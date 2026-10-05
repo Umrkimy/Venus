@@ -66,7 +66,15 @@ def memories_line(memories: list[str]) -> str | None:
     return f"What you know about the owner: {facts}"
 
 
+# A tool call written out as words, e.g. {"keyword":"spotify"} to=open_app.
+TOOL_ECHO = re.compile(r"\{[^{}]*\}\s*to=[\w.]+")
+
+
 def plain_punctuation(text: str) -> str:
-    """Swap pauses that read like a bot for commas, in case Luna slips."""
+    """Swap pauses that read like a bot for commas, in case Luna slips.
+
+    Also drops tool calls she sometimes types out instead of calling.
+    """
+    text = TOOL_ECHO.sub("", text).strip()
     text = BOT_PAUSE.sub(", ", text)
     return re.sub(r",(\s*,)+", ",", text).strip(" ,")
