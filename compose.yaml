@@ -1,6 +1,12 @@
+# Postgres always runs here. Core and web join in server mode:
+#   docker compose --profile server up -d --build
+# Dev mode (start-venus.cmd) runs only Postgres and starts Core and web
+# from the source with auto-reload. Both modes use ports 9000 and 3000,
+# so stop one before starting the other.
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: venus
       POSTGRES_USER: venus
@@ -14,6 +20,49 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  core:
+    profiles: ["server"]
+    build:
+      context: .
+      dockerfile: apps/core/Dockerfile
+    restart: unless-stopped
+    # Same secrets as dev mode; only the database address changes, because
+    # inside Docker Postgres is reached by its service name.
+    env_file: apps/core/.env
+    environment:
+      VENUS_CORE_DATABASE_URL: postgresql+psycopg://venus:${VENUS_POSTGRES_PASSWORD}@postgres:5432/venus
+    ports:
+      # The PC's Node connects to ws://localhost:9000.
+      - "127.0.0.1:9000:9000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  web:
+    profiles: ["server"]
+    build:
+      context: apps/web
+      args:
+        CORE_URL: http://core:9000
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 
 volumes:
   venus_postgres_data:

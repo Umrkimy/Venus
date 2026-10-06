@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const coreUrl = process.env.CORE_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // The Docker image (server mode) runs a small standalone server. Local
+  // `next build` + `next start` stay as they are.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   // /settings has no page of its own; open the first page in its menu.
   async redirects() {
     return [

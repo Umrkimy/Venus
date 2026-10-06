@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +29,13 @@ def get_settings() -> CoreSettings:
 
 def load_settings(env_file: Path) -> CoreSettings:
     values = dotenv_values(env_file)
+    # Real environment variables win over the file. Docker passes settings
+    # this way, for example the database address inside the compose network.
+    values.update(
+        (name, value)
+        for name, value in os.environ.items()
+        if name.startswith("VENUS_CORE_")
+    )
     node_token = values.get("VENUS_CORE_DEV_NODE_TOKEN", "")
     owner_token = values.get("VENUS_CORE_DEV_OWNER_TOKEN", "")
     database_url = values.get("VENUS_CORE_DATABASE_URL", "")

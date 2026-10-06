@@ -1,0 +1,7 @@
+# Build context = apps/web. Never send local secrets or builds.
+.env
+.env.*
+node_modules
+.next
+tsconfig.tsbuildinfo
+Dockerfile

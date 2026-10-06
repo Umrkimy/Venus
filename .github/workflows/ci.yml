@@ -75,3 +75,16 @@ jobs:
 
       - name: Build web
         run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Server mode images build (no push, no secrets needed).
+      - name: Build Core image
+        run: docker build -f apps/core/Dockerfile -t venus-core .
+
+      - name: Build web image
+        run: docker build -t venus-web apps/web
