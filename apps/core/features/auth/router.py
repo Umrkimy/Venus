@@ -20,6 +20,15 @@ router = APIRouter(prefix="/auth")
 _DUMMY_HASH = hash_password("venus-dummy-password")
 
 
+def _request_is_https(request: Request) -> bool:
+    # Over Tailscale the browser speaks HTTPS, but Core only sees plain http
+    # from the proxy in front of it, so trust the first X-Forwarded-Proto.
+    # A faked header can only make the cookie stricter, never weaker.
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    first = forwarded.split(",")[0].strip().lower()
+    return first == "https" or request.url.scheme == "https"
+
+
 @router.post("/login")
 def login(
     body: LoginRequest,
@@ -58,7 +67,7 @@ def login(
         path="/",
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=_request_is_https(request),
     )
     return OwnerResponse(username=owner.username)
 
