@@ -88,3 +88,17 @@ jobs:
 
       - name: Build web image
         run: docker build -t venus-web apps/web
+
+      # Real backup service + restore script: seed a row, wait until the
+      # backup healthcheck sees a dump, restore it into a test database.
+      - name: Backup and restore
+        env:
+          VENUS_POSTGRES_PASSWORD: ci-only-password
+        run: |
+          docker compose up -d --wait postgres
+          docker compose exec -T postgres psql -U venus -d venus -c "create table ci_check (x int); insert into ci_check values (1), (2);"
+          docker compose up -d --wait backup
+          docker compose logs backup
+          ls -l backups/daily backups/weekly
+          pwsh -File scripts/restore-db.ps1 -File "$(ls backups/daily/*.dump)" -Target venus_restore_test
+          test "$(docker compose exec -T postgres psql -U venus -d venus_restore_test -tAc 'select count(*) from ci_check')" = "2"

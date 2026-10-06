@@ -35,3 +35,6 @@ start-venus.ps1
 
 # Wake word models (Vosk download), too big for git
 apps/node/models/
+
+# Database backups (compose backup service, scripts/restore-db.ps1)
+backups/

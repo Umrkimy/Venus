@@ -167,6 +167,40 @@ Set-Location ../..
 .\apps\node\.venv\Scripts\python.exe -m pytest packages/venus-protocol/tests
 ```
 
+## Database backups
+
+Docker Compose runs a `backup` service next to Postgres (needs Docker
+Desktop, or Docker Engine 25+). It saves one backup when it starts and then
+one per day, keeping the newest 7 daily and 4 weekly files:
+
+```text
+<backup folder>/daily/venus-YYYY-MM-DD.dump
+<backup folder>/weekly/venus-YYYY-Www.dump
+```
+
+The backup folder is `./backups` in the repository unless you set
+`VENUS_BACKUP_DIR` in the root `.env` (see `.env.example`). Prefer a folder
+on another drive. Start it with Postgres:
+
+```powershell
+docker compose up -d --wait postgres backup
+```
+
+`docker compose ps` shows the service as unhealthy when no backup is newer
+than 26 hours.
+
+To restore, run the script from the repository root (PowerShell; on Linux or
+macOS install `pwsh`). Try a backup safely on a throwaway database first:
+
+```powershell
+.\scripts\restore-db.ps1 -File backups\daily\venus-2026-10-06.dump -Target venus_restore_test
+```
+
+Without `-Target` it replaces the live `venus` database. It asks you to type
+`RESTORE`, saves the current database as `pre-restore-<time>.dump` next to
+the backup file, and stops Core while restoring (close Core yourself if you
+run it outside Docker).
+
 ## Safety boundary
 
 Core may request a fake allowlisted action only after a development-owner token
