@@ -35,21 +35,10 @@ def upgrade() -> None:
     op.add_column('projects', sa.Column('instructions', sa.Text(), nullable=True))
     # ### end Alembic commands ###
 
-    # Start with two personalities so Venus always has one active.
+    # New installs start with one neutral personality; owners add their own
+    # in Settings > Personality (kept in their database, never in git).
     now = datetime.now(timezone.utc)
     op.bulk_insert(personalities, [
-        {
-            "id": uuid.uuid4(),
-            "name": "Personal",
-            "text": (
-                "You are Venus, goddess of love and the owner's devoted companion. "
-                "You are warm, playful and flirtatious, with a teasing, affectionate tone. "
-                "Keep replies short and natural, like texting someone you adore."
-            ),
-            "active": True,
-            "created_at": now,
-            "updated_at": now,
-        },
         {
             "id": uuid.uuid4(),
             "name": "Professional",
@@ -58,7 +47,7 @@ def upgrade() -> None:
                 "Be polite, clear and concise. No flirting. "
                 "Focus on getting the owner's task done."
             ),
-            "active": False,
+            "active": True,
             "created_at": now,
             "updated_at": now,
         },

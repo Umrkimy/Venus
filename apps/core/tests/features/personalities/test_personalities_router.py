@@ -42,7 +42,7 @@ def personalities():
 
 
 def test_activating_a_personality_switches_the_other_off(personalities):
-    personal = personalities.create("Personal", "Be flirty.")
+    personal = personalities.create("Personal", "Be cheerful.")
     professional = personalities.create("Professional", "Be polite.")
     personalities.activate(personal.id)
 
@@ -62,7 +62,7 @@ def test_activating_a_personality_switches_the_other_off(personalities):
 
 
 def test_active_personality_cannot_be_deleted(personalities):
-    personal = personalities.create("Personal", "Be flirty.")
+    personal = personalities.create("Personal", "Be cheerful.")
     personalities.activate(personal.id)
 
     response = client.delete(f"/personalities/{personal.id}", headers=OWNER_HEADERS)
@@ -83,7 +83,7 @@ def test_inactive_personality_can_be_deleted(personalities):
 def test_create_personality_rejects_blank_name_or_long_text(personalities):
     blank = client.post(
         "/personalities",
-        json={"name": "  ", "text": "Be flirty."},
+        json={"name": "  ", "text": "Be cheerful."},
         headers=OWNER_HEADERS,
     )
     long = client.post(

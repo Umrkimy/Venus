@@ -1590,7 +1590,7 @@ def test_chat_sends_active_personality_to_the_brain(
     conversations: ConversationRepository,
 ):
     personalities = app.dependency_overrides[get_personality_repository]()
-    personal = personalities.create("Personal", "Be flirty.")
+    personal = personalities.create("Personal", "Be cheerful.")
     personalities.create("Professional", "Be polite.")
     personalities.activate(personal.id)
     brain = RecordingBrain()
@@ -1603,7 +1603,7 @@ def test_chat_sends_active_personality_to_the_brain(
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
-    assert "Be flirty." in brain.instructions
+    assert "Be cheerful." in brain.instructions
     assert "Be polite." not in brain.instructions
     # Built-in sites are always listed, so Luna uses them instead of guessing.
     assert "youtube" in brain.instructions
