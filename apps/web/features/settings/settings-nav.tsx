@@ -1,6 +1,15 @@
 "use client";
 
-import { Archive, AudioLines, Brain, Heart, Link2, SlidersHorizontal, Sparkles } from "lucide-react";
+import {
+  Archive,
+  AudioLines,
+  Brain,
+  Heart,
+  Link2,
+  MonitorSmartphone,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -13,6 +22,7 @@ const PAGES = [
   { href: "/settings/ai", label: "AI model", icon: Sparkles },
   { href: "/settings/voice", label: "Voice", icon: AudioLines },
   { href: "/settings/shortcuts", label: "Shortcuts", icon: Link2 },
+  { href: "/settings/devices", label: "Devices", icon: MonitorSmartphone },
   { href: "/settings/archive", label: "Archive", icon: Archive },
 ];
 
