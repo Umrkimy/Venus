@@ -6,14 +6,14 @@ export default function VoiceSettingsPage() {
   return (
     <>
       <SettingsSection
-        title="Luna's voice"
-        description="Fish Audio speaks Luna's replies. The key is stored encrypted in Core."
+        title="Venus's voice"
+        description="Fish Audio speaks Venus's replies. The key is stored encrypted in Core."
       >
         <VoiceSettings />
       </SettingsSection>
       <SettingsSection
         title="Voice & text"
-        description="How Luna's replies come out in chat. Saved in this browser."
+        description="How Venus's replies come out in chat. Saved in this browser."
       >
         <ReadingForm />
       </SettingsSection>
