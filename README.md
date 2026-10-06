@@ -1,157 +1,156 @@
 # Venus
 
-Venus is a personal AI platform designed around a portable Core, a native
-Windows Node, and a future web control center.
+Venus is a personal assistant for your Windows PC. You type or say
+"Hey Venus", and she opens apps, sites and code projects, chats with you
+through an AI model (Luna), remembers what you tell her and answers out loud.
+Everything runs on your own PC: nothing is hosted for you, and you bring your
+own API keys.
 
-## Current scope
+Parts:
 
-This is an early local-only learning build. The repository currently includes:
-
-- a FastAPI Core with `GET /health` and deterministic `POST /chat` endpoints;
-- a shared Python command contract for one allowlisted application: Spotify;
-- a Windows Node executor that validates command IDs, expiry, and target
-  device IDs before dispatch; and
-- local SQLite command records that prevent duplicate actions, including after
-  a Node restart.
-
-Core and Node also have an authenticated local WebSocket connection. Core can
-propose an Open Spotify command for a Node; after the owner approves it, Core
-sends it to the connected Node and the Node returns a typed result. The Node
-launches Spotify only when `VENUS_NODE_REAL_ACTIONS=true` is set in
-`apps/node/.env` (default `false`, which records a fake result).
-
-The explicit local developer command can request Windows to open Spotify using
-the Node's private `spotify:` target. It bypasses future confirmation policy
-and does not prove Spotify is healthy after Windows accepts the launch request.
-No other Windows application is allowlisted yet. A minimal Next.js web UI in
-`apps/web` can sign the owner in and out through Core. There is no paid AI
-provider or internet exposure.
+- **Core** (`apps/core`): FastAPI server, the brain. Saves chats, memories and
+  settings in PostgreSQL, talks to the AI and voice providers, sends commands
+  to your PC.
+- **Web** (`apps/web`): Next.js page at `http://localhost:3000`: chat,
+  settings, shortcuts.
+- **Node** (`apps/node`): the PC part. A tray app that runs commands on
+  Windows, listens for "Hey Venus" and shows the orb.
+- **Protocol** (`packages/venus-protocol`): message formats shared by Core and
+  Node.
 
 ## Requirements
 
-- Windows
-- Python 3.11+
-- Node.js 22+ (for the web UI)
+- Windows 10 or 11
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (runs
+  Postgres, Core and the web page)
+- [Python 3.11+](https://www.python.org/downloads/) (runs the PC part; tick
+  "Add python.exe to PATH")
+- Optional keys: [OpenAI](https://platform.openai.com/) for chat,
+  [Fish Audio](https://fish.audio/) for her voice. Without them Venus still
+  opens apps and sites from typed commands.
 
-## Local setup
+## Quick start
 
-Create one virtual environment for Core and one for Node. Run these commands
-from the repository root in PowerShell:
+```powershell
+git clone https://github.com/Umrkimy/Venus.git
+cd Venus
+.\setup-venus.cmd
+```
+
+Or double-click `setup-venus.cmd`. It:
+
+1. checks Docker and Python,
+2. writes `.env`, `apps/core/.env` and `apps/node/.env` with fresh random
+   secrets (files that already exist are kept, so it is safe to run again),
+3. installs the PC part into `apps/node/.venv`,
+4. downloads the "Hey Venus" speech model (Vosk, about 40 MB),
+5. builds and starts Venus in Docker (the first build takes a few minutes),
+6. asks for your username and password.
+
+Then open `http://localhost:3000`, sign in, and add your keys under
+**Settings** (they are saved encrypted in the database).
+
+## Everyday use
+
+Double-click `start-venus-use.cmd`. Postgres, Core and the web page run in
+Docker, restart by themselves after a crash, and come back after a reboot
+once Docker Desktop starts (Docker Desktop settings: "Start Docker Desktop
+when you sign in"). The tray icon is the PC part: right-click it for Open
+Venus, Mute mic, Stop talking, **Start with Windows** and Quit.
+
+Say "Hey Venus", then talk. "Thank you Venus" or "bye" ends the conversation;
+"stop Venus" interrupts her.
+
+After pulling new code, run `start-venus-use.cmd` again: it rebuilds the
+containers.
+
+## Settings files
+
+`setup-venus.ps1` writes these; the `.env.example` next to each explains
+every value. Never commit a `.env` file.
+
+| File | Holds |
+| --- | --- |
+| `.env` | Postgres password, backup folder (Docker Compose) |
+| `apps/core/.env` | Node and owner tokens, database URL, encryption key, fallback AI/voice keys |
+| `apps/node/.env` | This PC's name, the Node token (same as Core's), wake phrases, projects folder, mic |
+
+Common changes in `apps/node/.env`: `VENUS_NODE_PROJECTS_ROOT` (folder with
+your code projects, for "open project X"), `VENUS_NODE_WAKE_PHRASES`,
+`VENUS_NODE_MIC`. Restart the tray app afterwards (tray menu Quit, then
+`start-venus-use.cmd`).
+
+## Development mode
+
+For changing the code: Core and the web page run from source with
+auto-reload, Postgres stays in Docker. Also needs
+[Node.js 22+](https://nodejs.org/). One-time setup after `setup-venus.cmd`:
 
 ```powershell
 Push-Location apps/core
 py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m alembic upgrade head
 Pop-Location
 
 Push-Location apps/node
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+Pop-Location
+
+Push-Location apps/web
+npm ci
 Pop-Location
 ```
 
-Both Core and Node install the local `venus-protocol` package in editable mode.
-It defines the shared WebSocket message contracts.
+Then double-click `start-venus.cmd`. It stops the server-mode Core and web
+containers (same ports 9000 and 3000) and opens Core, Node, web and the
+"Hey Venus" listener as tabs of one Windows Terminal window. Quit the tray
+app first; it and the dev Node tabs cannot run at the same time. Run
+`.\.venv\Scripts\python.exe -m alembic upgrade head` in `apps/core` after
+pulling new database migrations (server mode does this by itself).
 
-## Local private configuration
+## Database backups
 
-Copy the placeholder files, then replace every placeholder with your own local
-values. Do not commit either `.env` file.
-
-```powershell
-Copy-Item apps/core/.env.example apps/core/.env
-Copy-Item apps/node/.env.example apps/node/.env
-```
-
-`apps/core/.env` needs two different secrets:
+Docker Compose runs a `backup` service next to Postgres. It saves one backup
+when it starts and then one per day, keeping the newest 7 daily and 4 weekly
+files:
 
 ```text
-VENUS_CORE_DEV_NODE_TOKEN=your-shared-development-node-token
-VENUS_CORE_DEV_OWNER_TOKEN=your-development-owner-token
+<backup folder>/daily/venus-YYYY-MM-DD.dump
+<backup folder>/weekly/venus-YYYY-Www.dump
 ```
 
-`apps/node/.env` needs the same Node token, plus its local identity and Core
-WebSocket URL:
+The backup folder is `./backups` in the repository unless you set
+`VENUS_BACKUP_DIR` in the root `.env` (see `.env.example`). Prefer a folder
+on another drive. `docker compose ps` shows the service as unhealthy when no
+backup is newer than 26 hours.
 
-```text
-VENUS_NODE_DEVICE_ID=your-device-id
-VENUS_NODE_CORE_DEV_TOKEN=your-shared-development-node-token
-VENUS_NODE_CORE_URL=ws://127.0.0.1:8000/nodes/connect
-```
-
-The Node token proves a Node may connect. The owner token protects the
-development-only fake HTTP dispatch route; never reuse the Node token for it.
-
-## Run Core
+To restore, run the script from the repository root (PowerShell; on Linux or
+macOS install `pwsh`). Try a backup safely on a throwaway database first:
 
 ```powershell
-Set-Location apps/core
-.\.venv\Scripts\python.exe -m uvicorn main:app --reload
+.\scripts\restore-db.ps1 -File backups\daily\venus-2026-10-06.dump -Target venus_restore_test
 ```
 
-Open `http://127.0.0.1:8000/docs` to try the fake Core endpoints.
+Without `-Target` it replaces the live `venus` database. It asks you to type
+`RESTORE`, saves the current database as `pre-restore-<time>.dump` next to
+the backup file, and stops Core while restoring (close Core yourself in
+development mode).
 
-## Run the web UI
+## Troubleshooting
 
-Start Core first. Then install and start the web app:
-
-```powershell
-Set-Location apps/web
-npm install
-npm run dev
-```
-
-Open `http://localhost:3000/login`. The web app forwards `/api/*` to Core, so
-the browser only talks to one origin and the session cookie works without
-CORS. Core defaults to `http://127.0.0.1:8000`; to point elsewhere, copy
-`apps/web/.env.example` to `apps/web/.env.local` and set `CORE_URL`.
-
-## Run the authenticated fake Node connection
-
-Start Core first, then run this in a second PowerShell window:
-
-```powershell
-Set-Location apps/node
-.\.venv\Scripts\python.exe -m venus_node.dev_connect
-```
-
-The Node prints `Core confirmed Node: ...` after the authenticated hello.
-
-With Core and Node running, use the web UI, or a third PowerShell window, to
-propose a command (today only `spotify` is allowed). Replace the placeholder with the value in
-`apps/core/.env`:
-
-```powershell
-$headers = @{ Authorization = "Bearer your-development-owner-token" }
-Invoke-RestMethod -Method Post -Headers $headers `
-  -ContentType "application/json" -Body '{"application_id": "spotify"}' `
-  http://127.0.0.1:8000/nodes/your-device-id/commands
-```
-
-This creates a proposal that waits for approval. Approve it with
-`POST /commands/{command_id}/approval` and the body `{"approved": true}`.
-With real actions off, the Node records a fake result and does not launch
-Spotify.
-
-## Run the local app developer command
-
-Then run, with an AppID from `Get-StartApps`:
-
-```powershell
-Set-Location apps/node
-.\.venv\Scripts\python.exe -m venus_node.dev_run <AppID>
-```
-
-This intentionally asks Windows to open that app. It writes local command
-history to the Git-ignored `apps/node/data/node.db` and prints the command
-result. Use it only as a local developer check; it bypasses future Core policy,
-confirmation, and network authentication.
+- **Port 5432, 9000 or 3000 in use**: another Postgres, or dev mode and server
+  mode at once. Stop the other one. After a reboot Windows can reserve 5432;
+  in an admin terminal run `net stop winnat` then `net start winnat`.
+- **"password authentication failed"**: the Postgres data was created with an
+  older password than the one in `.env`. Put the old password back, or (this
+  deletes all Venus data) `docker compose down -v` and run setup again.
+- **Tray app does nothing**: see `apps/node/data/venus-node.log`.
+- **Mic in the browser**: only works on `localhost` or HTTPS.
+- Never use Docker Desktop's "Reset to factory defaults": it deletes the
+  database volume. Restore from a backup if it happens.
 
 ## Tests
-
-Run each suite from the indicated directory:
 
 ```powershell
 # Core
@@ -165,46 +164,19 @@ Set-Location ../node
 # Shared protocol, from the repository root
 Set-Location ../..
 .\apps\node\.venv\Scripts\python.exe -m pytest packages/venus-protocol/tests
+
+# Web
+Set-Location apps/web
+npx tsc --noEmit
+npm run lint
 ```
 
-## Database backups
+## Safety
 
-Docker Compose runs a `backup` service next to Postgres (needs Docker
-Desktop, or Docker Engine 25+). It saves one backup when it starts and then
-one per day, keeping the newest 7 daily and 4 weekly files:
-
-```text
-<backup folder>/daily/venus-YYYY-MM-DD.dump
-<backup folder>/weekly/venus-YYYY-Www.dump
-```
-
-The backup folder is `./backups` in the repository unless you set
-`VENUS_BACKUP_DIR` in the root `.env` (see `.env.example`). Prefer a folder
-on another drive. Start it with Postgres:
-
-```powershell
-docker compose up -d --wait postgres backup
-```
-
-`docker compose ps` shows the service as unhealthy when no backup is newer
-than 26 hours.
-
-To restore, run the script from the repository root (PowerShell; on Linux or
-macOS install `pwsh`). Try a backup safely on a throwaway database first:
-
-```powershell
-.\scripts\restore-db.ps1 -File backups\daily\venus-2026-10-06.dump -Target venus_restore_test
-```
-
-Without `-Target` it replaces the live `venus` database. It asks you to type
-`RESTORE`, saves the current database as `pre-restore-<time>.dump` next to
-the backup file, and stops Core while restoring (close Core yourself if you
-run it outside Docker).
-
-## Safety boundary
-
-Core may request a fake allowlisted action only after a development-owner token
-check. The Windows Node owns the private Windows-specific application mapping
-and independently validates each command. The current local app developer
-command reports that Windows accepted the launch request; it does not claim
-the app is healthy.
+- Core, web and Postgres listen on `127.0.0.1` only; nothing is reachable from
+  other devices.
+- PC actions need your approval in the chat unless you switch Settings to Full
+  mode. The Node checks every command again before running it.
+- API keys saved in Settings are encrypted with `VENUS_CORE_SECRET_KEY`; the
+  page never shows them back.
+- One shared Node token today; per-device tokens are planned.
