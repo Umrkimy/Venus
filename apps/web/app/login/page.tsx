@@ -48,7 +48,11 @@ export default function LoginPage() {
         Sign in to Venus
       </h1>
 
-      <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
+      <form
+        method="post"
+        onSubmit={handleSubmit}
+        className="mt-8 flex flex-col gap-6"
+      >
         <div className="flex flex-col gap-2">
           <label htmlFor="username" className="text-sm font-medium">
             Username
