@@ -6,9 +6,9 @@ from features.chat.prompt import BASE_PROMPT, build_instructions, now_line, plai
 
 
 def test_build_instructions_stacks_base_personality_then_project():
-    text = build_instructions("Be flirty.", "Help with my Java assignment.")
+    text = build_instructions("Be cheerful.", "Help with my Java assignment.")
 
-    assert text == f"{BASE_PROMPT}\n\nBe flirty.\n\nHelp with my Java assignment."
+    assert text == f"{BASE_PROMPT}\n\nBe cheerful.\n\nHelp with my Java assignment."
 
 
 def test_build_instructions_skips_empty_parts():
@@ -16,14 +16,14 @@ def test_build_instructions_skips_empty_parts():
 
 
 def test_build_instructions_lists_sites_and_folders_after_base_rules():
-    text = build_instructions("Be flirty.", None, ["youtube", "comix"], ["Venus"])
+    text = build_instructions("Be cheerful.", None, ["youtube", "comix"], ["Venus"])
     parts = text.split("\n\n")
 
     assert parts[0] == BASE_PROMPT
     assert parts[1].startswith("Saved sites: comix, youtube.")
     assert "search_site" in parts[1]
     assert parts[2].startswith("Project folders on the PC: Venus.")
-    assert parts[3] == "Be flirty."
+    assert parts[3] == "Be cheerful."
 
 
 def test_sites_line_keeps_open_and_search_of_one_site_to_one_call():
@@ -34,11 +34,11 @@ def test_sites_line_keeps_open_and_search_of_one_site_to_one_call():
 
 
 def test_build_instructions_lists_owner_facts_before_personality():
-    text = build_instructions("Be flirty.", None, memories=["Owner name is Umar."])
+    text = build_instructions("Be cheerful.", None, memories=["Owner name is Umar."])
     parts = text.split("\n\n")
 
     assert parts[1] == "What you know about the owner: Owner name is Umar."
-    assert parts[2] == "Be flirty."
+    assert parts[2] == "Be cheerful."
 
 
 def test_build_instructions_without_facts_has_no_owner_line():
