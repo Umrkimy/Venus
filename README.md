@@ -158,6 +158,30 @@ It prints an address like `https://my-pc.tailnet-name.ts.net`. Open it on the
 phone with the Tailscale app connected and log in as usual. Sharing stays on
 after a reboot; `.\scripts\phone-access.ps1 -Off` stops it.
 
+## Devices (PC tokens)
+
+Each PC running the Venus Node has its own token. Settings, Devices lists
+them with when each was last seen, and Revoke cuts one off at once without
+touching the others. Revoked PCs can then be deleted from the list.
+
+- The token that `setup-venus.ps1` writes (`VENUS_CORE_DEV_NODE_TOKEN`) shows
+  up as "Main PC" the first time the Node connects. The main PC can't be
+  revoked from the web, so a stolen phone login can't cut it off. To replace
+  its token, change it in both `apps/core/.env` and `apps/node/.env` and
+  restart; the old main token then stops working.
+- A token works for one PC only: it is locked to the first `VENUS_NODE_DEVICE_ID`
+  that uses it, so a copied token can't pretend to be another PC.
+- Add device gives a new token once. Put it in that PC's `apps/node/.env` as
+  `VENUS_NODE_CORE_DEV_TOKEN`. Core keeps only a hash of it.
+- A revoked token stays revoked. To use that PC again, add it as a new device.
+
+The same page lists every signed-in browser (for example "iPhone · Safari")
+with when it was last active. Sign out ends one login at once; "Sign out all
+other browsers" is for a lost phone. Logins end by themselves after 7 days.
+
+Core only listens on this PC for now, so a second PC can't reach it yet; that
+comes with remote Nodes later.
+
 ## Troubleshooting
 
 - **Port 5432, 9000 or 3000 in use**: another Postgres, or dev mode and server
@@ -200,4 +224,5 @@ npm run lint
   mode. The Node checks every command again before running it.
 - API keys saved in Settings are encrypted with `VENUS_CORE_SECRET_KEY`; the
   page never shows them back.
-- One shared Node token today; per-device tokens are planned.
+- Each PC has its own Node token, stored only as a hash; revoke one in
+  Settings, Devices.

@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-import hmac
 from json import JSONDecodeError
 from typing import Annotated
 from uuid import UUID, uuid4
@@ -18,7 +17,14 @@ from venus_protocol.schemas.commands import (
 )
 from venus_protocol.schemas.connections import NodeHello
 
-from features.auth.dependencies import require_owner, require_owner_or_node
+from features.auth.dependencies import (
+    get_auth_repository,
+    node_device_for_header,
+    require_owner,
+    require_owner_or_node,
+)
+from features.auth.models.node_device import MAX_DEVICE_ID_LENGTH
+from features.auth.repository import AuthRepository
 from features.chat.dependencies import get_chat_provider
 from features.chat.prompt import build_instructions, now_line
 from features.chat.provider import ChatProvider
@@ -152,12 +158,13 @@ async def connect_node(
         CommandRecordRepository,
         Depends(get_command_record_repository),
     ],
+    auth_repository: Annotated[AuthRepository, Depends(get_auth_repository)],
 ):
-    authorization = websocket.headers.get("authorization", "")
-    expected_authorization = f"Bearer {settings.dev_node_token}"
-
-    # Compare secrets safely even when an attacker controls the header.
-    if not hmac.compare_digest(authorization, expected_authorization):
+    # Each PC has its own token (Settings, Devices); revoked ones stop here.
+    device = node_device_for_header(
+        websocket.headers.get("authorization", ""), settings, auth_repository
+    )
+    if device is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -169,6 +176,13 @@ async def connect_node(
     except WebSocketDisconnect:
         return
     except (JSONDecodeError, KeyError, ValidationError):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    # A token works for one device only, so a copied token can't pose as another PC.
+    if len(hello.device_id) > MAX_DEVICE_ID_LENGTH or not auth_repository.claim_node_device(
+        device, hello.device_id, datetime.now(timezone.utc)
+    ):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 

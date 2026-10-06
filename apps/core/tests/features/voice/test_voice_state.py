@@ -9,6 +9,7 @@ from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
 from features.voice.live import LiveVoice, get_live_voice
 from main import app
+from storage.base import Base
 
 OWNER_HEADERS = {"Authorization": "Bearer test-owner-token"}
 NODE_HEADERS = {"Authorization": "Bearer test-node-token"}
@@ -42,6 +43,7 @@ def live(clock: Clock) -> LiveVoice:
     # A throwaway database for logins: without it the real one (and .env) is used,
     # which CI doesn't have.
     engine = create_engine("sqlite+pysqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
     app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
     app.dependency_overrides[get_live_voice] = lambda: fake
     yield fake
