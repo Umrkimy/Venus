@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   // The Docker image (server mode) runs a small standalone server. Local
   // `next build` + `next start` stay as they are.
   output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
+  // Dev mode only: let the phone open it through Tailscale
+  // (scripts/phone-access.ps1).
+  allowedDevOrigins: ["*.ts.net"],
   // /settings has no page of its own; open the first page in its menu.
   async redirects() {
     return [
