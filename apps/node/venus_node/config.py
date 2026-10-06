@@ -3,7 +3,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
-WAKE_PHRASES = ("hey venus", "venus", "hey love")
+WAKE_PHRASES = ("hey venus", "venus")
 WEB_URL = "http://localhost:3000"
 
 

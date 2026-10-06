@@ -139,7 +139,7 @@ def test_load_settings_wake_defaults_to_vosk_and_venus_phrases(tmp_path: Path):
     settings = load_settings(env_file)
 
     assert settings.wake_model == "models/vosk-model-small-en-us-0.15"
-    assert settings.wake_phrases == ["hey venus", "venus", "hey love"]
+    assert settings.wake_phrases == ["hey venus", "venus"]
 
 
 def test_load_settings_reads_wake_model_and_phrases(tmp_path: Path):
