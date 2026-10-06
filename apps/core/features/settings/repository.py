@@ -3,11 +3,13 @@ from sqlalchemy.orm import Session
 
 from features.settings.models.command_mode import CommandModeSetting
 from features.settings.models.llm import LlmSetting
+from features.settings.models.time import TimeSetting
 from features.settings.models.voice import VoiceSetting
 
 MODE_ROW_ID = 1
 LLM_ROW_ID = 1
 VOICE_ROW_ID = 1
+TIME_ROW_ID = 1
 
 
 class SettingsRepository:
@@ -83,4 +85,13 @@ class SettingsRepository:
                 # No new key means "keep the saved one".
                 if api_key_encrypted is not None:
                     row.api_key_encrypted = api_key_encrypted
+            session.commit()
+
+    def get_time(self) -> TimeSetting | None:
+        with Session(self.engine) as session:
+            return session.get(TimeSetting, TIME_ROW_ID)
+
+    def set_time(self, time_zone: str, country: str) -> None:
+        with Session(self.engine) as session:
+            session.merge(TimeSetting(id=TIME_ROW_ID, time_zone=time_zone, country=country))
             session.commit()

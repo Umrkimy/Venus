@@ -20,7 +20,7 @@ from venus_protocol.schemas.connections import NodeHello
 
 from features.auth.dependencies import require_owner, require_owner_or_node
 from features.chat.dependencies import get_chat_provider
-from features.chat.prompt import build_instructions
+from features.chat.prompt import build_instructions, now_line
 from features.chat.provider import ChatProvider
 from features.chat.schemas import ChatRequest
 from features.conversations.dependencies import get_conversation_repository
@@ -565,6 +565,7 @@ async def chat(
             folders,
             memories,
             full_mode,
+            local_now(settings_repository),
         )
 
     # Rules answer first; the brain only gets what they don't understand.
@@ -649,6 +650,7 @@ def chat_instructions(
     folders: list[str],
     memories: MemoryRepository,
     full_mode: bool = True,
+    now: str | None = None,
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -664,6 +666,17 @@ def chat_instructions(
         folders,
         [memory.text for memory in memories.newest(50)],
         approve_first=not full_mode,
+        now=now,
+    )
+
+
+def local_now(settings_repository: SettingsRepository) -> str:
+    # Core's own clock is UTC in Docker; the owner's zone comes from Settings.
+    saved = settings_repository.get_time()
+    return now_line(
+        datetime.now(timezone.utc),
+        saved.time_zone if saved is not None else None,
+        saved.country if saved is not None else "",
     )
 
 

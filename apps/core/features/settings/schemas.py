@@ -1,6 +1,7 @@
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CommandModeRequest(BaseModel):
@@ -27,3 +28,20 @@ class VoiceSettingsRequest(BaseModel):
     voice_id: str = Field(max_length=100)
     model: FishModel
     api_key: str | None = Field(default=None, max_length=500)
+
+
+class TimeSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    time_zone: str = Field(min_length=1, max_length=64)
+    country: str = Field(default="", max_length=60)
+
+    @field_validator("time_zone")
+    @classmethod
+    def known_time_zone(cls, value: str) -> str:
+        # Only names Python's time zone list knows, so Core can always use it.
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("Unknown time zone") from None
+        return value
