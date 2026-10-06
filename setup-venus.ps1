@@ -185,7 +185,12 @@ if ([int]$owners -gt 0) {
 } else {
     Write-Host "Choose a username and a password (12+ characters) for the web page."
     for ($try = 1; $try -le 3; $try++) {
-        $username = Read-Host "Username"
+        $username = (Read-Host "Username").Trim()
+        if (-not $username) {
+            if ($try -eq 3) { throw "No account created. Run setup-venus.cmd again." }
+            Write-Host "Username cannot be empty."
+            continue
+        }
         # Interactive, so the password is typed hidden inside the container.
         docker compose --project-directory $root exec core `
             python -m features.auth.create_owner $username
