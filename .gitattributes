@@ -1,3 +1,7 @@
 # Shell scripts run inside Linux containers: keep LF even on Windows
 # checkouts (core.autocrlf would turn them into CRLF and break sh).
 *.sh text eol=lf
+
+# Windows scripts keep CRLF, whatever git setting the cloner has.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
