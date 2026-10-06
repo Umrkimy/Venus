@@ -5,12 +5,15 @@ from collections.abc import Callable
 from venus_protocol.schemas.commands import CommandResult
 
 from websockets.asyncio.client import connect
-from websockets.exceptions import ConnectionClosedError, InvalidHandshake
+from websockets.exceptions import ConnectionClosedError, InvalidHandshake, InvalidStatus
 
 from venus_node.config import NodeSettings
 from venus_node.connection.messages import receive_and_execute_commands
 from venus_node.commands.start_apps import StartApp
 from venus_protocol.schemas.connections import NodeApp, NodeHello
+
+# Core said no to the token (revoked or wrong): no point asking every second.
+REFUSED_RETRY_SECONDS = 30
 
 
 async def connect_to_core(
@@ -70,6 +73,7 @@ async def keep_connected(
     list_projects: Callable[[], list[str]] | None = None,
 ) -> None:
     while True:
+        delay = 1
         try:
             await connect_to_core(
                 settings,
@@ -78,6 +82,11 @@ async def keep_connected(
                 list_apps=list_apps,
                 list_projects=list_projects,
             )
+        except InvalidStatus as error:
+            if error.response.status_code == 403:
+                delay = REFUSED_RETRY_SECONDS
+            if on_retry is not None:
+                on_retry()
         # InvalidHandshake: Docker's port forwarder answers while the Core
         # container restarts, then hangs up before Core can reply.
         except (OSError, ConnectionClosedError, InvalidHandshake):
@@ -85,4 +94,4 @@ async def keep_connected(
                 on_retry()
 
         # Local connections can drop normally, so wait briefly before reconnecting.
-        await asyncio.sleep(1)
+        await asyncio.sleep(delay)

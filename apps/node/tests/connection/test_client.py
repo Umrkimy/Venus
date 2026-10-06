@@ -12,7 +12,9 @@ from venus_node.commands.start_apps import StartApp
 from venus_protocol.schemas.commands import CommandResult
 from venus_protocol.schemas.connections import NodeApp, NodeHello
 from websockets.exceptions import ConnectionClosedError, InvalidMessage
-from websockets.exceptions import ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedOK, InvalidStatus
+from websockets.datastructures import Headers
+from websockets.http11 import Response
 
 
 def test_connect_to_core_sends_authenticated_hello(monkeypatch):
@@ -486,3 +488,30 @@ def test_connect_to_core_sends_projects_in_hello(monkeypatch):
 
     sent_hello = NodeHello.model_validate_json(sent_messages[0])
     assert sent_hello.projects == ["Venus"]
+
+
+def test_keep_connected_waits_longer_when_core_refuses_the_token(monkeypatch):
+    settings = NodeSettings(
+        device_id="laptop-1",
+        core_dev_token="revoked-token",
+        core_url="ws://core.test/nodes/connect",
+    )
+    retry_delays: list[int] = []
+    attempts: list[bool] = []
+
+    async def fake_connect_to_core(*args, **kwargs) -> NodeHello:
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise InvalidStatus(Response(403, "Forbidden", Headers()))
+        raise asyncio.CancelledError
+
+    async def fake_sleep(delay: int) -> None:
+        retry_delays.append(delay)
+
+    monkeypatch.setattr(core_connection, "connect_to_core", fake_connect_to_core)
+    monkeypatch.setattr(core_connection.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(core_connection.keep_connected(settings))
+
+    assert retry_delays == [core_connection.REFUSED_RETRY_SECONDS]
