@@ -11,7 +11,7 @@ from venus_node.config import NodeSettings
 from venus_node.commands.start_apps import StartApp
 from venus_protocol.schemas.commands import CommandResult
 from venus_protocol.schemas.connections import NodeApp, NodeHello
-from websockets.exceptions import ConnectionClosedError
+from websockets.exceptions import ConnectionClosedError, InvalidMessage
 from websockets.exceptions import ConnectionClosedOK
 
 
@@ -174,6 +174,43 @@ def test_keep_connected_retries_after_abnormal_disconnect(monkeypatch):
 
     assert connection_attempts == [settings, settings]
     assert retry_delays == [1]
+    assert retry_notifications == [True]
+
+
+def test_keep_connected_retries_while_core_container_restarts(monkeypatch):
+    # Docker accepts the connection and hangs up before Core answers.
+    settings = NodeSettings(
+        device_id="laptop-1",
+        core_dev_token="test-node-token",
+        core_url="ws://core.test/nodes/connect",
+    )
+    connection_attempts: list[NodeSettings] = []
+    retry_notifications: list[bool] = []
+
+    async def fake_connect_to_core(received_settings, on_connected=None,
+                                   execute_payload=None, list_apps=None,
+                                   list_projects=None):
+        connection_attempts.append(received_settings)
+        if len(connection_attempts) == 1:
+            raise InvalidMessage("did not receive a valid HTTP response")
+        raise asyncio.CancelledError
+
+    async def fake_sleep(delay: int) -> None:
+        pass
+
+    monkeypatch.setattr(core_connection, "connect_to_core", fake_connect_to_core)
+    monkeypatch.setattr(core_connection.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            core_connection.keep_connected(
+                settings,
+                on_retry=lambda: retry_notifications.append(True),
+            ),
+        )
+
+    # It tried again instead of the thread dying.
+    assert connection_attempts == [settings, settings]
     assert retry_notifications == [True]
 
 
