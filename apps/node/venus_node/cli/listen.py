@@ -209,6 +209,11 @@ def listen_loop(
             hear(settings, voice, listener, resume, status, stream, muted, mute, stopper)
 
 
+def web_in_front(status: Status) -> bool:
+    """A Venus tab is in front: the PC mic stays out (on PC just PC, on web just web)."""
+    return status.web_watching or status.web_listening
+
+
 def hear(
     settings: NodeSettings,
     voice: VoiceChat,
@@ -237,8 +242,8 @@ def hear(
         if muted.is_set() or status.closed:
             status.set(IDLE)
             return
-        if status.web_listening:
-            # Both mics would hear you and Venus would answer twice.
+        if web_in_front(status):
+            # On the web only the web listens, even when its mic is muted.
             paused = True
             continue
         if paused:
@@ -270,7 +275,7 @@ def hear(
             print(timer.report())
             # A conversation: keep listening without "Hey Venus" until you
             # say bye or stop, or go quiet.
-            while outcome is None and not (muted.is_set() or status.closed or status.web_listening):
+            while outcome is None and not (muted.is_set() or status.closed or web_in_front(status)):
                 status.set(LISTENING)
                 timer = Timer()
                 pcm = record_until_silence(

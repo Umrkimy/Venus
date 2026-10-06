@@ -380,6 +380,27 @@ def test_hear_ignores_hey_venus_while_the_web_listens(monkeypatch):
 
 
 
+def test_hear_ignores_hey_venus_while_a_muted_web_tab_is_in_front(monkeypatch):
+    # On the web only the web listens: its mute must not hand you back to the PC mic.
+    answered = []
+    monkeypatch.setattr(listen, "answer", lambda *args: answered.append(True))
+    status = Status()
+    status.set_web_watching(True)
+
+    frames = [0]
+
+    class ThreeFrames(FakeMic):
+        def read(self, size):
+            frames[0] += 1
+            if frames[0] > 3:
+                status.close()
+            return super().read(size)
+
+    listen.hear(SETTINGS, None, HearsOnce(), FakeListener(), status, ThreeFrames([]), Event())
+
+    assert answered == []
+
+
 def test_goodbye_gets_a_bye_from_luna_then_ends_the_conversation(monkeypatch):
     events, voice = setup(monkeypatch, text="Okay, goodbye.", reply="Bye babe.")
 

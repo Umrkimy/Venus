@@ -1,4 +1,6 @@
 import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # Fixed rules: editing a personality can't remove these.
 BASE_PROMPT = (
@@ -31,8 +33,9 @@ def build_instructions(
     folders: list[str] | None = None,
     memories: list[str] | None = None,
     approve_first: bool = False,
+    now: str | None = None,
 ) -> str:
-    """Base rules, what's on the PC and the owner, then who Venus is, then the project."""
+    """Base rules, what's on the PC and the owner, who Venus is, the project, then the time."""
     parts = [
         BASE_PROMPT,
         APPROVE_FIRST if approve_first else None,
@@ -41,8 +44,33 @@ def build_instructions(
         memories_line(memories or []),
         personality,
         project,
+        # Last: it changes every minute, and everything before it stays the
+        # same, so OpenAI can reuse (cache) that start of the prompt.
+        now,
     ]
     return "\n\n".join(part.strip() for part in parts if part and part.strip())
+
+
+def now_line(now_utc: datetime, time_zone: str | None, country: str = "") -> str:
+    """The owner's date and time, so Luna never guesses them."""
+    if not time_zone:
+        return (
+            f"Right now it is {spoken_time(now_utc)} UTC. The owner has not set "
+            "a time zone yet: if they ask the time, give it in UTC and say they "
+            "can set theirs in Settings, General."
+        )
+    local = now_utc.astimezone(ZoneInfo(time_zone))
+    line = f"Right now for the owner it is {spoken_time(local)} ({time_zone})."
+    if country:
+        line += f" The owner lives in {country}."
+    return line + " Use this for anything about the time, the date or the day."
+
+
+def spoken_time(moment: datetime) -> str:
+    # "Tuesday 6 October 2026, 2:30 PM": no leading zeros, no 24-hour clock.
+    hour = moment.hour % 12 or 12
+    half = "AM" if moment.hour < 12 else "PM"
+    return f"{moment:%A} {moment.day} {moment:%B %Y}, {hour}:{moment:%M} {half}"
 
 
 def sites_line(sites: list[str]) -> str | None:

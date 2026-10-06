@@ -230,3 +230,43 @@ def test_voice_settings_require_owner():
 
     assert get.status_code == 401
     assert put.status_code == 401
+
+
+def test_time_settings_start_empty():
+    response = client.get("/settings/time", headers=OWNER_HEADERS)
+
+    assert response.status_code == 200
+    # No time zone yet: the web offers the browser's own.
+    assert response.json() == {"time_zone": None, "country": ""}
+
+
+def test_time_settings_put_is_remembered():
+    response = client.put(
+        "/settings/time",
+        json={"time_zone": "Asia/Kuala_Lumpur", "country": " Malaysia "},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == 200
+    saved = {"time_zone": "Asia/Kuala_Lumpur", "country": "Malaysia"}
+    assert response.json() == saved
+    assert client.get("/settings/time", headers=OWNER_HEADERS).json() == saved
+
+
+def test_time_settings_reject_unknown_time_zone():
+    response = client.put(
+        "/settings/time",
+        json={"time_zone": "Mars/Olympus_Mons", "country": ""},
+        headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == 422
+
+
+def test_time_settings_require_owner():
+    get = client.get("/settings/time")
+    put = client.put("/settings/time", json={"time_zone": "UTC"})
+
+    assert get.status_code == 401
+    assert put.status_code == 401
+

@@ -1628,7 +1628,8 @@ def test_chat_moved_into_project_uses_its_instructions(
             headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
         )
 
-    assert brain.instructions.endswith("Explain step by step.")
+    # The project comes right before the time line, which is always last.
+    assert "Explain step by step.\n\nRight now it is" in brain.instructions
 
 
 class MemoryBrain:

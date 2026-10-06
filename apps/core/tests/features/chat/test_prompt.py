@@ -1,6 +1,8 @@
+from datetime import datetime, timezone
+
 import pytest
 
-from features.chat.prompt import BASE_PROMPT, build_instructions, plain_punctuation
+from features.chat.prompt import BASE_PROMPT, build_instructions, now_line, plain_punctuation
 
 
 def test_build_instructions_stacks_base_personality_then_project():
@@ -81,4 +83,32 @@ def test_base_prompt_says_earlier_requests_are_done():
     # Real-model check (S18): "thanks" after "open comix" re-opened Comix 2 of 2
     # times without this rule, 0 of 6 with it; "open it again" still opened (4 of 4).
     assert "never to redo an earlier one" in BASE_PROMPT
+
+
+def test_now_line_gives_the_owners_local_time_and_country():
+    # 06:30 UTC is 2:30 PM in Kuala Lumpur (UTC+8).
+    now = datetime(2026, 10, 6, 6, 30, tzinfo=timezone.utc)
+
+    line = now_line(now, "Asia/Kuala_Lumpur", "Malaysia")
+
+    assert "Tuesday 6 October 2026, 2:30 PM (Asia/Kuala_Lumpur)" in line
+    assert "lives in Malaysia" in line
+
+
+def test_now_line_without_time_zone_says_utc_and_where_to_set_it():
+    now = datetime(2026, 10, 6, 0, 5, tzinfo=timezone.utc)
+
+    line = now_line(now, None)
+
+    assert "Tuesday 6 October 2026, 12:05 AM UTC" in line
+    assert "Settings" in line
+
+
+def test_build_instructions_puts_the_time_last():
+    instructions = build_instructions(
+        "Personality.", "Project.", now="Right now it is noon.",
+    )
+
+    # Last, so the unchanging start of the prompt can be cached.
+    assert instructions.endswith("Right now it is noon.")
 

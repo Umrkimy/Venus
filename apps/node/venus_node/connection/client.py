@@ -5,7 +5,7 @@ from collections.abc import Callable
 from venus_protocol.schemas.commands import CommandResult
 
 from websockets.asyncio.client import connect
-from websockets.exceptions import ConnectionClosedError
+from websockets.exceptions import ConnectionClosedError, InvalidHandshake
 
 from venus_node.config import NodeSettings
 from venus_node.connection.messages import receive_and_execute_commands
@@ -78,7 +78,9 @@ async def keep_connected(
                 list_apps=list_apps,
                 list_projects=list_projects,
             )
-        except (OSError, ConnectionClosedError):
+        # InvalidHandshake: Docker's port forwarder answers while the Core
+        # container restarts, then hangs up before Core can reply.
+        except (OSError, ConnectionClosedError, InvalidHandshake):
             if on_retry is not None:
                 on_retry()
 

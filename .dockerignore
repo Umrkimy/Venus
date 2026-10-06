@@ -1,0 +1,16 @@
+# Keep the Core image small and free of secrets (build context = repo root).
+.git
+**/.env
+**/.env.*
+**/.venv
+**/__pycache__
+**/*.egg-info
+**/node_modules
+**/.next
+docs
+.claude
+.vibe-wise
+apps/node
+apps/web
+apps/core/tests
+packages/venus-protocol/tests

@@ -15,6 +15,7 @@ from features.personalities.models.personality import Personality
 from features.memories.models.memory import Memory
 from features.settings.models.command_mode import CommandModeSetting
 from features.settings.models.llm import LlmSetting
+from features.settings.models.time import TimeSetting
 from features.settings.models.voice import VoiceSetting
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from storage.base import Base

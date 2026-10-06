@@ -6,11 +6,13 @@ from config import CoreSettings, get_settings
 from features.auth.dependencies import require_owner
 from features.settings.dependencies import get_settings_repository
 from features.settings.models.llm import LlmSetting
+from features.settings.models.time import TimeSetting
 from features.settings.models.voice import VoiceSetting
 from features.settings.repository import SettingsRepository
 from features.settings.schemas import (
     CommandModeRequest,
     LlmSettingsRequest,
+    TimeSettingsRequest,
     VoiceSettingsRequest,
 )
 from features.settings.secrets import encrypt_text
@@ -133,3 +135,32 @@ def set_voice_settings(
         request.voice_id.strip(), request.model, api_key_encrypted,
     )
     return voice_settings_json(settings_repository.get_voice(), settings)
+
+
+def time_settings_json(saved: TimeSetting | None) -> dict:
+    # Nothing saved yet: the web suggests the browser's time zone.
+    if saved is None:
+        return {"time_zone": None, "country": ""}
+    return {"time_zone": saved.time_zone, "country": saved.country}
+
+
+@router.get("/time", dependencies=[Depends(require_owner)])
+def get_time_settings(
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
+    ],
+):
+    return time_settings_json(settings_repository.get_time())
+
+
+@router.put("/time", dependencies=[Depends(require_owner)])
+def set_time_settings(
+    request: TimeSettingsRequest,
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
+    ],
+):
+    settings_repository.set_time(request.time_zone, request.country.strip())
+    return time_settings_json(settings_repository.get_time())
