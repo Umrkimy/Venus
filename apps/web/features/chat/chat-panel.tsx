@@ -257,6 +257,7 @@ export default function ChatPanel({
         emptyState={emptyState}
         thinking={sending || thinkingElsewhere}
         listening={(voiceHere && voice.state === "listening") || handsFree.phase === "recording"}
+        liveWords={handsFree.words}
         localVoice={localVoice}
         onStopVoice={stopVoice}
       />

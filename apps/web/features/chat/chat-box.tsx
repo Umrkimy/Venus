@@ -30,7 +30,10 @@ export type ChatMessage = {
 function lettersSaid(speaking: Speaking | null, id: number): number | null {
   if (!speaking || speaking.id !== id || !speaking.typing) return null;
   const before = speaking.lines.slice(0, speaking.line).join("").length;
-  return before + Math.round(speaking.lines[speaking.line].length * speaking.fraction);
+  return (
+    before +
+    Math.round(speaking.lines[speaking.line].length * speaking.fraction)
+  );
 }
 
 type ChatBoxProps = {
@@ -46,6 +49,8 @@ type ChatBoxProps = {
   thinking?: boolean;
   // You're talking to Venus right now; your words land here next.
   listening?: boolean;
+  // What you've said so far, shown live in your bubble (browser speech only).
+  liveWords?: string;
   // Hands-free in this tab (null when off), and how to stop its turn.
   localVoice?: VoiceStateName | null;
   onStopVoice?: () => void;
@@ -67,7 +72,12 @@ function Dots() {
 
 function ThinkingLine() {
   return (
-    <motion.li {...fadeUp} transition={springSoft} role="status" className="flex items-center gap-2 text-sm text-foreground/70">
+    <motion.li
+      {...fadeUp}
+      transition={springSoft}
+      role="status"
+      className="flex items-center gap-2 text-sm text-foreground/70"
+    >
       <span>Venus is thinking</span>
       <Dots />
     </motion.li>
@@ -76,7 +86,20 @@ function ThinkingLine() {
 
 // Your side of the chat while you speak: a bubble that fills in with your words
 // once they're heard.
-function ListeningLine() {
+function ListeningLine({ words }: { words: string }) {
+  if (words) {
+    return (
+      <motion.li
+        {...fadeUp}
+        transition={springSoft}
+        role="status"
+        className="ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap text-foreground/70"
+      >
+        <span className="sr-only">You: </span>
+        {words}
+      </motion.li>
+    );
+  }
   return (
     <motion.li
       {...fadeUp}
@@ -99,6 +122,7 @@ export default function ChatBox({
   emptyState,
   thinking = false,
   listening = false,
+  liveWords = "",
   localVoice = null,
   onStopVoice = () => {},
 }: ChatBoxProps) {
@@ -111,7 +135,7 @@ export default function ChatBox({
   const speakingLine = speaker.speaking?.line;
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, speakingLine, thinking, listening]);
+  }, [messages.length, speakingLine, thinking, listening, liveWords]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,69 +145,80 @@ export default function ChatBox({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-4 py-4">
-          {messages.length === 0 && !listening && !thinking ? (
-            (emptyState ?? (
-              <p className="mt-16 text-center text-3xl font-semibold tracking-tight text-balance">
-                What can I do for you?
-              </p>
-            ))
-          ) : (
-            <ul role="log" className="space-y-5">
-              {/* Messages are only ever added, so the position is a safe key. */}
-              {messages.map((message, index) => (
-                <motion.li
-                  key={index}
-                  {...fadeUp}
-                  transition={{
-                    ...springSoft,
-                    delay: message.live ? 0 : staggerDelay(index),
-                  }}
-                  className={
-                    message.from === "you"
-                      ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap"
-                      : "group max-w-[85%] break-words whitespace-pre-wrap drop-shadow-sm"
-                  }
-                >
-                  <span className="sr-only">
-                    {message.from === "you" ? "You: " : "Venus: "}
-                  </span>
-                  {/* What Venus did comes first, then what she says about it. */}
-                  {message.actions && message.actions.length > 0 && (
-                    <ActionCard
-                      actions={message.actions}
-                      startOpen={message.live ?? false}
-                    />
-                  )}
-                  {message.reveal ? (
-                    <TypedText
-                      text={message.text}
-                      reveal={message.reveal}
-                      said={lettersSaid(speaker.speaking, index)}
-                      speed={reading.textSpeed}
-                      instant={reading.instantText}
-                    />
-                  ) : (
-                    message.text
-                  )}
-                  {message.from === "venus" && message.text && (
-                    <ReplayButton
-                      onReplay={() => speaker.replay(index, message.text)}
-                      playing={speaker.speaking?.id === index}
-                    />
-                  )}
-                </motion.li>
-              ))}
-              {listening && <ListeningLine />}
-              {thinking && <ThinkingLine />}
-              <li ref={endRef} aria-hidden="true" />
-            </ul>
-          )}
+      {/* The orb floats over the bottom of the chat instead of taking a row:
+          messages scroll behind it and fade out there. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto [mask-image:linear-gradient(to_bottom,black_calc(100%-7rem),transparent)]">
+          <div className="mx-auto w-full max-w-3xl px-4 pt-4 pb-32">
+            {messages.length === 0 && !listening && !thinking ? (
+              (emptyState ?? (
+                <p className="mt-16 text-center text-3xl font-semibold tracking-tight text-balance">
+                  What can I do for you?
+                </p>
+              ))
+            ) : (
+              <ul role="log" className="space-y-5">
+                {/* Messages are only ever added, so the position is a safe key. */}
+                {messages.map((message, index) => (
+                  <motion.li
+                    key={index}
+                    {...fadeUp}
+                    transition={{
+                      ...springSoft,
+                      delay: message.live ? 0 : staggerDelay(index),
+                    }}
+                    className={
+                      message.from === "you"
+                        ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap"
+                        : "group max-w-[85%] break-words whitespace-pre-wrap drop-shadow-sm"
+                    }
+                  >
+                    <span className="sr-only">
+                      {message.from === "you" ? "You: " : "Venus: "}
+                    </span>
+                    {/* What Venus did comes first, then what she says about it. */}
+                    {message.actions && message.actions.length > 0 && (
+                      <ActionCard
+                        actions={message.actions}
+                        startOpen={message.live ?? false}
+                      />
+                    )}
+                    {message.reveal ? (
+                      <TypedText
+                        text={message.text}
+                        reveal={message.reveal}
+                        said={lettersSaid(speaker.speaking, index)}
+                        speed={reading.textSpeed}
+                        instant={reading.instantText}
+                      />
+                    ) : (
+                      message.text
+                    )}
+                    {message.from === "venus" && message.text && (
+                      <ReplayButton
+                        onReplay={() => speaker.replay(index, message.text)}
+                        playing={speaker.speaking?.id === index}
+                      />
+                    )}
+                  </motion.li>
+                ))}
+                {(listening || liveWords) && (
+                  <ListeningLine words={liveWords} />
+                )}
+                {thinking && <ThinkingLine />}
+                <li ref={endRef} aria-hidden="true" />
+              </ul>
+            )}
+          </div>
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0">
+          <VoiceOrb local={localVoice} onStopLocal={onStopVoice} />
         </div>
       </div>
-      <VoiceOrb local={localVoice} onStopLocal={onStopVoice} />
-      <form onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl px-4 pb-3">
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto w-full max-w-3xl px-4 pb-3"
+      >
         <label htmlFor="chat-input" className="sr-only">
           Message Venus
         </label>
