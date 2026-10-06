@@ -47,6 +47,62 @@ export type Speaking = {
   typing: boolean;
 };
 
+// The iPhone only plays sound right after a tap, and it remembers that per
+// audio player. So Venus keeps one player and plays a moment of silence on
+// your first tap; after that it may speak replies that come by voice.
+let sharedPlayer: HTMLAudioElement | null = null;
+let unlocked = false;
+
+function player(): HTMLAudioElement {
+  sharedPlayer ??= new Audio();
+  return sharedPlayer;
+}
+
+// 0.1 s of silence as a tiny WAV file (8 kHz, 8-bit, mono).
+function silence(): string {
+  const samples = 800;
+  const bytes = new Uint8Array(44 + samples);
+  const view = new DataView(bytes.buffer);
+  const text = (at: number, value: string) =>
+    [...value].forEach((char, index) =>
+      view.setUint8(at + index, char.charCodeAt(0)),
+    );
+  text(0, "RIFF");
+  view.setUint32(4, 36 + samples, true);
+  text(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // plain PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, 8000, true);
+  view.setUint32(28, 8000, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  text(36, "data");
+  view.setUint32(40, samples, true);
+  bytes.fill(128, 44); // 128 is silence for 8-bit sound
+  return URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+}
+
+function unlock() {
+  const audio = player();
+  // Playing already means the phone allows it.
+  if (unlocked || !audio.paused) return;
+  audio.src = silence();
+  audio.play().then(
+    () => {
+      unlocked = true;
+      audio.pause();
+    },
+    () => {},
+  );
+}
+
+if (typeof window !== "undefined") {
+  for (const type of ["pointerdown", "keydown", "touchend"]) {
+    window.addEventListener(type, unlock, { capture: true, passive: true });
+  }
+}
+
 // Core said why it couldn't speak, e.g. "Voice reply needs a Fish Audio key".
 class VoiceError extends Error {}
 
@@ -104,15 +160,18 @@ export function useSpeaker() {
   // Plays one mp3. True when it played to the end; false when stopped or blocked.
   function playLine(blob: Blob, onProgress: (fraction: number) => void) {
     return new Promise<boolean>((resolve) => {
-      const audio = new Audio(URL.createObjectURL(blob));
+      const audio = player();
+      const url = URL.createObjectURL(blob);
+      audio.src = url;
       audio.volume = volume;
       audioRef.current = audio;
       let frame = 0;
       const finish = (ended: boolean) => {
         cancelAnimationFrame(frame);
         audio.pause();
+        audio.onended = null;
         // Frees the mp3 the browser kept in memory (the Blob stays cached).
-        URL.revokeObjectURL(audio.src);
+        URL.revokeObjectURL(url);
         if (audioRef.current === audio) audioRef.current = null;
         if (finishRef.current === finish) finishRef.current = null;
         resolve(ended);
@@ -123,12 +182,20 @@ export function useSpeaker() {
         frame = requestAnimationFrame(tick);
       };
       audio.onended = () => finish(true);
-      // The browser can refuse sound before any click on the page.
+      // The browser can refuse sound before any tap on the page: say so.
       audio.play().then(
         () => {
           frame = requestAnimationFrame(tick);
         },
-        () => finish(false),
+        (problem) => {
+          if (
+            problem instanceof DOMException &&
+            problem.name === "NotAllowedError"
+          ) {
+            setError("Tap anywhere once so Venus can talk.");
+          }
+          finish(false);
+        },
       );
     });
   }
@@ -159,7 +226,8 @@ export function useSpeaker() {
       return line;
     };
     const show = (line: number, fraction: number) => {
-      if (run === runRef.current) setSpeaking({ id, lines, line, fraction, typing });
+      if (run === runRef.current)
+        setSpeaking({ id, lines, line, fraction, typing });
     };
 
     // Set before anything waits, so new words start hidden instead of flashing.
