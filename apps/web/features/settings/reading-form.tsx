@@ -80,7 +80,7 @@ export default function ReadingForm() {
         <label htmlFor={instantId} className="text-sm">
           <span className="font-medium">Instant text</span>
           <span className="block text-muted-foreground">
-            Show Luna&apos;s replies all at once instead of typing them out.
+            Show Venus&apos;s replies all at once instead of typing them out.
           </span>
         </label>
       </div>

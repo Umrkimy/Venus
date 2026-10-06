@@ -46,7 +46,7 @@ def test_answer_says_luna_reply_with_the_mic_off(monkeypatch, capsys):
     listen.answer(SETTINGS, voice, b"pc", FakeStream(events))
 
     assert events == ["mic off", "speak Opening Spotify, love.", "play", "mic on"]
-    assert "Luna: Opening Spotify, love." in capsys.readouterr().out
+    assert "Venus: Opening Spotify, love." in capsys.readouterr().out
 
 
 def test_answer_skips_chat_when_nothing_was_heard(monkeypatch):
@@ -281,7 +281,7 @@ def test_answer_says_so_when_the_voice_stream_breaks(monkeypatch, capsys):
 
     listen.answer(SETTINGS, voice, b"pc", FakeStream(events))
 
-    assert "Luna's voice isn't available" in capsys.readouterr().out
+    assert "Venus's voice isn't available" in capsys.readouterr().out
     assert events[-1] == "mic on"
 
 
@@ -297,7 +297,7 @@ def test_answer_drops_luna_reply_when_stopped_while_she_thinks(monkeypatch, caps
     listen.answer(SETTINGS, VoiceChat(ask_then_stop), b"pc", FakeStream(events), status)
 
     assert not any(event.startswith("speak") for event in events)
-    assert "Stopped before Luna spoke." in capsys.readouterr().out
+    assert "Stopped before Venus spoke." in capsys.readouterr().out
 
 
 def test_answer_passes_the_stop_to_the_player(monkeypatch):

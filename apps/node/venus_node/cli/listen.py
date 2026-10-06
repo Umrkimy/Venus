@@ -136,7 +136,7 @@ def speak_reply(
             return MUTE
         reply = voice.ask(text)
         timer.lap("chat")
-        print("Luna:", reply)
+        print("Venus:", reply)
     except OSError as exc:
         print(problem(exc))
         return NOTHING
@@ -145,7 +145,7 @@ def speak_reply(
     # "Goodbye": Luna still says bye back, then the conversation ends.
     outcome = GOODBYE if word == GOODBYE else None
     if status.stop.is_set():
-        print("Stopped before Luna spoke.")
+        print("Stopped before Venus spoke.")
         return outcome
 
     def started() -> None:
@@ -161,7 +161,7 @@ def speak_reply(
         timer.lap("playback")
     except (OSError, HTTPException) as exc:
         # HTTPException: the stream broke halfway (Core restarted, Wi-Fi dropped).
-        print("Luna's voice isn't available:", exc)
+        print("Venus's voice isn't available:", exc)
     finally:
         if mic_off_while_speaking:
             stream.start()

@@ -48,7 +48,7 @@ function TimeForm({ initial }: { initial: TimeResponse }) {
   const [country, setCountry] = useState(initial.country);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(
-    initial.time_zone ? null : "Not saved yet: Luna uses UTC until you save.",
+    initial.time_zone ? null : "Not saved yet: Venus uses UTC until you save.",
   );
   const [error, setError] = useState<string | null>(null);
   // Every zone name the browser knows, for the suggestions list.

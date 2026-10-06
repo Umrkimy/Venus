@@ -53,6 +53,26 @@ def test_login_sets_http_only_session_cookie(client):
     assert "HttpOnly" in response.headers["set-cookie"]
 
 
+def test_login_cookie_not_secure_on_localhost(client):
+    response = client.post(
+        "/auth/login",
+        json={"username": "umar", "password": "correct horse"},
+    )
+
+    assert "Secure" not in response.headers["set-cookie"]
+
+
+def test_login_cookie_secure_over_https(client):
+    # Tailscale and Next pass the scheme along as "https,http".
+    response = client.post(
+        "/auth/login",
+        json={"username": "umar", "password": "correct horse"},
+        headers={"X-Forwarded-Proto": "https,http"},
+    )
+
+    assert "Secure" in response.headers["set-cookie"]
+
+
 def test_login_rejects_wrong_password(client):
     response = client.post(
         "/auth/login",

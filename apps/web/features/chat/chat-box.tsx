@@ -68,7 +68,7 @@ function Dots() {
 function ThinkingLine() {
   return (
     <motion.li {...fadeUp} transition={springSoft} role="status" className="flex items-center gap-2 text-sm text-foreground/70">
-      <span>Luna is thinking</span>
+      <span>Venus is thinking</span>
       <Dots />
     </motion.li>
   );

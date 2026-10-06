@@ -27,7 +27,7 @@ const MODELS: { value: FishModel; label: string }[] = [
   { value: "s1", label: "s1 (paid)" },
 ];
 
-const TEST_LINE = "Hi, it's Luna. This is how I sound.";
+const TEST_LINE = "Hi, it's Venus. This is how I sound.";
 
 export default function VoiceSettings() {
   const voice = useQuery({
@@ -195,7 +195,7 @@ function VoiceForm({ initial }: { initial: VoiceResponse }) {
           onClick={() => void testVoice()}
           disabled={testing || !hasKey}
         >
-          {testing ? "Asking Luna…" : "Test voice"}
+          {testing ? "Asking Venus…" : "Test voice"}
         </Button>
       </div>
       {message && (

@@ -78,7 +78,7 @@ export default function VoiceOrb({ local, onStopLocal }: VoiceOrbProps) {
   }
 
   let label = listenOn ? "Stop listening" : "Talk to Venus hands-free";
-  if (busy) label = "Stop Luna";
+  if (busy) label = "Stop Venus";
 
   return (
     <div className="pointer-events-none relative flex shrink-0 justify-center py-3">

@@ -137,6 +137,27 @@ Without `-Target` it replaces the live `venus` database. It asks you to type
 the backup file, and stops Core while restoring (close Core yourself in
 development mode).
 
+## Use Venus on your phone
+
+Venus can be opened from your phone (or a laptop) through
+[Tailscale](https://tailscale.com), a free private network between your own
+devices. Only devices signed in to your Tailscale account can reach it;
+nothing is opened to the public internet. The address uses HTTPS, so the
+browser microphone works there too.
+
+1. Install Tailscale on the PC and the phone and sign in to the same account.
+2. In the Tailscale admin console, on the DNS page, turn on MagicDNS and
+   HTTPS Certificates.
+3. With Venus running, run from the repository root:
+
+```powershell
+.\scripts\phone-access.ps1
+```
+
+It prints an address like `https://my-pc.tailnet-name.ts.net`. Open it on the
+phone with the Tailscale app connected and log in as usual. Sharing stays on
+after a reboot; `.\scripts\phone-access.ps1 -Off` stops it.
+
 ## Troubleshooting
 
 - **Port 5432, 9000 or 3000 in use**: another Postgres, or dev mode and server
