@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.engine import Engine
 
 from config import CoreSettings, get_settings
+from features.auth.models.node_device import NodeDevice
 from features.auth.models.owner_account import OwnerAccount
 from features.auth.repository import AuthRepository
 from storage.database import get_database_engine
@@ -62,7 +63,29 @@ def require_owner_or_node(
 ) -> None:
     # The Node's "Hey Venus" loop speaks for the owner sitting at that PC:
     # it may hear, talk and chat, but not touch settings, keys or memories.
-    authorization = request.headers.get("authorization", "")
-    if hmac.compare_digest(authorization, f"Bearer {settings.dev_node_token}"):
+    device = node_device_for_header(
+        request.headers.get("authorization", ""), settings, repository
+    )
+    if device is None:
+        require_owner(request, settings, repository)
         return
-    require_owner(request, settings, repository)
+    # A Node may only chat as itself, never as another PC.
+    path_device_id = request.path_params.get("device_id")
+    if path_device_id is not None and path_device_id != device.device_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This token belongs to another device",
+        )
+
+
+def node_device_for_header(
+    authorization: str,
+    settings: CoreSettings,
+    repository: AuthRepository,
+) -> NodeDevice | None:
+    scheme, _, token = authorization.partition(" ")
+    if scheme != "Bearer" or not token:
+        return None
+    return repository.find_node_device(
+        token, settings.dev_node_token, datetime.now(timezone.utc)
+    )

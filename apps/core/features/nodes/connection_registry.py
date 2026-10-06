@@ -60,6 +60,12 @@ class NodeConnectionRegistry:
                 self._apps.pop(device_id, None)
                 self._projects.pop(device_id, None)
 
+    async def disconnect(self, device_id: str) -> None:
+        # Used when a device's token is revoked; its next reconnect is refused.
+        websocket = self._connections.get(device_id)
+        if websocket is not None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+
 
 connection_registry = NodeConnectionRegistry()
 
