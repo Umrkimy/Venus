@@ -202,6 +202,48 @@ def test_logout_invalidates_session(client, repository):
     assert repository.get_owner_for_session(token, datetime.now(timezone.utc)) is None
 
 
+def test_login_failures_count_per_forwarded_client(client):
+    phone = {"X-Forwarded-For": "100.64.0.2"}
+    for _ in range(5):
+        client.post(
+            "/auth/login",
+            json={"username": "umar", "password": "wrong password"},
+            headers=phone,
+        )
+
+    blocked = client.post(
+        "/auth/login",
+        json={"username": "umar", "password": "correct horse"},
+        headers=phone,
+    )
+    other_device = client.post(
+        "/auth/login",
+        json={"username": "umar", "password": "correct horse"},
+        headers={"X-Forwarded-For": "100.64.0.3"},
+    )
+
+    assert blocked.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+    assert other_device.status_code == status.HTTP_200_OK
+
+
+def test_login_rate_limit_uses_last_forwarded_entry(client):
+    # Only the last entry comes from our own proxy; earlier ones can be faked.
+    for fake in range(5):
+        client.post(
+            "/auth/login",
+            json={"username": "umar", "password": "wrong password"},
+            headers={"X-Forwarded-For": f"6.6.6.{fake}, 100.64.0.2"},
+        )
+
+    response = client.post(
+        "/auth/login",
+        json={"username": "umar", "password": "correct horse"},
+        headers={"X-Forwarded-For": "100.64.0.2"},
+    )
+
+    assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+
 def test_login_cookie_lasts_thirty_days(client):
     response = client.post(
         "/auth/login",

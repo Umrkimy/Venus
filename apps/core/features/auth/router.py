@@ -14,7 +14,11 @@ from features.auth.dependencies import (
 from features.auth.models.owner_session import OwnerSession
 from features.auth.models.owner_account import OwnerAccount
 from features.auth.passwords import hash_password, verify_password
-from features.auth.rate_limit import LoginRateLimiter, get_login_rate_limiter
+from features.auth.rate_limit import (
+    LoginRateLimiter,
+    client_key as login_client_key,
+    get_login_rate_limiter,
+)
 from features.auth.repository import SESSION_MAX_AGE, AuthRepository
 from features.auth.schemas import LoginRequest, OwnerResponse
 
@@ -42,7 +46,7 @@ def login(
     limiter: Annotated[LoginRateLimiter, Depends(get_login_rate_limiter)],
 ) -> OwnerResponse:
     now = datetime.now(timezone.utc)
-    client_key = request.client.host if request.client else "unknown"
+    client_key = login_client_key(request)
 
     if limiter.is_blocked(client_key, now):
         raise HTTPException(
