@@ -158,6 +158,39 @@ It prints an address like `https://my-pc.tailnet-name.ts.net`. Open it on the
 phone with the Tailscale app connected and log in as usual. Sharing stays on
 after a reboot; `.\scripts\phone-access.ps1 -Off` stops it.
 
+### Your own domain (optional)
+
+Instead of the `ts.net` address you can use a domain you own, for example
+`https://venus.example.com`. It stays private: the domain points to the PC's
+Tailscale address, which only your own devices can reach.
+[Caddy](https://caddyserver.com) answers on that address (about 45 MB of RAM)
+and gets a free Let's Encrypt certificate by proving domain ownership through
+your DNS. The steps below assume the domain's DNS is at Cloudflare.
+
+1. Set up Tailscale as above. Find the PC's Tailscale address with
+   `tailscale ip -4` (it starts with `100.`).
+2. In Cloudflare, add an `A` record (for example `venus`) pointing to that
+   address, with the proxy turned off ("DNS only", grey cloud).
+3. In Cloudflare, create an API token with the "Edit zone DNS" template,
+   limited to that one domain.
+4. In the `.env` in the repository root, set `VENUS_DOMAIN` (the full name,
+   for example `venus.example.com`) and `CLOUDFLARE_API_TOKEN`.
+5. Run:
+
+```powershell
+.\scripts\domain-access.ps1
+```
+
+It downloads Caddy with the Cloudflare module into `tools\caddy` (it asks
+first), stops the `ts.net` share (Caddy takes port 443 instead) and restarts
+the Venus tray app. From then on the tray app runs Caddy whenever it runs,
+also after a reboot. Caddy's messages go to `apps
+ode\data\caddy.log`.
+
+To stop using the domain, empty `VENUS_DOMAIN`, quit Venus from the tray and
+start it again, then run `.\scripts\phone-access.ps1` for the `ts.net`
+address.
+
 ## Devices (PC tokens)
 
 Each PC running the Venus Node has its own token. Settings, Devices lists

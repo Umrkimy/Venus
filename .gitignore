@@ -34,3 +34,6 @@ apps/node/models/
 
 # Database backups (compose backup service, scripts/restore-db.ps1)
 backups/
+
+# Caddy download for your own domain (scripts/domain-access.ps1)
+tools/caddy/

@@ -1,0 +1,23 @@
+# Venus at your own domain, reachable only inside your Tailscale network.
+# The Venus tray app runs this (README "Your own domain"). Settings come
+# from the .env in the repository root:
+#   VENUS_DOMAIN          for example venus.example.com, with a DNS A record
+#                         pointing to the PC's Tailscale address (100.x.y.z)
+#   CLOUDFLARE_API_TOKEN  Cloudflare token allowed to edit that zone's DNS,
+#                         used to prove you own the domain for the certificate
+# The tray app sets VENUS_TAILNET_IP (tailscale ip -4).
+{
+	# No admin API on localhost:2019; the tray app starts and stops Caddy.
+	admin off
+}
+
+{$VENUS_DOMAIN} {
+	# Listen only on the Tailscale address: not on the home network or internet.
+	bind {$VENUS_TAILNET_IP}
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	# Caddy puts the real client address in X-Forwarded-For (it ignores one
+	# sent by the client), so Core's login limit counts each device apart.
+	reverse_proxy 127.0.0.1:3000
+}
