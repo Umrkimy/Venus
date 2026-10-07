@@ -51,15 +51,14 @@ def test_load_settings_rejects_missing_dev_node_token(tmp_path: Path):
         load_settings(env_file)
 
 
-def test_load_settings_rejects_missing_dev_owner_token(tmp_path: Path):
+def test_load_settings_allows_missing_dev_owner_token(tmp_path: Path):
     env_file = tmp_path / ".env"
-    env_file.write_text("VENUS_CORE_DEV_NODE_TOKEN=test-node-token\n")
+    env_file.write_text(
+        "VENUS_CORE_DEV_NODE_TOKEN=test-node-token\n"
+        "VENUS_CORE_DATABASE_URL=sqlite+pysqlite:///:memory:\n"
+    )
 
-    with pytest.raises(
-        ValueError,
-        match="VENUS_CORE_DEV_OWNER_TOKEN is required",
-    ):
-        load_settings(env_file)
+    assert load_settings(env_file).dev_owner_token == ""
 
 
 def test_load_settings_rejects_missing_database_url(tmp_path: Path):
