@@ -200,3 +200,12 @@ def test_logout_invalidates_session(client, repository):
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
     assert repository.get_owner_for_session(token, datetime.now(timezone.utc)) is None
+
+
+def test_login_cookie_lasts_thirty_days(client):
+    response = client.post(
+        "/auth/login",
+        json={"username": "umar", "password": "correct horse"},
+    )
+
+    assert "Max-Age=2592000" in response.headers["set-cookie"]

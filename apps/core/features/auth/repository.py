@@ -13,7 +13,9 @@ from features.auth.models.owner_account import OwnerAccount
 from features.auth.models.owner_session import OwnerSession
 
 
-SESSION_LIFETIME = timedelta(days=7)
+# A login ends after a week without use, and after 30 days no matter what.
+SESSION_IDLE_LIMIT = timedelta(days=7)
+SESSION_MAX_AGE = timedelta(days=30)
 # "Last active" is saved at most this often, not on every request.
 LAST_SEEN_STEP = timedelta(minutes=5)
 USER_AGENT_LIMIT = 300
@@ -35,6 +37,14 @@ def _aware(moment: datetime | None) -> datetime | None:
     if moment is not None and moment.tzinfo is None:
         return moment.replace(tzinfo=timezone.utc)
     return moment
+
+
+def _session_alive(owner_session: OwnerSession, now: datetime) -> bool:
+    if now >= _aware(owner_session.expires_at):
+        return False
+    last_used = _aware(owner_session.last_seen_at) or _aware(owner_session.created_at)
+    # last_seen_at is saved in LAST_SEEN_STEP steps, so allow that much slack.
+    return now - last_used < SESSION_IDLE_LIMIT + LAST_SEEN_STEP
 
 
 def hash_token(token: str) -> str:
@@ -80,7 +90,7 @@ class AuthRepository:
                 id=uuid4(),
                 account_id=account_id,
                 created_at=now,
-                expires_at=now + SESSION_LIFETIME,
+                expires_at=now + SESSION_MAX_AGE,
                 user_agent=user_agent[:USER_AGENT_LIMIT] if user_agent else None,
             )
             session.add(owner_session)
@@ -99,10 +109,7 @@ class AuthRepository:
             if owner_session is None:
                 return None
 
-            expires_at = owner_session.expires_at
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if now >= expires_at:
+            if not _session_alive(owner_session, now):
                 return None
 
             last_seen = _aware(owner_session.last_seen_at)
@@ -118,7 +125,7 @@ class AuthRepository:
             sessions = session.scalars(
                 select(OwnerSession).order_by(OwnerSession.created_at.desc())
             ).all()
-        return [s for s in sessions if now < _aware(s.expires_at)]
+        return [s for s in sessions if _session_alive(s, now)]
 
     def session_id_for_token(self, token: str) -> UUID | None:
         with Session(self._engine) as session:
@@ -157,12 +164,12 @@ class AuthRepository:
 
     def delete_expired_sessions(self, account_id: UUID, now: datetime) -> None:
         with Session(self._engine) as session:
-            session.execute(
-                delete(OwnerSession).where(
-                    OwnerSession.account_id == account_id,
-                    OwnerSession.expires_at <= now,
-                )
-            )
+            owner_sessions = session.scalars(
+                select(OwnerSession).where(OwnerSession.account_id == account_id)
+            ).all()
+            for owner_session in owner_sessions:
+                if not _session_alive(owner_session, now):
+                    session.delete(owner_session)
             session.commit()
 
     def create_node_device(self, name: str, now: datetime) -> tuple[NodeDevice, str]:

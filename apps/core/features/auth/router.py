@@ -15,7 +15,7 @@ from features.auth.models.owner_session import OwnerSession
 from features.auth.models.owner_account import OwnerAccount
 from features.auth.passwords import hash_password, verify_password
 from features.auth.rate_limit import LoginRateLimiter, get_login_rate_limiter
-from features.auth.repository import SESSION_LIFETIME, AuthRepository
+from features.auth.repository import SESSION_MAX_AGE, AuthRepository
 from features.auth.schemas import LoginRequest, OwnerResponse
 
 
@@ -69,7 +69,7 @@ def login(
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,
-        max_age=int(SESSION_LIFETIME.total_seconds()),
+        max_age=int(SESSION_MAX_AGE.total_seconds()),
         path="/",
         httponly=True,
         samesite="lax",
