@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from venus_node.app.autostart import launch_command
+from venus_node.app.domain import start_domain
 from venus_node.app.single import (
     CONNECTION,
     LISTENER,
@@ -23,6 +24,7 @@ from venus_protocol.schemas.connections import NodeHello
 
 MB_ICONINFORMATION = 0x40
 NODE_DIRECTORY = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = NODE_DIRECTORY.parent.parent
 
 
 def log_to_file(path: Path) -> None:
@@ -82,6 +84,9 @@ def run_app(node_directory: Path) -> None:
     if listeners is not None:
         start_listening(settings, *listeners, status, muted, tray.mute)
 
+    # Your own domain, only if VENUS_DOMAIN is set in the root .env.
+    domain = start_domain(REPO_ROOT, node_directory / "data" / "caddy.log")
+
     # setup runs once the icon is up: a toast, or a new icon is easy to miss under "^".
     tray.icon.run_detached(setup=announce)
     try:
@@ -91,6 +96,8 @@ def run_app(node_directory: Path) -> None:
         # The orb window owns the main thread until Quit (or a mic error).
         Circle(status).run()
     finally:
+        if domain is not None:
+            domain.stop()
         tray.icon.stop()
 
 
