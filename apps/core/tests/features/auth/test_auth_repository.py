@@ -1,10 +1,16 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
 from features.auth.passwords import hash_password
 from features.auth.models.owner_session import OwnerSession
-from features.auth.repository import SESSION_LIFETIME, AuthRepository, hash_token
+from features.auth.repository import (
+    LAST_SEEN_STEP,
+    SESSION_IDLE_LIMIT,
+    SESSION_MAX_AGE,
+    AuthRepository,
+    hash_token,
+)
 from storage.database import create_database_engine
 from storage.base import Base
 
@@ -25,7 +31,7 @@ def test_get_owner_for_session_returns_owner_for_valid_token():
         engine.dispose()
 
 
-def test_get_owner_for_session_returns_none_after_expiry():
+def test_get_owner_for_session_returns_none_after_max_age():
     engine = create_database_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     repository = AuthRepository(engine)
@@ -34,7 +40,12 @@ def test_get_owner_for_session_returns_none_after_expiry():
     token = repository.create_session(owner.account_id, now)
 
     try:
-        assert repository.get_owner_for_session(token, now + SESSION_LIFETIME) is None
+        # Used every few days, so never idle, but still ends at the hard limit.
+        moment = now
+        while moment + timedelta(days=3) < now + SESSION_MAX_AGE:
+            moment += timedelta(days=3)
+            assert repository.get_owner_for_session(token, moment) is not None
+        assert repository.get_owner_for_session(token, now + SESSION_MAX_AGE) is None
     finally:
         engine.dispose()
 
@@ -62,7 +73,10 @@ def test_delete_expired_sessions_keeps_live_sessions():
     repository = AuthRepository(engine)
     now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     owner = repository.create_owner("umar", hash_password("pw"), now)
-    repository.create_session(owner.account_id, now - SESSION_LIFETIME)
+    repository.create_session(owner.account_id, now - SESSION_MAX_AGE)
+    repository.create_session(
+        owner.account_id, now - SESSION_IDLE_LIMIT - LAST_SEEN_STEP
+    )
     live_token = repository.create_session(owner.account_id, now)
 
     try:
@@ -84,5 +98,52 @@ def test_has_owner_is_false_until_owner_created():
         assert not repository.has_owner()
         repository.create_owner("umar", hash_password("pw"), datetime.now(timezone.utc))
         assert repository.has_owner()
+    finally:
+        engine.dispose()
+
+
+def test_get_owner_for_session_returns_none_after_week_unused():
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    repository = AuthRepository(engine)
+    now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+    owner = repository.create_owner("umar", hash_password("pw"), now)
+    token = repository.create_session(owner.account_id, now)
+
+    try:
+        later = now + SESSION_IDLE_LIMIT + LAST_SEEN_STEP
+        assert repository.get_owner_for_session(token, later) is None
+    finally:
+        engine.dispose()
+
+
+def test_using_a_session_pushes_idle_limit_forward():
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    repository = AuthRepository(engine)
+    now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+    owner = repository.create_owner("umar", hash_password("pw"), now)
+    token = repository.create_session(owner.account_id, now)
+
+    try:
+        used = now + timedelta(days=6)
+        assert repository.get_owner_for_session(token, used) is not None
+        # Ten days after login, but only four since last use.
+        assert repository.get_owner_for_session(token, now + timedelta(days=10)) is not None
+    finally:
+        engine.dispose()
+
+
+def test_list_sessions_leaves_out_idle_sessions():
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    repository = AuthRepository(engine)
+    now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+    owner = repository.create_owner("umar", hash_password("pw"), now)
+    repository.create_session(owner.account_id, now - timedelta(days=8))
+    repository.create_session(owner.account_id, now)
+
+    try:
+        assert len(repository.list_sessions(now)) == 1
     finally:
         engine.dispose()

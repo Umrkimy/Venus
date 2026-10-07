@@ -1,5 +1,24 @@
 from datetime import datetime, timedelta
 
+from fastapi import Request
+
+
+def client_key(request: Request) -> str:
+    """Who is trying to log in, so one phone's typos don't lock out the PC.
+
+    Every browser reaches Core through the web app's proxy, so the connection
+    address is always the proxy's. Tailscale replaces X-Forwarded-For with the
+    phone's real tailnet address (a faked header is dropped), and Next.js passes
+    it on, or adds the browser's address when the header is missing. Take the
+    last entry: it was written by the proxy nearest Core. Core and the web app
+    only listen on 127.0.0.1, so only programs on this PC could fake it.
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    last = forwarded.split(",")[-1].strip()
+    if last:
+        return last
+    return request.client.host if request.client else "unknown"
+
 
 class LoginRateLimiter:
     def __init__(

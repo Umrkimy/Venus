@@ -72,7 +72,7 @@ every value. Never commit a `.env` file.
 | File | Holds |
 | --- | --- |
 | `.env` | Postgres password, backup folder (Docker Compose) |
-| `apps/core/.env` | Node and owner tokens, database URL, encryption key, fallback AI/voice keys |
+| `apps/core/.env` | Node token, database URL, encryption key, fallback AI/voice keys |
 | `apps/node/.env` | This PC's name, the Node token (same as Core's), wake phrases, projects folder, mic |
 
 Common changes in `apps/node/.env`: `VENUS_NODE_PROJECTS_ROOT` (folder with

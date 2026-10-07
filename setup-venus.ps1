@@ -109,7 +109,6 @@ if (-not $postgresPassword) {
 New-EnvFile $coreEnv @(
     "# Made by setup-venus.ps1. See apps/core/.env.example.",
     "VENUS_CORE_DEV_NODE_TOKEN=$(New-Secret)",
-    "VENUS_CORE_DEV_OWNER_TOKEN=$(New-Secret)",
     "VENUS_CORE_DATABASE_URL=postgresql+psycopg://venus:$postgresPassword@127.0.0.1:5432/venus",
     "VENUS_CORE_SECRET_KEY=$(New-FernetKey)",
     "# AI and voice keys: easiest in the web page, Settings. These are fallbacks.",

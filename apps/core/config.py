@@ -11,6 +11,7 @@ FISH_MODEL = "s2.1-pro-free"
 @dataclass(frozen=True)
 class CoreSettings:
     dev_node_token: str
+    # Empty = off. Only for curl testing; the web page logs in with cookies.
     dev_owner_token: str
     database_url: str
     llm_provider: str = "fake"
@@ -37,7 +38,7 @@ def load_settings(env_file: Path) -> CoreSettings:
         if name.startswith("VENUS_CORE_")
     )
     node_token = values.get("VENUS_CORE_DEV_NODE_TOKEN", "")
-    owner_token = values.get("VENUS_CORE_DEV_OWNER_TOKEN", "")
+    owner_token = (values.get("VENUS_CORE_DEV_OWNER_TOKEN") or "").strip()
     database_url = values.get("VENUS_CORE_DATABASE_URL", "")
     llm_provider = values.get("VENUS_CORE_LLM_PROVIDER") or "fake"
     llm_model = values.get("VENUS_CORE_LLM_MODEL") or ""
@@ -49,9 +50,6 @@ def load_settings(env_file: Path) -> CoreSettings:
 
     if not node_token or not node_token.strip():
         raise ValueError("VENUS_CORE_DEV_NODE_TOKEN is required")
-
-    if not owner_token or not owner_token.strip():
-        raise ValueError("VENUS_CORE_DEV_OWNER_TOKEN is required")
 
     if not database_url or not database_url.strip():
         raise ValueError("VENUS_CORE_DATABASE_URL is required")

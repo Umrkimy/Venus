@@ -118,3 +118,20 @@ def test_owner_or_node_rejects_other_tokens(client):
     response = client.get("/voice-ish", headers={"Authorization": "Bearer wrong-token"})
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_empty_dev_owner_token_is_switched_off(repository):
+    app.dependency_overrides[get_auth_repository] = lambda: repository
+    app.dependency_overrides[get_settings] = lambda: CoreSettings(
+        dev_node_token="test-node-token",
+        dev_owner_token="",
+        database_url="sqlite+pysqlite://",
+    )
+    try:
+        response = TestClient(app).get(
+            "/protected", headers={"Authorization": "Bearer "}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

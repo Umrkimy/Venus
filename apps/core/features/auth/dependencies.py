@@ -39,8 +39,11 @@ def require_owner(
     repository: Annotated[AuthRepository, Depends(get_auth_repository)],
 ) -> None:
     # Check the dev token first so token-only requests never query the database.
+    # An empty token means it is switched off, so "Bearer " alone never passes.
     authorization = request.headers.get("authorization", "")
-    if hmac.compare_digest(authorization, f"Bearer {settings.dev_owner_token}"):
+    if settings.dev_owner_token and hmac.compare_digest(
+        authorization, f"Bearer {settings.dev_owner_token}"
+    ):
         return
 
     token = request.cookies.get(SESSION_COOKIE_NAME)
