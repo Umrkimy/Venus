@@ -47,12 +47,14 @@ class LiveVoice:
         self.web_listening = False
         self.stop_wish = False
         self.conversation_id: str | None = None
+        self.mics: list[str] = []
 
-    def report(self, state: str, subtitle: str, muted: bool) -> Reply:
+    def report(self, state: str, subtitle: str, muted: bool, mics: list[str] | None = None) -> Reply:
         """The Node's latest state; the answer carries a stop wish, once."""
         self.state = state
         self.subtitle = subtitle
         self.muted = muted
+        self.mics = mics or []
         self.reported_at = self.clock()
         stop, self.stop_wish = self.stop_wish, False
         watching = self.clock() - self.watched_at < WEB_WATCHING_FOR
@@ -65,6 +67,12 @@ class LiveVoice:
         if self.clock() - self.reported_at > NODE_ALIVE_FOR:
             return Seen(IDLE, "", False, False, self.conversation_id)
         return Seen(self.state, self.subtitle, self.muted, True, self.conversation_id)
+
+    def current_mics(self) -> list[str]:
+        """The PC's mics, or none once its voice loop stopped reporting."""
+        if self.clock() - self.reported_at > NODE_ALIVE_FOR:
+            return []
+        return self.mics
 
     def wish_stop(self) -> None:
         """The web's stop button; the Node picks it up on its next report."""

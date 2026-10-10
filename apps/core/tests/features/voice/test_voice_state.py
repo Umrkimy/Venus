@@ -51,9 +51,11 @@ def live(clock: Clock) -> LiveVoice:
     engine.dispose()
 
 
-def report(state: str = "listening", subtitle: str = "", muted: bool = False) -> dict:
+def report(state: str = "listening", subtitle: str = "", muted: bool = False, mics: list[str] | None = None) -> dict:
     response = client.put(
-        "/voice/state", json={"state": state, "subtitle": subtitle, "muted": muted}, headers=NODE_HEADERS,
+        "/voice/state",
+        json={"state": state, "subtitle": subtitle, "muted": muted, "mics": mics or []},
+        headers=NODE_HEADERS,
     )
     return response.json()
 
@@ -136,3 +138,22 @@ def test_node_hears_the_pause_setting(live: LiveVoice):
 
     # The PC picks up a new slider value on its next report.
     assert report()["end_pause_ms"] == 2250
+
+
+def test_web_sees_the_pc_mics_while_its_voice_loop_runs(live: LiveVoice, clock: Clock):
+    report(mics=["Microphone (Realtek(R) Audio)", "CABLE Output (VB-Audio Virtual "])
+
+    response = client.get("/voice/mics", headers=OWNER_HEADERS)
+
+    assert response.json() == {"mics": ["Microphone (Realtek(R) Audio)", "CABLE Output (VB-Audio Virtual "]}
+    # PC closed or crashed: no list to pick from.
+    clock.now += 10
+    assert client.get("/voice/mics", headers=OWNER_HEADERS).json() == {"mics": []}
+
+
+def test_node_hears_the_chosen_mic(live: LiveVoice):
+    assert report()["mic"] == ""
+
+    client.put("/settings/listening", json={"mic": "Microphone (Realtek(R) Audio)"}, headers=OWNER_HEADERS)
+
+    assert report()["mic"] == "Microphone (Realtek(R) Audio)"

@@ -138,6 +138,8 @@ class VoiceReport(BaseModel):
     state: VoiceStateName
     subtitle: str = Field(default="", max_length=MAX_SPEAK_CHARS)
     muted: bool = False
+    # The PC's mic names, for the Settings mic list.
+    mics: list[Annotated[str, Field(max_length=200)]] = Field(default=[], max_length=50)
 
 
 class VoiceReportReply(BaseModel):
@@ -146,6 +148,8 @@ class VoiceReportReply(BaseModel):
     stop: bool
     # The Settings pause slider: the PC waits this long after you stop talking.
     end_pause_ms: int
+    # The Settings mic list: "" = the Windows default (or the PC's own .env choice).
+    mic: str
 
 
 class VoiceState(BaseModel):
@@ -164,10 +168,11 @@ async def report_state(
 ) -> VoiceReportReply:
     """The PC's orb reports here. The answer says if a web tab shows the orb
     (and listens) instead, passes on the web's stop button and the pause setting."""
-    reply = live.report(body.state, body.subtitle, body.muted)
+    reply = live.report(body.state, body.subtitle, body.muted, body.mics)
+    listening = settings_repository.get_listening()
     return VoiceReportReply(
         web_watching=reply.web_watching, web_listening=reply.web_listening, stop=reply.stop,
-        end_pause_ms=settings_repository.get_end_pause_ms(),
+        end_pause_ms=listening.end_pause_ms, mic=listening.mic,
     )
 
 
@@ -193,3 +198,9 @@ async def watch_state(
 async def stop(live: Annotated[LiveVoice, Depends(get_live_voice)]) -> None:
     """The web's stop button: Luna on the PC stops talking (or drops her answer)."""
     live.wish_stop()
+
+
+@router.get("/mics")
+async def mics(live: Annotated[LiveVoice, Depends(get_live_voice)]) -> dict:
+    """The PC's mics for the Settings list; empty while its voice loop is off."""
+    return {"mics": live.current_mics()}

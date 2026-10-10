@@ -50,5 +50,7 @@ class TimeSettingsRequest(BaseModel):
 class ListeningSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # 0.5 to 3 s in quarter seconds, the steps of the web's slider.
-    end_pause_ms: int = Field(ge=500, le=3000, multiple_of=250)
+    # 0.5 to 3 s in quarter seconds, the steps of the web's slider. None keeps the saved one.
+    end_pause_ms: int | None = Field(default=None, ge=500, le=3000, multiple_of=250)
+    # A name from the PC's mic list; "" = Windows default. None keeps the saved one.
+    mic: str | None = Field(default=None, max_length=200)

@@ -268,15 +268,15 @@ def test_listening_settings_default_to_one_and_a_half_seconds():
     response = client.get("/settings/listening", headers=OWNER_HEADERS)
 
     assert response.status_code == 200
-    assert response.json() == {"end_pause_ms": 1500}
+    assert response.json() == {"end_pause_ms": 1500, "mic": ""}
 
 
 def test_listening_settings_put_is_remembered():
     response = client.put("/settings/listening", json={"end_pause_ms": 750}, headers=OWNER_HEADERS)
 
     assert response.status_code == 200
-    assert response.json() == {"end_pause_ms": 750}
-    assert client.get("/settings/listening", headers=OWNER_HEADERS).json() == {"end_pause_ms": 750}
+    assert response.json() == {"end_pause_ms": 750, "mic": ""}
+    assert client.get("/settings/listening", headers=OWNER_HEADERS).json()["end_pause_ms"] == 750
 
 
 @pytest.mark.parametrize("end_pause_ms", [250, 3250, 1600])
@@ -295,3 +295,14 @@ def test_listening_settings_require_owner():
 
     assert get.status_code == 401
     assert put.status_code == 401
+
+
+def test_listening_settings_save_mic_and_pause_on_their_own():
+    client.put("/settings/listening", json={"end_pause_ms": 2000}, headers=OWNER_HEADERS)
+
+    response = client.put(
+        "/settings/listening", json={"mic": "Microphone (Realtek(R) Audio)"}, headers=OWNER_HEADERS,
+    )
+
+    # Picking a mic keeps the slider's value, and the other way round.
+    assert response.json() == {"end_pause_ms": 2000, "mic": "Microphone (Realtek(R) Audio)"}
