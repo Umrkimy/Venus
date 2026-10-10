@@ -3,6 +3,8 @@ from typing import Protocol
 
 from openai import AsyncOpenAI
 
+from features.usage.repository import UsageLog
+
 # Small, cheap model for short spoken commands; change here to try another.
 TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe"
 
@@ -22,9 +24,12 @@ class Transcriber(Protocol):
 
 
 class OpenAITranscriber:
-    def __init__(self, client: AsyncOpenAI, model: str = TRANSCRIBE_MODEL) -> None:
+    def __init__(
+        self, client: AsyncOpenAI, model: str = TRANSCRIBE_MODEL, usage: UsageLog | None = None,
+    ) -> None:
         self._client = client
         self._model = model
+        self._usage = usage
 
     async def transcribe(self, audio: bytes, content_type: str, hint: str) -> str:
         extension = EXTENSIONS.get(content_type.split(";")[0].strip(), "webm")
@@ -34,6 +39,8 @@ class OpenAITranscriber:
             # Names like Spotify or comix, so they come back spelled right.
             prompt=hint,
         )
+        if self._usage is not None:
+            self._usage.record("transcribe", self._model, getattr(result, "usage", None))
         return result.text.strip()
 
 

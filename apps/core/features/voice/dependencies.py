@@ -8,6 +8,8 @@ from features.chat.dependencies import llm_choice
 from features.settings.dependencies import get_settings_repository
 from features.settings.repository import SettingsRepository
 from features.settings.secrets import decrypt_text
+from features.usage.dependencies import get_usage_repository
+from features.usage.repository import UsageRepository
 from features.voice.speaker import FishSpeaker, Speaker
 from features.voice.transcriber import OpenAITranscriber, Transcriber
 
@@ -18,6 +20,7 @@ def get_transcriber(
         SettingsRepository,
         Depends(get_settings_repository),
     ],
+    usage: Annotated[UsageRepository, Depends(get_usage_repository)],
 ) -> Transcriber:
     # Same key as chat: saved from the web first, otherwise .env.
     provider, _, api_key = llm_choice(settings, settings_repository)
@@ -26,7 +29,7 @@ def get_transcriber(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Voice needs an OpenAI API key",
         )
-    return OpenAITranscriber(AsyncOpenAI(api_key=api_key))
+    return OpenAITranscriber(AsyncOpenAI(api_key=api_key), usage=usage)
 
 
 def voice_choice(

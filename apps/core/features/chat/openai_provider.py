@@ -6,18 +6,26 @@ from features.chat.prompt import plain_punctuation
 from features.chat.provider import BrainReply
 from features.chat.schemas import ChatTurn
 from features.chat.tools import TOOLS, tool_to_command
+from features.usage.repository import UsageLog
 
 class OpenAIProvider:
-    def __init__(self, client: AsyncOpenAI, model: str) -> None:
+    def __init__(self, client: AsyncOpenAI, model: str, usage: UsageLog | None = None) -> None:
         self._client = client
         self._model = model
+        self._usage = usage
+
+    async def _create(self, **request):
+        # Every paid call goes through here, so each one is counted.
+        response = await self._client.responses.create(model=self._model, **request)
+        if self._usage is not None:
+            self._usage.record("chat", self._model, getattr(response, "usage", None))
+        return response
 
     async def reply(
         self, message: str, history: list[ChatTurn], instructions: str,
     ) -> BrainReply:
         try:
-            response = await self._client.responses.create(
-                model=self._model,
+            response = await self._create(
                 instructions=instructions,
                 input=[
                     {"role": turn.role, "content": turn.content} for turn in history
@@ -68,8 +76,7 @@ class OpenAIProvider:
     async def say(self, message: str, instructions: str) -> str | None:
         # No tools: a line about what was done can't start anything new.
         try:
-            response = await self._client.responses.create(
-                model=self._model,
+            response = await self._create(
                 instructions=instructions,
                 input=[{"role": "user", "content": message}],
             )
@@ -83,8 +90,7 @@ class OpenAIProvider:
         # The model stops at a tool call; tell it the facts are kept so it
         # goes on to answer the owner's message in its own words.
         try:
-            followup = await self._client.responses.create(
-                model=self._model,
+            followup = await self._create(
                 previous_response_id=response_id,
                 input=[
                     {"type": "function_call_output", "call_id": call_id, "output": output}

@@ -7,6 +7,7 @@ from features.chat.openai_provider import OpenAIProvider
 from features.chat.provider import FakeProvider
 from features.settings.repository import SettingsRepository
 from features.settings.secrets import encrypt_text
+from features.usage.repository import UsageRepository
 from tests.database import make_test_engine
 
 
@@ -24,7 +25,7 @@ def test_unknown_llm_provider_is_rejected():
     )
 
     with pytest.raises(ValueError):
-        get_chat_provider(settings, empty_repository())
+        get_chat_provider(settings, empty_repository(), None)
 
 
 def test_openai_provider_needs_key_and_model():
@@ -38,7 +39,7 @@ def test_openai_provider_needs_key_and_model():
     )
 
     with pytest.raises(ValueError):
-        get_chat_provider(settings, empty_repository())
+        get_chat_provider(settings, empty_repository(), None)
 
 
 def test_chat_provider_uses_saved_llm_settings():
@@ -55,11 +56,14 @@ def test_chat_provider_uses_saved_llm_settings():
         "openai", "gpt-6-luna", encrypt_text("sk-saved", secret_key),
     )
 
-    provider = get_chat_provider(settings, repository)
+    usage = UsageRepository(repository.engine)
+    provider = get_chat_provider(settings, repository, usage)
 
     # The saved row beats .env's "fake", and its key was decrypted.
     assert isinstance(provider, OpenAIProvider)
     assert provider._client.api_key == "sk-saved"
+    # Every reply it gets is counted in the usage table.
+    assert provider._usage is usage
 
 
 def test_chat_provider_falls_back_to_env_without_saved_settings():
@@ -69,4 +73,4 @@ def test_chat_provider_falls_back_to_env_without_saved_settings():
         database_url="sqlite+pysqlite://",
     )
 
-    assert isinstance(get_chat_provider(settings, empty_repository()), FakeProvider)
+    assert isinstance(get_chat_provider(settings, empty_repository(), None), FakeProvider)

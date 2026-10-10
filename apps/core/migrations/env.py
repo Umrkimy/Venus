@@ -20,6 +20,7 @@ from features.settings.models.llm import LlmSetting
 from features.settings.models.time import TimeSetting
 from features.settings.models.voice import VoiceSetting
 from features.shortcuts.models.site_shortcut import SiteShortcut
+from features.usage.models.llm_usage import LlmUsage
 from storage.base import Base
 
 # this is the Alembic Config object, which provides

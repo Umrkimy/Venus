@@ -9,6 +9,8 @@ from features.chat.provider import ChatProvider, FakeProvider
 from features.settings.dependencies import get_settings_repository
 from features.settings.repository import SettingsRepository
 from features.settings.secrets import decrypt_text
+from features.usage.dependencies import get_usage_repository
+from features.usage.repository import UsageRepository
 
 
 def llm_choice(
@@ -30,6 +32,7 @@ def get_chat_provider(
         SettingsRepository,
         Depends(get_settings_repository),
     ],
+    usage: Annotated[UsageRepository, Depends(get_usage_repository)],
 ) -> ChatProvider:
     provider, model, api_key = llm_choice(settings, settings_repository)
 
@@ -38,5 +41,5 @@ def get_chat_provider(
     if provider == "openai":
         if not api_key or not model:
             raise ValueError("An API key and a model are required for openai")
-        return OpenAIProvider(AsyncOpenAI(api_key=api_key), model)
+        return OpenAIProvider(AsyncOpenAI(api_key=api_key), model, usage)
     raise ValueError(f"Unknown LLM provider: {provider}")

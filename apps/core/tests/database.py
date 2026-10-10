@@ -21,6 +21,7 @@ from features.settings.models.llm import LlmSetting  # noqa: F401
 from features.settings.models.time import TimeSetting  # noqa: F401
 from features.settings.models.voice import VoiceSetting  # noqa: F401
 from features.shortcuts.models.site_shortcut import SiteShortcut  # noqa: F401
+from features.usage.models.llm_usage import LlmUsage  # noqa: F401
 from storage.base import Base
 
 # Set to a Postgres database (name must end in _test) to run the tests
