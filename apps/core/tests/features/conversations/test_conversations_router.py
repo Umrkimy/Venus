@@ -4,9 +4,8 @@ from uuid import uuid4
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
@@ -17,7 +16,7 @@ from features.conversations.repository import ConversationRepository
 from features.projects.dependencies import get_project_repository
 from features.projects.repository import ProjectRepository
 from main import app
-from storage.base import Base
+from tests.database import make_test_engine
 
 TEST_OWNER_TOKEN = "test-owner-token"
 OWNER_HEADERS = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
@@ -27,12 +26,7 @@ client = TestClient(app)
 
 @pytest.fixture
 def engine():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     yield engine
     engine.dispose()
 

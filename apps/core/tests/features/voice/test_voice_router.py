@@ -5,8 +5,6 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 from openai import OpenAIError
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
@@ -20,7 +18,7 @@ from features.voice.dependencies import get_transcriber
 from features.voice.router import MAX_AUDIO_BYTES, NOTHING_HEARD
 from features.voice.transcriber import TRANSCRIBE_MODEL, OpenAITranscriber, is_hint_echo
 from main import app
-from storage.base import Base
+from tests.database import make_test_engine
 
 TEST_OWNER_TOKEN = "test-owner-token"
 OWNER_HEADERS = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
@@ -55,12 +53,7 @@ def settings(llm_provider: str = "fake", llm_api_key: str = "") -> CoreSettings:
 
 @pytest.fixture
 def engine():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     app.dependency_overrides[get_settings] = settings
     app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
     app.dependency_overrides[get_settings_repository] = lambda: SettingsRepository(engine)

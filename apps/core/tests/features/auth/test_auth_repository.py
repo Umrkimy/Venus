@@ -11,13 +11,11 @@ from features.auth.repository import (
     AuthRepository,
     hash_token,
 )
-from storage.database import create_database_engine
-from storage.base import Base
+from tests.database import make_test_engine
 
 
 def test_get_owner_for_session_returns_owner_for_valid_token():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     owner = repository.create_owner("umar", hash_password("pw"), now)
@@ -32,8 +30,7 @@ def test_get_owner_for_session_returns_owner_for_valid_token():
 
 
 def test_get_owner_for_session_returns_none_after_max_age():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     owner = repository.create_owner("umar", hash_password("pw"), now)
@@ -51,8 +48,7 @@ def test_get_owner_for_session_returns_none_after_max_age():
 
 
 def test_create_session_stores_hash_not_raw_token():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     owner = repository.create_owner("umar", hash_password("pw"), now)
@@ -68,8 +64,7 @@ def test_create_session_stores_hash_not_raw_token():
 
 
 def test_delete_expired_sessions_keeps_live_sessions():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     owner = repository.create_owner("umar", hash_password("pw"), now)
@@ -90,8 +85,7 @@ def test_delete_expired_sessions_keeps_live_sessions():
 
 
 def test_has_owner_is_false_until_owner_created():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
 
     try:
@@ -103,8 +97,7 @@ def test_has_owner_is_false_until_owner_created():
 
 
 def test_get_owner_for_session_returns_none_after_week_unused():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     owner = repository.create_owner("umar", hash_password("pw"), now)
@@ -118,8 +111,7 @@ def test_get_owner_for_session_returns_none_after_week_unused():
 
 
 def test_using_a_session_pushes_idle_limit_forward():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     owner = repository.create_owner("umar", hash_password("pw"), now)
@@ -135,8 +127,7 @@ def test_using_a_session_pushes_idle_limit_forward():
 
 
 def test_list_sessions_leaves_out_idle_sessions():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     now = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     owner = repository.create_owner("umar", hash_password("pw"), now)

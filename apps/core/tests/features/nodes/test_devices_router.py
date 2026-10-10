@@ -3,8 +3,6 @@ from contextlib import contextmanager
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 from starlette.websockets import WebSocketDisconnect
 
 from config import CoreSettings, get_settings
@@ -17,7 +15,7 @@ from features.nodes.connection_registry import (
     get_connection_registry,
 )
 from main import app
-from storage.base import Base
+from tests.database import make_test_engine
 
 ENV_TOKEN = "test-node-token"
 OWNER_HEADERS = {"Authorization": "Bearer test-owner-token"}
@@ -27,12 +25,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def overrides():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     registry = NodeConnectionRegistry()
     app.dependency_overrides[get_settings] = lambda: CoreSettings(
         dev_node_token=ENV_TOKEN,

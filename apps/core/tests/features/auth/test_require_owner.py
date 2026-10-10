@@ -3,8 +3,6 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import Depends, FastAPI, status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 from config import CoreSettings, get_settings
 from features.auth.dependencies import (
@@ -15,7 +13,7 @@ from features.auth.dependencies import (
 )
 from features.auth.passwords import hash_password
 from features.auth.repository import AuthRepository
-from storage.base import Base
+from tests.database import make_test_engine
 
 TEST_OWNER_TOKEN = "test-owner-token"
 
@@ -34,12 +32,7 @@ def voice_ish():
 
 @pytest.fixture
 def repository():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     yield AuthRepository(engine)
     engine.dispose()
 

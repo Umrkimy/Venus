@@ -1,9 +1,8 @@
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
 from features.auth.models.node_device import NodeDevice
 from features.auth.repository import (
@@ -12,7 +11,7 @@ from features.auth.repository import (
     MainDeviceError,
     hash_token,
 )
-from storage.base import Base
+from tests.database import make_test_engine
 
 ENV_TOKEN = "env-node-token"
 NOW = datetime(2026, 10, 6, 12, 0, tzinfo=timezone.utc)
@@ -20,12 +19,7 @@ NOW = datetime(2026, 10, 6, 12, 0, tzinfo=timezone.utc)
 
 @pytest.fixture
 def repository():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     yield AuthRepository(engine)
     engine.dispose()
 

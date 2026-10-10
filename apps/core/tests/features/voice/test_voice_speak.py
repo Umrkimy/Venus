@@ -6,8 +6,6 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 from config import FISH_MODEL, CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
@@ -19,7 +17,7 @@ from features.voice.dependencies import get_speaker, voice_choice
 from features.voice.router import MAX_SPEAK_CHARS
 from features.voice.speaker import FISH_TTS_URL, SAMPLE_RATE, FishSpeaker
 from main import app
-from storage.base import Base
+from tests.database import make_test_engine
 
 TEST_OWNER_TOKEN = "test-owner-token"
 OWNER_HEADERS = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
@@ -63,12 +61,7 @@ def settings(fish_api_key: str = "", **changes) -> CoreSettings:
 
 @pytest.fixture
 def engine():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     app.dependency_overrides[get_settings] = lambda: settings()
     app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
     app.dependency_overrides[get_settings_repository] = lambda: SettingsRepository(engine)
