@@ -184,8 +184,7 @@ your DNS. The steps below assume the domain's DNS is at Cloudflare.
 It downloads Caddy with the Cloudflare module into `tools\caddy` (it asks
 first), stops the `ts.net` share (Caddy takes port 443 instead) and restarts
 the Venus tray app. From then on the tray app runs Caddy whenever it runs,
-also after a reboot. Caddy's messages go to `apps
-ode\data\caddy.log`.
+also after a reboot. Caddy's messages go to `apps\node\data\caddy.log`.
 
 To stop using the domain, empty `VENUS_DOMAIN`, quit Venus from the tray and
 start it again, then run `.\scripts\phone-access.ps1` for the `ts.net`
@@ -212,8 +211,26 @@ The same page lists every signed-in browser (for example "iPhone · Safari")
 with when it was last active. Sign out ends one login at once; "Sign out all
 other browsers" is for a lost phone. Logins end by themselves after 7 days.
 
-Core only listens on this PC for now, so a second PC can't reach it yet; that
-comes with remote Nodes later.
+## Another PC
+
+A second Windows PC (for example a laptop) can run only the Venus Node and
+take commands from the same Venus. It reaches Core over Tailscale; Core
+itself still listens only on the main PC (127.0.0.1), and Caddy or
+`tailscale serve` is the one door in, on port 9443.
+
+1. On the main PC, set up your own domain or phone access (above). Both
+   print the address for other PCs, for example
+   `wss://venus.example.com:9443/nodes/connect`.
+2. On the main PC, Settings, Devices, Add device. Copy the token (shown once).
+3. On the other PC: install Tailscale (same account) and Python 3.11+, clone
+   Venus, and double-click `setup-venus-node.cmd`. It asks for the address
+   (a plain name like `venus.example.com` is fine) and the token, writes
+   `apps/node/.env` and starts the tray app. No Docker needed there.
+
+With two or more PCs online, the chat shows a PC picker next to the send
+button; it remembers your pick per browser and otherwise uses the main PC.
+"Hey Venus" runs on the main PC only for now (`VENUS_NODE_VOICE=false` on
+the others). Revoking the device cuts that PC off at once.
 
 ## Troubleshooting
 
