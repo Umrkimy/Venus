@@ -177,3 +177,25 @@ def test_load_settings_reads_mic_name(tmp_path: Path):
     assert load_settings(env_file).mic == "Realtek"
     env_file.write_text(NODE_VALUES)
     assert load_settings(env_file).mic == ""
+
+
+def test_load_settings_voice_defaults_to_on(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES)
+
+    assert load_settings(env_file).voice is True
+
+
+def test_load_settings_reads_voice_off(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES + "VENUS_NODE_VOICE= False \n")
+
+    assert load_settings(env_file).voice is False
+
+
+def test_load_settings_rejects_invalid_voice(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES + "VENUS_NODE_VOICE=maybe\n")
+
+    with pytest.raises(ValueError, match="VENUS_NODE_VOICE must be true or false"):
+        load_settings(env_file)

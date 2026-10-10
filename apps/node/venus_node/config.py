@@ -18,6 +18,8 @@ class NodeSettings:
     wake_phrases: list[str] = field(default_factory=lambda: list(WAKE_PHRASES))
     web_url: str = WEB_URL
     mic: str = ""
+    # False on extra PCs: no "Hey Venus" (and no speech model in RAM).
+    voice: bool = True
 
 
 def load_settings(env_file: Path) -> NodeSettings:
@@ -37,6 +39,7 @@ def load_settings(env_file: Path) -> NodeSettings:
     web_url = (values.get("VENUS_NODE_WEB_URL") or "").strip() or WEB_URL
     # Part of the mic's name, e.g. "Realtek"; empty = the Windows default mic.
     mic = (values.get("VENUS_NODE_MIC") or "").strip()
+    raw_voice = (values.get("VENUS_NODE_VOICE") or "true").strip().lower()
 
     if not device_id.strip():
         raise ValueError("VENUS_NODE_DEVICE_ID is required")
@@ -52,6 +55,9 @@ def load_settings(env_file: Path) -> NodeSettings:
 
     real_actions = raw_real_actions == "true"
 
+    if raw_voice not in ("true", "false"):
+        raise ValueError("VENUS_NODE_VOICE must be true or false")
+
     if projects_root is not None and not projects_root.is_dir():
         raise ValueError("VENUS_NODE_PROJECTS_ROOT must be an existing folder")
 
@@ -65,4 +71,5 @@ def load_settings(env_file: Path) -> NodeSettings:
         wake_phrases=wake_phrases,
         web_url=web_url,
         mic=mic,
+        voice=raw_voice == "true",
     )
