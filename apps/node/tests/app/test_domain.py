@@ -1,3 +1,4 @@
+import json
 import threading
 from pathlib import Path
 
@@ -118,3 +119,24 @@ def test_crashed_caddy_is_started_again(tmp_path, monkeypatch):
     proxy.run()
 
     assert len(processes) == 2
+
+
+def status_json(state: str) -> str:
+    return json.dumps({
+        "BackendState": state,
+        "Self": {"TailscaleIPs": ["100.127.90.122", "fd7a:115c:a1e0::1"]},
+    })
+
+
+def test_running_tailscale_gives_its_ipv4_address():
+    assert domain.running_ipv4(status_json("Running")) == "100.127.90.122"
+
+
+def test_stopped_tailscale_gives_no_address_even_if_it_remembers_one():
+    assert domain.running_ipv4(status_json("Stopped")) is None
+    assert domain.running_ipv4(status_json("NeedsLogin")) is None
+
+
+def test_unreadable_tailscale_status_gives_no_address():
+    assert domain.running_ipv4("not json") is None
+    assert domain.running_ipv4(json.dumps({"BackendState": "Running"})) is None
