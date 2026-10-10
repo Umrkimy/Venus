@@ -3,8 +3,7 @@ import pytest
 from features.auth.create_owner import create_owner_account
 from features.auth.passwords import verify_password
 from features.auth.repository import AuthRepository
-from storage.base import Base
-from storage.database import create_database_engine
+from tests.database import make_test_engine
 
 
 VALID_PASSWORD = "correct horse battery"
@@ -12,8 +11,7 @@ VALID_PASSWORD = "correct horse battery"
 
 @pytest.fixture
 def repository():
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     yield AuthRepository(engine)
     engine.dispose()
 

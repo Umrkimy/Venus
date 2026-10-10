@@ -11,8 +11,7 @@ from features.commands.repository import (
     CommandNotDispatchedError,
     CommandRecordRepository,
 )
-from storage.base import Base
-from storage.database import create_database_engine
+from tests.database import as_utc, make_test_engine
 
 
 @pytest.mark.parametrize("approved", [True, False])
@@ -20,8 +19,7 @@ from storage.database import create_database_engine
 def test_repository_rejects_decision_at_or_after_expiry(
     approved: bool, seconds_after_expiry: int,
 ) -> None:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
     command_id = uuid4()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
@@ -47,8 +45,7 @@ def test_repository_rejects_decision_at_or_after_expiry(
 
 
 def test_repository_stores_and_gets_command_record() -> None:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
 
     command_id = uuid4()
@@ -73,8 +70,7 @@ def test_repository_stores_and_gets_command_record() -> None:
 
 
 def test_repository_marks_all_dispatched_unknown_on_recovery() -> None:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
 
     checked_at = datetime.now(timezone.utc)
@@ -141,7 +137,7 @@ def test_repository_marks_all_dispatched_unknown_on_recovery() -> None:
             assert succeeded is not None
 
             assert dispatched.state == "unknown"
-            assert dispatched.completed_at == checked_at.replace(tzinfo=None)
+            assert as_utc(dispatched.completed_at) == checked_at
             assert dispatched.detail == "Core restarted before a result arrived"
 
             assert awaiting_approval.state == "awaiting_approval"
@@ -153,8 +149,7 @@ def test_repository_marks_all_dispatched_unknown_on_recovery() -> None:
 
 
 def test_repository_completes_command_record() -> None:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
 
     command_id = uuid4()
@@ -181,14 +176,13 @@ def test_repository_completes_command_record() -> None:
     assert stored_record is not None
     assert stored_record.state == "succeeded"
     assert stored_record.detail == "Fake executor accepted spotify"
-    assert stored_record.completed_at == completed_at.replace(tzinfo=None)
+    assert as_utc(stored_record.completed_at) == completed_at
 
     engine.dispose()
 
 
 def test_repository_marks_overdue_dispatched_command_unknown() -> None:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
     command_id = uuid4()
     checked_at = datetime.now(timezone.utc)
@@ -212,14 +206,13 @@ def test_repository_marks_overdue_dispatched_command_unknown() -> None:
         assert changed is True
         assert stored is not None
         assert stored.state == "unknown"
-        assert stored.completed_at == checked_at.replace(tzinfo=None)
+        assert as_utc(stored.completed_at) == checked_at
     finally:
         engine.dispose()
 
 
 def test_repository_does_not_replace_completed_result_with_unknown() -> None:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
     command_id = uuid4()
     checked_at = datetime.now(timezone.utc)
@@ -251,14 +244,13 @@ def test_repository_does_not_replace_completed_result_with_unknown() -> None:
         assert stored is not None
         assert stored.state == "succeeded"
         assert stored.detail == "Fake command completed"
-        assert stored.completed_at == completed_at.replace(tzinfo=None)
+        assert as_utc(stored.completed_at) == completed_at
     finally:
         engine.dispose()
 
 
 def test_repository_rejects_completing_unknown_command() -> None:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
     command_id = uuid4()
     checked_at = datetime.now(timezone.utc)
@@ -294,8 +286,7 @@ def test_repository_rejects_completing_unknown_command() -> None:
 
 
 def test_repository_rejects_completing_unrecorded_command() -> None:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
 
     with pytest.raises(LookupError):
@@ -310,11 +301,7 @@ def test_repository_rejects_completing_unrecorded_command() -> None:
 
 
 def test_repository_accepts_only_one_concurrent_approval_decision(tmp_path):
-    database_path = tmp_path / "core.db"
-    engine = create_database_engine(
-        f"sqlite+pysqlite:///{database_path.as_posix()}"
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine(sqlite_file=tmp_path / "core.db")
     repository = CommandRecordRepository(engine)
 
     command_id = uuid4()

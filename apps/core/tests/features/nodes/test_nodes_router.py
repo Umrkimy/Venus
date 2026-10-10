@@ -6,9 +6,7 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import StaticPool
 from starlette.websockets import WebSocketDisconnect
 
 from config import CoreSettings, get_settings
@@ -44,7 +42,6 @@ from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.shortcuts.repository import ShortcutRepository
 from features.voice.live import LiveVoice, get_live_voice
-from storage.base import Base
 
 from venus_protocol.schemas.commands import (
     CommandResult,
@@ -52,6 +49,7 @@ from venus_protocol.schemas.commands import (
     OpenProjectCommand,
     OpenUrlCommand,
 )
+from tests.database import make_test_engine
 
 TEST_NODE_TOKEN = "test-node-token"
 TEST_OWNER_TOKEN = "test-owner-token"
@@ -131,12 +129,7 @@ def connected_pc_umar():
 
 @pytest.fixture(autouse=True)
 def command_records():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     auth_repository = AuthRepository(engine)
     app.dependency_overrides[get_auth_repository] = lambda: auth_repository
     settings_repository = SettingsRepository(engine)

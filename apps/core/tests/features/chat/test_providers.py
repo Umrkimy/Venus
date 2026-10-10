@@ -5,16 +5,13 @@ from config import CoreSettings
 from features.chat.dependencies import get_chat_provider
 from features.chat.openai_provider import OpenAIProvider
 from features.chat.provider import FakeProvider
-from features.settings.models.llm import LlmSetting  # noqa: F401 registers the table
 from features.settings.repository import SettingsRepository
 from features.settings.secrets import encrypt_text
-from storage.base import Base
-from storage.database import create_database_engine
+from tests.database import make_test_engine
 
 
 def empty_repository() -> SettingsRepository:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     return SettingsRepository(engine)
 
 

@@ -3,8 +3,6 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 from features.auth import router as auth_router
 from features.auth.dependencies import SESSION_COOKIE_NAME, get_auth_repository
@@ -12,17 +10,12 @@ from features.auth.passwords import hash_password
 from features.auth.rate_limit import LoginRateLimiter, get_login_rate_limiter
 from features.auth.repository import AuthRepository
 from main import app
-from storage.base import Base
+from tests.database import make_test_engine
 
 
 @pytest.fixture
 def repository():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     repository.create_owner(
         "umar",

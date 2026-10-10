@@ -2,8 +2,6 @@ from uuid import uuid4
 
 import pytest
 
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -19,12 +17,12 @@ from features.auth.repository import AuthRepository
 from features.commands.dependencies import get_command_record_repository
 from features.commands.models.command_record import CommandRecord
 from features.commands.repository import CommandRecordRepository
-from storage.base import Base
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
 )
 from main import app
+from tests.database import make_test_engine
 
 
 TEST_OWNER_TOKEN = "test-owner-token"
@@ -34,12 +32,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def command_records():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = CommandRecordRepository(engine)
     app.dependency_overrides[get_command_record_repository] = (
         lambda: repository

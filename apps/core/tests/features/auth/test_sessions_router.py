@@ -3,8 +3,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
@@ -12,7 +10,7 @@ from features.auth.passwords import hash_password
 from features.auth.rate_limit import LoginRateLimiter, get_login_rate_limiter
 from features.auth.repository import AuthRepository
 from main import app
-from storage.base import Base
+from tests.database import make_test_engine
 
 IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile Safari/604.1"
 WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0 Safari/537.36"
@@ -20,12 +18,7 @@ WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0 Safari/537.36"
 
 @pytest.fixture
 def repository():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = AuthRepository(engine)
     repository.create_owner("umar", hash_password("correct horse"), datetime.now(timezone.utc))
     limiter = LoginRateLimiter()

@@ -1,12 +1,9 @@
-from features.settings.models.command_mode import CommandModeSetting  # noqa: F401 registers the table
 from features.settings.repository import SettingsRepository
-from storage.base import Base
-from storage.database import create_database_engine
+from tests.database import make_test_engine
 
 
 def create_repository() -> SettingsRepository:
-    engine = create_database_engine("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     return SettingsRepository(engine)
 
 

@@ -4,9 +4,7 @@ from uuid import uuid4
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
@@ -15,7 +13,7 @@ from features.memories.dependencies import get_memory_repository
 from features.memories.models.memory import Memory
 from features.memories.repository import MemoryRepository
 from main import app
-from storage.base import Base
+from tests.database import make_test_engine
 
 TEST_OWNER_TOKEN = "test-owner-token"
 OWNER_HEADERS = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
@@ -35,12 +33,7 @@ def saved_minutes_ago(memories: MemoryRepository, text: str, minutes: int) -> No
 
 @pytest.fixture
 def memories():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     repository = MemoryRepository(engine)
     app.dependency_overrides[get_settings] = lambda: CoreSettings(
         dev_node_token="test-node-token",

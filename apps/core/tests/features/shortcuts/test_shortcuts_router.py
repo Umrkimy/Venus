@@ -1,8 +1,6 @@
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
@@ -10,7 +8,7 @@ from features.auth.repository import AuthRepository
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.repository import ShortcutRepository
 from main import app
-from storage.base import Base
+from tests.database import make_test_engine
 
 TEST_OWNER_TOKEN = "test-owner-token"
 OWNER_HEADERS = {"Authorization": f"Bearer {TEST_OWNER_TOKEN}"}
@@ -26,12 +24,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def override_dependencies():
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    engine = make_test_engine()
     app.dependency_overrides[get_settings] = lambda: CoreSettings(
         dev_node_token="test-node-token",
         dev_owner_token=TEST_OWNER_TOKEN,
