@@ -25,8 +25,9 @@ export function useDevices() {
   return useQuery({
     queryKey: ["devices"],
     queryFn: () => getJson<Device[]>("/api/devices"),
-    // "Connected" changes when a PC starts or stops.
-    refetchInterval: 10_000,
+    // "Connected" changes when a PC starts or stops; the chat's PC picker
+    // and its "PC is offline" note read it too.
+    refetchInterval: 5000,
   });
 }
 

@@ -82,10 +82,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "The Caddyfile did not validate. See the messages above."
 }
 
-# tailscale serve holds port 443 on the Tailscale address; Caddy needs it.
+# tailscale serve holds ports 443 and 9443 on the Tailscale address; Caddy needs them.
 # It says "handler does not exist" when already off, so errors are ignored.
 $ErrorActionPreference = "Continue"
 & $tailscale serve --https=443 off 2>&1 | Out-Null
+& $tailscale serve --https=9443 off 2>&1 | Out-Null
 $ErrorActionPreference = "Stop"
 
 # The tray app starts Caddy when it starts, so restart it.
@@ -109,3 +110,5 @@ Write-Host "Open this on your phone (Tailscale app connected):"
 Write-Host "  https://$domain"
 Write-Host "The first start gets a certificate, which can take a minute."
 Write-Host "Caddy's messages: apps\node\data\caddy.log"
+Write-Host "Other PCs (setup-venus-node.cmd) connect to:"
+Write-Host "  wss://${domain}:9443/nodes/connect"

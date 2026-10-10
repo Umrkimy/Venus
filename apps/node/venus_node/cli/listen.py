@@ -309,6 +309,10 @@ def wake_listeners(
     env_file: Path, settings: NodeSettings,
 ) -> tuple[WakeListener, WakeListener, WakeListener] | None:
     """The "Hey Venus", "start listening" and "stop venus" listeners, or None without a model."""
+    if not settings.voice:
+        # Checked before importing Vosk, so the model never loads.
+        print("Voice is off on this PC (VENUS_NODE_VOICE=false).")
+        return None
     import vosk
 
     path = wake_model_path(env_file.parent, settings.wake_model)

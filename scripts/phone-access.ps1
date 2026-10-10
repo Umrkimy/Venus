@@ -3,7 +3,9 @@
 #   .\scripts\phone-access.ps1
 #       Shares the web app (port 3000) as https://<pc>.<tailnet>.ts.net,
 #       visible only to devices signed in to your own Tailscale account.
-#       Tailscale keeps sharing it after a reboot. Safe to run again.
+#       Also shares Core (port 9000) on port 9443, for Venus Nodes on your
+#       other PCs: VENUS_NODE_CORE_URL=wss://<that name>:9443/nodes/connect
+#       Tailscale keeps sharing both after a reboot. Safe to run again.
 #
 #   .\scripts\phone-access.ps1 -Off
 #       Stops sharing.
@@ -30,6 +32,10 @@ $tailscale = Find-Tailscale
 if ($Off) {
     & $tailscale serve --https=443 off
     if ($LASTEXITCODE -ne 0) { throw "tailscale serve off failed." }
+    # Older setups never shared 9443; "handler does not exist" is fine then.
+    $ErrorActionPreference = "Continue"
+    & $tailscale serve --https=9443 off 2>&1 | Out-Null
+    $ErrorActionPreference = "Stop"
     Write-Host "Venus is no longer shared over Tailscale."
     return
 }
@@ -43,9 +49,13 @@ if ($status.BackendState -ne "Running") {
 if ($LASTEXITCODE -ne 0) {
     throw "tailscale serve failed. Check that HTTPS Certificates are on in the Tailscale admin console (DNS page)."
 }
+& $tailscale serve --bg --https=9443 9000
+if ($LASTEXITCODE -ne 0) { throw "tailscale serve for Core (port 9443) failed." }
 
 $name = $status.Self.DNSName.TrimEnd(".")
 Write-Host ""
 Write-Host "Open this on your phone (Tailscale app connected):"
 Write-Host "  https://$name"
 Write-Host "Venus itself must be running (start-venus-use.cmd or start-venus.cmd)."
+Write-Host "Other PCs (setup-venus-node.cmd) connect to:"
+Write-Host "  wss://${name}:9443/nodes/connect"

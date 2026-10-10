@@ -7,13 +7,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { isFinal, useCommandStatus, type ChatAction } from "./action-card";
 import ChatBox, { type ChatMessage } from "./chat-box";
+import PcPicker, { usePcTarget } from "./pc-picker";
 import { useSpeaker } from "./use-speaker";
 import { getJson } from "@/lib/get-json";
 import { useListenOn } from "@/features/voice/listen-store";
 import { useHandsFree } from "@/features/voice/use-hands-free";
 import { useFrontTab, useVoiceState, type VoiceStateName } from "@/features/voice/use-voice-state";
 import { POLL_MS, VOICE_POLL_MS } from "@/lib/poll";
-import { useNodes } from "@/lib/use-nodes";
 
 type SavedMessage = {
   role: "user" | "assistant";
@@ -139,9 +139,9 @@ export default function ChatPanel({
     return () => clearTimeout(timer);
   }, [thinkingElsewhere]);
 
-  // Venus has one PC for now: the chat talks to the first one online.
-  const nodes = useNodes();
-  const deviceId = nodes.data?.device_ids[0];
+  // The PC that runs what you ask; a picker shows with two or more online.
+  const pc = usePcTarget();
+  const deviceId = pc.deviceId;
 
   function stopVoice() {
     speaker.stop();
@@ -260,6 +260,7 @@ export default function ChatPanel({
         liveWords={handsFree.words}
         localVoice={localVoice}
         onStopVoice={stopVoice}
+        pcPicker={<PcPicker {...pc} />}
       />
 
       <div aria-live="polite" className="empty:hidden mx-auto w-full max-w-3xl px-4 pb-3">

@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -32,7 +33,7 @@ def tailnet_ip() -> str | None:
     )
     try:
         result = subprocess.run(
-            [tailscale, "ip", "-4"],
+            [tailscale, "status", "--json"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -40,8 +41,23 @@ def tailnet_ip() -> str | None:
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
-    lines = result.stdout.split()
-    return lines[0] if result.returncode == 0 and lines else None
+    return running_ipv4(result.stdout) if result.returncode == 0 else None
+
+
+def running_ipv4(status_json: str) -> str | None:
+    """The IPv4 address from `tailscale status --json`, only while connected.
+
+    `tailscale ip -4` still prints the old address when Tailscale is stopped,
+    and Caddy can't listen on it then.
+    """
+    try:
+        status = json.loads(status_json)
+    except ValueError:
+        return None
+    if status.get("BackendState") != "Running":
+        return None
+    addresses = (status.get("Self") or {}).get("TailscaleIPs") or []
+    return next((address for address in addresses if "." in address), None)
 
 
 class DomainProxy:

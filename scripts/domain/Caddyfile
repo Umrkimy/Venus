@@ -11,13 +11,26 @@
 	admin off
 }
 
-{$VENUS_DOMAIN} {
+(tailnet_only) {
 	# Listen only on the Tailscale address: not on the home network or internet.
 	bind {$VENUS_TAILNET_IP}
 	tls {
 		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
 	}
+}
+
+# The web page.
+{$VENUS_DOMAIN} {
+	import tailnet_only
 	# Caddy puts the real client address in X-Forwarded-For (it ignores one
 	# sent by the client), so Core's login limit counts each device apart.
 	reverse_proxy 127.0.0.1:3000
+}
+
+# Core itself, for Venus Nodes on your other PCs:
+# VENUS_NODE_CORE_URL=wss://<VENUS_DOMAIN>:9443/nodes/connect
+# Core keeps listening on 127.0.0.1 only; Caddy is the one door in.
+{$VENUS_DOMAIN}:9443 {
+	import tailnet_only
+	reverse_proxy 127.0.0.1:9000
 }

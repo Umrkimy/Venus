@@ -1,4 +1,6 @@
 import io
+import sys
+from dataclasses import replace
 from threading import Event
 from urllib.error import HTTPError
 
@@ -460,3 +462,12 @@ def test_quiet_after_an_answer_ends_the_conversation_for_free(monkeypatch, capsy
     # The silent follow-up never went to Core.
     assert len(calls) == 1
     assert "conversation ended" in capsys.readouterr().out
+
+
+def test_wake_listeners_skips_vosk_when_voice_is_off(monkeypatch, tmp_path, capsys):
+    # None in sys.modules makes "import vosk" fail, so this proves it is never loaded.
+    monkeypatch.setitem(sys.modules, "vosk", None)
+    settings = replace(SETTINGS, voice=False)
+
+    assert listen.wake_listeners(tmp_path / ".env", settings) is None
+    assert "Voice is off" in capsys.readouterr().out
