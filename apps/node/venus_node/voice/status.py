@@ -34,6 +34,8 @@ class Status:
         self._web_listening = False
         self._closed = False
         self._end_pause_ms = DEFAULT_END_PAUSE_MS
+        self._mic = ""  # Settings mic list; "" = not picked there.
+        self._mic_in_use = ""
         # "Stop talking" (web button, tray, "stop venus"): cut Luna off or drop her answer.
         self.stop = Event()
         # Wakes the Core reporter at once, instead of on its next tick.
@@ -92,6 +94,24 @@ class Status:
         """Quiet mic frames in a row that end your sentence (the Settings slider)."""
         with self._lock:
             return max(round(self._end_pause_ms / FRAME_MS), 1)
+
+    def set_mic(self, mic: str) -> None:
+        with self._lock:
+            self._mic = mic
+
+    def wanted_mic(self, fallback: str) -> str:
+        """The mic picked in Settings, else `fallback` (VENUS_NODE_MIC in .env)."""
+        with self._lock:
+            return self._mic or fallback
+
+    def use_mic(self, mic: str) -> None:
+        with self._lock:
+            self._mic_in_use = mic
+
+    @property
+    def mic_in_use(self) -> str:
+        with self._lock:
+            return self._mic_in_use
 
     def request_stop(self) -> None:
         self.stop.set()

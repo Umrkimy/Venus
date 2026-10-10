@@ -5,6 +5,23 @@ import numpy as np
 
 from venus_node.voice.status import Status
 
+# After these you're still thinking: wait twice as long (same lists as the web).
+FILLERS = {"uh", "uhh", "uhm", "um", "umm", "er", "erm", "hmm", "hm", "ah", "eh"}
+LINKS = {"and", "but", "so", "or", "like", "because", "cause", "then", "the", "a", "to", "with", "if"}
+THINKING_TIMES = 2
+
+
+def still_thinking(words: str) -> bool:
+    """Your words so far end in "uh", "and", "so"...: more is coming."""
+    last = words.lower().split()[-1:] or [""]
+    return last[0] in FILLERS or last[0] in LINKS
+
+
+def end_frames(status: Status) -> int:
+    """Quiet frames that end your sentence: the Settings pause, twice after "uh"."""
+    frames = status.end_pause_frames
+    return frames * THINKING_TIMES if still_thinking(status.report()[1]) else frames
+
 
 class LiveWords:
     """Your words while you talk, from Vosk's free-text guess.

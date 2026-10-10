@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 import numpy as np
 
@@ -11,11 +11,13 @@ def is_quiet(frame: np.ndarray, level: int = 500) -> bool:
 
 def record_until_silence(
     frames: Iterable[np.ndarray],
-    quiet_frames: int = 9,
+    quiet_frames: int | Callable[[], int] = 9,
     max_frames: int = 125,
     start_frames: int = 40,
 ) -> bytes:
     """Keep frames until about 0.7 s of quiet (9 x 80 ms) or 10 seconds.
+
+    `quiet_frames` can be a function, asked each frame: after "uh" you get longer.
 
     Before you start talking it waits longer (40 x 80 ms, about 3 s): people
     pause after "Hey Venus", and stopping then sent only silence to Core.
@@ -31,7 +33,8 @@ def record_until_silence(
             # A short pause mid-sentence starts the count again.
             quiet_in_a_row = 0
             talking = True
-        limit = quiet_frames if talking else start_frames
+        end = quiet_frames() if callable(quiet_frames) else quiet_frames
+        limit = end if talking else start_frames
         if quiet_in_a_row >= limit or len(kept) >= max_frames:
             break
     return b"".join(frame.tobytes() for frame in kept)

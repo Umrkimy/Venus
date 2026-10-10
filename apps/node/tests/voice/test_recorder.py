@@ -74,3 +74,14 @@ def test_heard_speech_only_when_something_was_loud():
 
     assert heard_speech(quiet) is False
     assert heard_speech(quiet + loud) is True
+
+
+def test_record_asks_a_quiet_frames_function_every_frame():
+    loud = np.full(1280, 3000, dtype=np.int16)
+    quiet = np.zeros(1280, dtype=np.int16)
+    limits = iter([5, 5, 2, 2, 2, 2, 2])
+
+    pcm = record_until_silence([loud, loud, quiet, quiet, quiet, quiet], quiet_frames=lambda: next(limits))
+
+    # The wait shrank to 2 while recording: 2 loud + 2 quiet frames kept.
+    assert len(pcm) == 4 * 1280 * 2

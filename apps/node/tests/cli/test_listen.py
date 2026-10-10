@@ -303,8 +303,47 @@ def test_hear_waits_as_long_as_the_pause_setting_and_shows_your_words(monkeypatc
 
     listen.hear(SETTINGS, None, HearsOnce(), FakeListener(), status, FakeMic([]), muted, muted.set, None, words)
 
-    assert recorded["quiet_frames"] == 25  # 2 s of 80 ms frames.
+    assert recorded["quiet_frames"]() == 25  # 2 s of 80 ms frames.
     assert recorded["subtitle"] == "open spotify"
+
+
+def test_hear_returns_to_reopen_when_another_mic_is_picked():
+    status = Status()
+    status.use_mic("")
+    status.set_mic("Microphone (Realtek(R) Audio)")
+
+    # Returns at the first frame instead of waiting for "Hey Venus".
+    listen.hear(SETTINGS, None, FakeListener(), FakeListener(), status, FakeMic([]), Event())
+
+    assert status.snapshot()[0] == "idle"
+
+
+def test_listen_loop_opens_the_mic_picked_in_settings(monkeypatch):
+    status = Status()
+    status.set_mic("Microphone (Realtek(R) Audio)")
+    opened = []
+
+    def fake_open(name):
+        opened.append(name)
+        status.close()
+        return FakeMic([])
+
+    monkeypatch.setattr(listen, "open_mic", fake_open)
+
+    listen.listen_loop(SETTINGS, FakeListener(), FakeListener(), status)
+
+    assert opened == ["Microphone (Realtek(R) Audio)"]
+
+
+def test_mic_names_lists_each_mic_once_from_one_sound_system():
+    devices = [
+        {"name": "Microsoft Sound Mapper - Input", "hostapi": 0, "max_input_channels": 2},
+        {"name": "Microphone (Realtek(R) Audio)", "hostapi": 0, "max_input_channels": 2},
+        {"name": "Speakers (Realtek(R) Audio)", "hostapi": 0, "max_input_channels": 0},
+        {"name": "Microphone (Realtek(R) Audio)", "hostapi": 1, "max_input_channels": 2},
+    ]
+
+    assert listen.mic_names(devices, 0) == ["Microphone (Realtek(R) Audio)"]
 
 
 def test_answer_says_so_when_the_voice_stream_breaks(monkeypatch, capsys):
