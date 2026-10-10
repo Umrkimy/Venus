@@ -14,6 +14,7 @@ from features.settings.repository import SettingsRepository
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.shortcuts.repository import ShortcutRepository
+from features.usage.dependencies import get_usage_repository
 from features.usage.repository import UsageRepository
 from features.voice.dependencies import get_transcriber
 from features.voice.router import MAX_AUDIO_BYTES, NOTHING_HEARD
@@ -58,6 +59,7 @@ def engine():
     app.dependency_overrides[get_settings] = settings
     app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
     app.dependency_overrides[get_settings_repository] = lambda: SettingsRepository(engine)
+    app.dependency_overrides[get_usage_repository] = lambda: UsageRepository(engine)
     app.dependency_overrides[get_shortcut_repository] = lambda: ShortcutRepository(engine)
     yield engine
     app.dependency_overrides.clear()
