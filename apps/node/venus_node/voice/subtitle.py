@@ -17,28 +17,41 @@ def load_font() -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         return ImageFont.load_default(FONT_SIZE)
 
 
-def wrap(text: str, fits: Callable[[str], bool], max_lines: int = MAX_LINES) -> list[str]:
-    """Split into lines that fit; cut with "..." past `max_lines`."""
+def wrap(
+    text: str, fits: Callable[[str], bool], max_lines: int = MAX_LINES, newest: bool = False,
+) -> list[str]:
+    """Split into lines that fit; cut with "..." past `max_lines`.
+
+    `newest` keeps the last lines instead (your live words: what you say now matters).
+    """
     lines: list[str] = []
     for word in text.split():
         if lines and fits(f"{lines[-1]} {word}"):
             lines[-1] = f"{lines[-1]} {word}"
         else:
             lines.append(word)
-    if len(lines) > max_lines:
+    if len(lines) > max_lines and newest:
+        lines = lines[-max_lines:]
+        first = lines[0]
+        # The dots must fit too: drop words from the front until they do.
+        while not fits(f"...{first}") and " " in first:
+            first = first.split(" ", 1)[1]
+        lines[0] = f"...{first}"
+    elif len(lines) > max_lines:
         lines = lines[:max_lines]
         lines[-1] = f"{lines[-1]}..."
     return lines
 
 
-def subtitle_pixels(text: str, width: int, height: int, font=None) -> np.ndarray:
-    """Luna's line in a dark box at the bottom right: premultiplied BGRA, like the orb."""
+def subtitle_pixels(text: str, width: int, height: int, font=None, newest: bool = False) -> np.ndarray:
+    """Luna's line (or your live words) in a dark box at the bottom right:
+    premultiplied BGRA, like the orb."""
     font = font or load_font()
     image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     if text.strip():
         draw = ImageDraw.Draw(image)
         room = width - 2 * PADDING
-        lines = wrap(text, lambda line: draw.textlength(line, font=font) <= room)
+        lines = wrap(text, lambda line: draw.textlength(line, font=font) <= room, newest=newest)
         line_height = FONT_SIZE + 5
         box_width = int(max(draw.textlength(line, font=font) for line in lines)) + 2 * PADDING
         box_height = len(lines) * line_height + 2 * PADDING - 4

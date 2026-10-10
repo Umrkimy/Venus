@@ -15,6 +15,13 @@ def test_wrap_cuts_long_lines_with_dots():
     assert lines == ["one two", "three four..."]
 
 
+def test_wrap_newest_keeps_the_last_lines_for_live_words():
+    lines = wrap("one two three four five six seven eight nine ten", short, max_lines=2, newest=True)
+
+    # What you say now matters; "eight nine" plus dots is too wide, so "eight" goes.
+    assert lines == ["...nine", "ten"]
+
+
 def test_no_subtitle_is_fully_see_through():
     pixels = subtitle_pixels("", 300, 84)
 

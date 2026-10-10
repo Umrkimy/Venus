@@ -13,6 +13,10 @@ SLEEPING = "sleeping"  # Shown briefly to confirm "stop listening".
 # Loudness of a normal speaking voice into a headset mic is about 2000-3000.
 LOUD = 2500.0
 
+# Until Core says otherwise (Settings -> Voice): wait 1.5 s after you stop talking.
+DEFAULT_END_PAUSE_MS = 1500
+FRAME_MS = 80
+
 
 class Status:
     """What the voice loop is doing, shared with the circle window and Core.
@@ -29,6 +33,7 @@ class Status:
         self._web_watching = False
         self._web_listening = False
         self._closed = False
+        self._end_pause_ms = DEFAULT_END_PAUSE_MS
         # "Stop talking" (web button, tray, "stop venus"): cut Luna off or drop her answer.
         self.stop = Event()
         # Wakes the Core reporter at once, instead of on its next tick.
@@ -42,6 +47,13 @@ class Status:
             if state != LISTENING:
                 self._level = 0.0
         self.changed.set()
+
+    def set_heard(self, words: str) -> None:
+        """Your words so far while you talk, shown where Luna's line goes."""
+        with self._lock:
+            # Not after you stop: thinking and speaking have their own line.
+            if self._state == LISTENING:
+                self._subtitle = words
 
     def set_level(self, level: float) -> None:
         with self._lock:
@@ -70,6 +82,16 @@ class Status:
         """That tab listens with the browser mic, so "Hey Venus" here pauses."""
         with self._lock:
             return self._web_listening
+
+    def set_end_pause_ms(self, end_pause_ms: int) -> None:
+        with self._lock:
+            self._end_pause_ms = end_pause_ms
+
+    @property
+    def end_pause_frames(self) -> int:
+        """Quiet mic frames in a row that end your sentence (the Settings slider)."""
+        with self._lock:
+            return max(round(self._end_pause_ms / FRAME_MS), 1)
 
     def request_stop(self) -> None:
         self.stop.set()
