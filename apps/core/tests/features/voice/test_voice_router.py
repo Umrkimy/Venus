@@ -14,6 +14,8 @@ from features.settings.repository import SettingsRepository
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.shortcuts.repository import ShortcutRepository
+from features.usage.dependencies import get_usage_repository
+from features.usage.repository import UsageRepository
 from features.voice.dependencies import get_transcriber
 from features.voice.router import MAX_AUDIO_BYTES, NOTHING_HEARD
 from features.voice.transcriber import TRANSCRIBE_MODEL, OpenAITranscriber, is_hint_echo
@@ -57,6 +59,7 @@ def engine():
     app.dependency_overrides[get_settings] = settings
     app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
     app.dependency_overrides[get_settings_repository] = lambda: SettingsRepository(engine)
+    app.dependency_overrides[get_usage_repository] = lambda: UsageRepository(engine)
     app.dependency_overrides[get_shortcut_repository] = lambda: ShortcutRepository(engine)
     yield engine
     app.dependency_overrides.clear()
@@ -194,18 +197,21 @@ def test_transcribe_without_openai_key_gives_503(engine):
 
 def test_transcribe_with_openai_key_builds_openai_transcriber(engine):
     repository = SettingsRepository(engine)
-    transcriber = get_transcriber(settings("openai", "sk-test"), repository)
+    usage = UsageRepository(engine)
+    transcriber = get_transcriber(settings("openai", "sk-test"), repository, usage)
 
     assert isinstance(transcriber, OpenAITranscriber)
+    assert transcriber._usage is usage
 
 
 class FakeTranscriptions:
-    def __init__(self) -> None:
+    def __init__(self, usage=None) -> None:
         self.calls: list[dict] = []
+        self.usage = usage
 
     async def create(self, **kwargs):
         self.calls.append(kwargs)
-        return SimpleNamespace(text="  open spotify  ")
+        return SimpleNamespace(text="  open spotify  ", usage=self.usage)
 
 
 def test_openai_transcriber_sends_audio_and_model():
@@ -226,6 +232,26 @@ def test_openai_transcriber_sends_audio_and_model():
             "prompt": "Venus, comix",
         },
     ]
+
+
+class FakeUsageLog:
+    def __init__(self) -> None:
+        self.records: list[tuple] = []
+
+    def record(self, kind: str, model: str, usage) -> None:
+        self.records.append((kind, model, usage))
+
+
+def test_openai_transcriber_counts_its_tokens():
+    used = SimpleNamespace(input_tokens=40, output_tokens=4)
+    transcriptions = FakeTranscriptions(usage=used)
+    client = SimpleNamespace(audio=SimpleNamespace(transcriptions=transcriptions))
+    usage = FakeUsageLog()
+    transcriber = OpenAITranscriber(client, usage=usage)
+
+    asyncio.run(transcriber.transcribe(b"audio", "audio/webm", "Venus"))
+
+    assert usage.records == [("transcribe", TRANSCRIBE_MODEL, used)]
 
 
 def test_transcribe_accepts_the_node_token(transcriber: FakeTranscriber):

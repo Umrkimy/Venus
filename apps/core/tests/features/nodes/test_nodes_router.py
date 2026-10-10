@@ -19,6 +19,8 @@ from features.commands.result_registry import (
 from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
 from features.chat.dependencies import get_chat_provider
+from features.usage.dependencies import get_usage_repository
+from features.usage.repository import UsageRepository
 from features.chat.provider import BrainReply
 from features.chat.schemas import ChatTurn
 from features.commands.dependencies import get_command_record_repository
@@ -140,6 +142,8 @@ def command_records():
     app.dependency_overrides[get_shortcut_repository] = (
         lambda: shortcut_repository
     )
+    # Chat counts its OpenAI tokens in the test database too.
+    app.dependency_overrides[get_usage_repository] = lambda: UsageRepository(engine)
     conversation_repository = ConversationRepository(engine)
     app.dependency_overrides[get_conversation_repository] = (
         lambda: conversation_repository

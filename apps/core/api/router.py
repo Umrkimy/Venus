@@ -12,6 +12,7 @@ from features.auth.router import router as auth_router
 from features.settings.router import router as settings_router
 from features.shortcuts.router import router as shortcuts_router
 from features.voice.router import router as voice_router
+from features.usage.router import router as usage_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -26,3 +27,4 @@ api_router.include_router(projects_router)
 api_router.include_router(personalities_router)
 api_router.include_router(memories_router)
 api_router.include_router(voice_router)
+api_router.include_router(usage_router)

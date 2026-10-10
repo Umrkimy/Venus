@@ -273,3 +273,32 @@ def test_openai_provider_keeps_luna_line_written_with_the_tool_call():
     reply = asyncio.run(provider.reply("open spotify", [], ""))
 
     assert reply == BrainReply(text="Opening Spotify, love.", commands=["open Spotify"])
+
+
+class FakeUsageLog:
+    def __init__(self) -> None:
+        self.records: list[tuple] = []
+
+    def record(self, kind: str, model: str, usage) -> None:
+        self.records.append((kind, model, usage))
+
+
+def test_openai_provider_counts_every_paid_call():
+    # Saving a fact takes two calls: the reply, then the answer after it.
+    client = FakeClient(output=[function_call("save_memory", '{"fact": "Owner likes lo-fi"}')])
+    usage = FakeUsageLog()
+    provider = OpenAIProvider(client, "gpt-6-luna", usage)
+
+    asyncio.run(provider.reply("i like lo-fi", [], ""))
+    asyncio.run(provider.say("open spotify", ""))
+
+    assert [(kind, model) for kind, model, _ in usage.records] == [("chat", "gpt-6-luna")] * 3
+
+
+def test_openai_provider_counts_nothing_when_the_call_fails():
+    usage = FakeUsageLog()
+    provider = OpenAIProvider(FakeClient(error=OpenAIError("boom")), "gpt-6-luna", usage)
+
+    asyncio.run(provider.reply("hi", [], ""))
+
+    assert usage.records == []
