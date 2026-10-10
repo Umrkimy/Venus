@@ -51,6 +51,62 @@ jobs:
         shell: pwsh
         run: .\apps\node\.venv\Scripts\python.exe -m pytest packages/venus-protocol/tests
 
+  # Same Postgres as server mode. The Windows job above uses SQLite (fast);
+  # this one catches what only real Postgres does (time zones, types,
+  # migrations). Service containers need a Linux runner.
+  core-postgres:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: venus
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: venus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U venus -d venus_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: apps/core
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install Core dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-dev.txt
+
+      # Fresh clone path: build every table from migrations, then make sure
+      # the models need no new migration, and every downgrade works.
+      - name: Migrations
+        env:
+          VENUS_CORE_DEV_NODE_TOKEN: ci-node-token
+          VENUS_CORE_DATABASE_URL: postgresql+psycopg://venus:ci-only-password@127.0.0.1:5432/venus_test
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+          python -m alembic downgrade base
+          python -m alembic upgrade head
+
+      # Only the test database address: config tests check that real
+      # VENUS_CORE_* variables win over .env, so leave the others unset.
+      - name: Test Core on Postgres
+        env:
+          VENUS_CORE_TEST_DATABASE_URL: postgresql+psycopg://venus:ci-only-password@127.0.0.1:5432/venus_test
+        run: python -m pytest
+
   web:
     runs-on: ubuntu-latest
 

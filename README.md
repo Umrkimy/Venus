@@ -249,6 +249,17 @@ npx tsc --noEmit
 npm run lint
 ```
 
+Core tests use SQLite in memory by default. CI also runs them on real
+Postgres. To do that locally, make a scratch database (its name must end in
+`_test`, because every test wipes its tables) and point the tests at it:
+
+```powershell
+docker compose exec postgres psql -U venus -d postgres -c "create database venus_test"
+Set-Location apps/core
+$env:VENUS_CORE_TEST_DATABASE_URL = "postgresql+psycopg://venus:<password>@127.0.0.1:5432/venus_test"
+.\.venv\Scripts\python.exe -m pytest
+```
+
 ## Safety
 
 - Core, web and Postgres listen on `127.0.0.1` only; nothing is reachable from
