@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 
-from venus_node.voice.live_words import LiveWords, captioned
+from venus_node.voice.live_words import LiveWords, captioned, end_frames, still_thinking
 from venus_node.voice.status import LISTENING, THINKING, Status
 
 FRAME = np.zeros(1280, dtype=np.int16)
@@ -77,3 +77,22 @@ def test_your_words_never_cover_lunas_line():
     status.set_heard("open spotify")
 
     assert status.report() == (THINKING, "")
+
+
+def test_still_thinking_after_fillers_and_linking_words():
+    assert still_thinking("open spotify and")
+    assert still_thinking("play some uh")
+    assert not still_thinking("open spotify")
+    assert not still_thinking("")
+
+
+def test_end_wait_doubles_while_you_are_still_thinking():
+    status = Status()
+    status.set(LISTENING)
+    status.set_heard("open spotify and")
+
+    assert end_frames(status) == 38  # 2 x 19 frames.
+
+    status.set_heard("open spotify and play music")
+
+    assert end_frames(status) == 19

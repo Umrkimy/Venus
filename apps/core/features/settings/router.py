@@ -167,6 +167,11 @@ def set_time_settings(
     return time_settings_json(settings_repository.get_time())
 
 
+def listening_json(settings_repository: SettingsRepository) -> dict:
+    saved = settings_repository.get_listening()
+    return {"end_pause_ms": saved.end_pause_ms, "mic": saved.mic}
+
+
 @router.get("/listening", dependencies=[Depends(require_owner)])
 def get_listening_settings(
     settings_repository: Annotated[
@@ -174,7 +179,7 @@ def get_listening_settings(
         Depends(get_settings_repository),
     ],
 ):
-    return {"end_pause_ms": settings_repository.get_end_pause_ms()}
+    return listening_json(settings_repository)
 
 
 @router.put("/listening", dependencies=[Depends(require_owner)])
@@ -185,5 +190,5 @@ def set_listening_settings(
         Depends(get_settings_repository),
     ],
 ):
-    settings_repository.set_end_pause_ms(request.end_pause_ms)
-    return {"end_pause_ms": settings_repository.get_end_pause_ms()}
+    settings_repository.set_listening(request.end_pause_ms, request.mic)
+    return listening_json(settings_repository)

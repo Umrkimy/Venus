@@ -14,7 +14,7 @@ import numpy as np
 
 from venus_node.config import NodeSettings, load_settings
 from venus_node.voice.conversation import VoiceChat
-from venus_node.voice.live_words import LiveWords, captioned
+from venus_node.voice.live_words import LiveWords, captioned, end_frames
 from venus_node.voice.core_client import chat, speak_stream, transcribe
 from venus_node.voice.player import play_pcm
 from venus_node.voice.recorder import heard_speech, record_until_silence, trim_silence
@@ -180,6 +180,31 @@ def find_mic(name: str, devices: list[dict]) -> int | None:
     return None
 
 
+def mic_names(devices: list[dict], host_api: int) -> list[str]:
+    """Input names on one sound system (Windows lists each mic up to 4 times), for Settings."""
+    names: list[str] = []
+    for device in devices:
+        name = device["name"]
+        if device["hostapi"] != host_api or device["max_input_channels"] == 0:
+            continue
+        # Windows' "Sound Mapper" is just the default mic again.
+        if "sound mapper" in name.lower() or name in names:
+            continue
+        names.append(name)
+    return names
+
+
+def list_mics() -> list[str]:
+    try:
+        import sounddevice as sd
+
+        # The sound system find_mic opens first, so a name from here picks that one.
+        return mic_names(list(sd.query_devices()), sd.default.hostapi)
+    except (ImportError, OSError) as exc:
+        print("Couldn't list the mics:", exc)
+        return []
+
+
 def open_mic(name: str = ""):
     # Imported here so tests and the connect command don't need a mic.
     import sounddevice as sd
@@ -200,14 +225,16 @@ def listen_loop(
     words: LiveWords | None = None,
 ) -> None:
     muted = muted if muted is not None else Event()
-    open_stream = open_stream or partial(open_mic, settings.mic)
     voice = VoiceChat(partial(chat, settings))
     while not status.closed:
         if muted.is_set():
             # Mic closed while muted, so Windows' mic light goes off too.
             time.sleep(0.2)
             continue
-        with open_stream() as stream:
+        # The mic picked in Settings, else the .env one; hear() returns when it changes.
+        name = status.wanted_mic(settings.mic)
+        status.use_mic(name)
+        with (open_stream or partial(open_mic, name))() as stream:
             hear(settings, voice, listener, resume, status, stream, muted, mute, stopper, words)
 
 
@@ -246,6 +273,11 @@ def hear(
         if muted.is_set() or status.closed:
             status.set(IDLE)
             return
+        if status.wanted_mic(settings.mic) != status.mic_in_use:
+            # Another mic picked in Settings: listen_loop opens it.
+            print(f"Switching mic to {status.wanted_mic(settings.mic) or 'the Windows default'}.")
+            status.set(IDLE)
+            return
         if web_in_front(status):
             # On the web only the web listens, even when its mic is muted.
             paused = True
@@ -274,7 +306,7 @@ def hear(
         timer = Timer()
         try:
             pcm = b"".join(f.tobytes() for f in recent) + record_until_silence(
-                captioned(frames, words, status), quiet_frames=status.end_pause_frames,
+                captioned(frames, words, status), quiet_frames=partial(end_frames, status),
             )
             timer.lap("record")
             outcome = answer(settings, voice, pcm, stream, status, timer, stopper)
@@ -286,7 +318,7 @@ def hear(
                 timer = Timer()
                 pcm = record_until_silence(
                     captioned(frames, words, status),
-                    quiet_frames=status.end_pause_frames,
+                    quiet_frames=partial(end_frames, status),
                     start_frames=FOLLOW_UP_FRAMES,
                     max_frames=FOLLOW_UP_FRAMES + 125,
                 )
@@ -366,7 +398,9 @@ def start_listening(
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
     # The web's orb follows this one through Core.
-    threading.Thread(target=report_loop, args=(settings, status, muted), daemon=True).start()
+    threading.Thread(
+        target=report_loop, args=(settings, status, muted), kwargs={"mics": list_mics()}, daemon=True,
+    ).start()
     return thread
 
 

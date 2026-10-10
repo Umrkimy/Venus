@@ -8,7 +8,7 @@ import { getJson } from "@/lib/get-json";
 export const END_PAUSE_KEY = ["listening"];
 export const DEFAULT_END_PAUSE_MS = 1500;
 
-export type ListeningResponse = { end_pause_ms: number };
+export type ListeningResponse = { end_pause_ms: number; mic: string };
 
 export function useEndPause(): number {
   const query = useQuery({

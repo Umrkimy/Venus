@@ -15,25 +15,27 @@ def report_loop(
     settings: NodeSettings,
     status: Status,
     muted: Event | None = None,
-    send: Callable[[str, str, bool], tuple[bool, bool, bool, int]] | None = None,
+    send: Callable[[str, str, bool], tuple[bool, bool, bool, int, str]] | None = None,
     every: float = EVERY,
+    mics: list[str] | None = None,
 ) -> None:
     """Keep Core up to date with the orb; learn if a web tab shows it (and
     listens) instead, stop Luna when the web's stop button asks, and pick up
     the pause setting."""
     muted = muted if muted is not None else Event()
-    send = send or partial(report_state, settings)
+    send = send or partial(report_state, settings, mics=mics)
     while not status.closed:
         # Cleared before reading: a change while we send wakes the next round at once.
         status.changed.clear()
         state, subtitle = status.report()
         try:
-            watching, listening, stop, end_pause_ms = send(state, subtitle, muted.is_set())
+            watching, listening, stop, end_pause_ms, mic = send(state, subtitle, muted.is_set())
         except (OSError, HTTPException, ValueError, KeyError):
             # Core down or restarting: the PC's orb and "Hey Venus" carry on as before.
             watching, listening, stop = False, False, False
         else:
             status.set_end_pause_ms(end_pause_ms)
+            status.set_mic(mic)
         status.set_web_watching(watching)
         status.set_web_listening(listening)
         if stop:

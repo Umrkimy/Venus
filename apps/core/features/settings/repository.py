@@ -101,14 +101,25 @@ class SettingsRepository:
             session.merge(TimeSetting(id=TIME_ROW_ID, time_zone=time_zone, country=country))
             session.commit()
 
-    def get_end_pause_ms(self) -> int:
+    def get_listening(self) -> ListeningSetting:
         with Session(self.engine) as session:
             setting = session.get(ListeningSetting, LISTENING_ROW_ID)
             if setting is None:
-                return DEFAULT_END_PAUSE_MS
-            return setting.end_pause_ms
+                return ListeningSetting(id=LISTENING_ROW_ID, end_pause_ms=DEFAULT_END_PAUSE_MS)
+            return setting
 
-    def set_end_pause_ms(self, end_pause_ms: int) -> None:
+    def get_end_pause_ms(self) -> int:
+        return self.get_listening().end_pause_ms
+
+    def set_listening(self, end_pause_ms: int | None = None, mic: str | None = None) -> None:
+        """None keeps the saved value, so the slider and the mic list save on their own."""
+        saved = self.get_listening()
         with Session(self.engine) as session:
-            session.merge(ListeningSetting(id=LISTENING_ROW_ID, end_pause_ms=end_pause_ms))
+            session.merge(
+                ListeningSetting(
+                    id=LISTENING_ROW_ID,
+                    end_pause_ms=saved.end_pause_ms if end_pause_ms is None else end_pause_ms,
+                    mic=saved.mic if mic is None else mic,
+                ),
+            )
             session.commit()

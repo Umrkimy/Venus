@@ -90,13 +90,14 @@ def test_speak_stream_reads_pieces_and_sample_rate(core):
 
 def test_report_state_puts_state_and_reads_web_watching(core):
     core["body"] = json.dumps(
-        {"web_watching": True, "web_listening": True, "stop": False, "end_pause_ms": 2000},
+        {"web_watching": True, "web_listening": True, "stop": False, "end_pause_ms": 2000, "mic": "Realtek"},
     ).encode()
 
-    reply = report_state(SETTINGS, "speaking", "hi " * 600, muted=False)
+    reply = report_state(SETTINGS, "speaking", "hi " * 600, muted=False, mics=["Realtek", "CABLE"])
 
     request = core["request"]
-    assert reply == (True, True, False, 2000)
+    assert reply == (True, True, False, 2000, "Realtek")
+    assert json.loads(request.data)["mics"] == ["Realtek", "CABLE"]
     assert request.full_url == "http://core.test:9000/voice/state"
     assert request.get_method() == "PUT"
     body = json.loads(request.data)
