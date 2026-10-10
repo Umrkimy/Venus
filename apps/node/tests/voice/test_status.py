@@ -62,3 +62,13 @@ def test_set_and_close_wake_the_reporter():
     status.changed.clear()
     status.close()
     assert status.changed.is_set()
+
+
+def test_end_pause_frames_follow_the_settings_slider():
+    status = Status()
+    # Default 1.5 s: about 19 frames of 80 ms.
+    assert status.end_pause_frames == 19
+
+    status.set_end_pause_ms(500)
+
+    assert status.end_pause_frames == 6

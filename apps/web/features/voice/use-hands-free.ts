@@ -11,11 +11,10 @@ import {
 } from "./browser-speech";
 import { setListenOn, setListeningActive } from "./listen-store";
 import { endingOf } from "./stop-phrases";
+import { useEndPause } from "./use-end-pause";
 
 // How often the mic's loudness is checked (cheap: one small array per tick).
 const TICK_MS = 50;
-// Quiet this long after talking = you finished your sentence.
-const END_SILENCE_MS = 800;
 // Shorter than this is a cough or a click, not worth paying to transcribe.
 const MIN_SPEECH_MS = 400;
 const MAX_RECORDING_MS = 30_000;
@@ -68,10 +67,14 @@ export function useHandsFree({ enabled, busy, onHeard, onStop }: Options) {
   const busyRef = useRef(busy);
   const heardRef = useRef(onHeard);
   const stopRef = useRef(onStop);
+  // Quiet this long after talking = you finished your sentence (Settings slider).
+  const endPause = useEndPause();
+  const pauseRef = useRef(endPause);
   useEffect(() => {
     busyRef.current = busy;
     heardRef.current = onHeard;
     stopRef.current = onStop;
+    pauseRef.current = endPause;
   });
 
   useEffect(() => {
@@ -152,7 +155,7 @@ export function useHandsFree({ enabled, busy, onHeard, onStop }: Options) {
           setPhase("recording");
         }
         window.clearTimeout(quiet);
-        quiet = window.setTimeout(finish, pauseAfter(heard));
+        quiet = window.setTimeout(finish, pauseAfter(heard, pauseRef.current));
       };
       speech.onerror = (event) => {
         if (event.error === "not-allowed") {
@@ -269,7 +272,7 @@ export function useHandsFree({ enabled, busy, onHeard, onStop }: Options) {
           lastLoudAt = now;
         }
         if (
-          now - lastLoudAt > END_SILENCE_MS ||
+          now - lastLoudAt > pauseRef.current ||
           now - startedAt > MAX_RECORDING_MS
         )
           finish();

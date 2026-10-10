@@ -89,12 +89,14 @@ def test_speak_stream_reads_pieces_and_sample_rate(core):
 
 
 def test_report_state_puts_state_and_reads_web_watching(core):
-    core["body"] = json.dumps({"web_watching": True, "web_listening": True, "stop": False}).encode()
+    core["body"] = json.dumps(
+        {"web_watching": True, "web_listening": True, "stop": False, "end_pause_ms": 2000},
+    ).encode()
 
     reply = report_state(SETTINGS, "speaking", "hi " * 600, muted=False)
 
     request = core["request"]
-    assert reply == (True, True, False)
+    assert reply == (True, True, False, 2000)
     assert request.full_url == "http://core.test:9000/voice/state"
     assert request.get_method() == "PUT"
     body = json.loads(request.data)
@@ -102,3 +104,9 @@ def test_report_state_puts_state_and_reads_web_watching(core):
     assert body["muted"] is False
     # Cut to what Core accepts, or Core would answer 422 and the orb would never hide.
     assert len(body["subtitle"]) == 1000
+
+
+def test_report_state_keeps_the_default_pause_with_an_older_core(core):
+    core["body"] = json.dumps({"web_watching": False, "web_listening": False, "stop": False}).encode()
+
+    assert report_state(SETTINGS, "idle", "", muted=False)[3] == 1500

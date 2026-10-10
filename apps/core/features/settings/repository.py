@@ -2,6 +2,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from features.settings.models.command_mode import CommandModeSetting
+from features.settings.models.listening import ListeningSetting
 from features.settings.models.llm import LlmSetting
 from features.settings.models.time import TimeSetting
 from features.settings.models.voice import VoiceSetting
@@ -10,6 +11,10 @@ MODE_ROW_ID = 1
 LLM_ROW_ID = 1
 VOICE_ROW_ID = 1
 TIME_ROW_ID = 1
+LISTENING_ROW_ID = 1
+
+# Wait after you stop talking: long enough for a short breath, short enough to feel quick.
+DEFAULT_END_PAUSE_MS = 1500
 
 
 class SettingsRepository:
@@ -94,4 +99,16 @@ class SettingsRepository:
     def set_time(self, time_zone: str, country: str) -> None:
         with Session(self.engine) as session:
             session.merge(TimeSetting(id=TIME_ROW_ID, time_zone=time_zone, country=country))
+            session.commit()
+
+    def get_end_pause_ms(self) -> int:
+        with Session(self.engine) as session:
+            setting = session.get(ListeningSetting, LISTENING_ROW_ID)
+            if setting is None:
+                return DEFAULT_END_PAUSE_MS
+            return setting.end_pause_ms
+
+    def set_end_pause_ms(self, end_pause_ms: int) -> None:
+        with Session(self.engine) as session:
+            session.merge(ListeningSetting(id=LISTENING_ROW_ID, end_pause_ms=end_pause_ms))
             session.commit()

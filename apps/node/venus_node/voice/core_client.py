@@ -4,6 +4,7 @@ from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
 from venus_node.config import NodeSettings
+from venus_node.voice.status import DEFAULT_END_PAUSE_MS
 
 HTTP_SCHEMES = {"ws": "http", "wss": "https"}
 SUBTITLE_CHARS = 1000
@@ -49,17 +50,20 @@ def chat(settings: NodeSettings, message: str, conversation_id: str | None) -> d
     return json.loads(_post(settings, path, json.dumps(body).encode(), "application/json"))
 
 
-def report_state(settings: NodeSettings, state: str, subtitle: str, muted: bool) -> tuple[bool, bool, bool]:
+def report_state(settings: NodeSettings, state: str, subtitle: str, muted: bool) -> tuple[bool, bool, bool, int]:
     """Tell Core what the orb shows.
 
-    Returns (a web tab shows the orb, that tab listens itself, the web pressed stop).
+    Returns (a web tab shows the orb, that tab listens itself, the web pressed
+    stop, how long to wait after you stop talking in ms).
     """
     # Core caps the subtitle; Luna's spoken lines are far shorter anyway.
     body = json.dumps({"state": state, "subtitle": subtitle[:SUBTITLE_CHARS], "muted": muted}).encode()
     # Short timeout: a stuck report must not freeze the orb's hand-off.
     with _open(settings, "/voice/state", body, "application/json", method="PUT", timeout=2) as response:
         reply = json.loads(response.read())
-    return bool(reply["web_watching"]), bool(reply["web_listening"]), bool(reply["stop"])
+    # An older Core has no pause setting: keep the default.
+    end_pause_ms = int(reply.get("end_pause_ms", DEFAULT_END_PAUSE_MS))
+    return bool(reply["web_watching"]), bool(reply["web_listening"]), bool(reply["stop"]), end_pause_ms
 
 
 def speak_stream(settings: NodeSettings, text: str) -> tuple[int, Iterator[bytes]]:

@@ -1,3 +1,4 @@
+import ListeningSettings from "@/features/settings/listening-settings";
 import ReadingForm from "@/features/settings/reading-form";
 import SettingsSection from "@/features/settings/settings-section";
 import VoiceSettings from "@/features/settings/voice-settings";
@@ -10,6 +11,12 @@ export default function VoiceSettingsPage() {
         description="Fish Audio speaks Venus's replies. The key is stored encrypted in Core."
       >
         <VoiceSettings />
+      </SettingsSection>
+      <SettingsSection
+        title="Listening"
+        description="When Venus sends what you said, on the web and on your PC. Saved in Core."
+      >
+        <ListeningSettings />
       </SettingsSection>
       <SettingsSection
         title="Voice & text"

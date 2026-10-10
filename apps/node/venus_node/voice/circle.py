@@ -6,7 +6,7 @@ from ctypes import wintypes
 import numpy as np
 
 from venus_node.voice.orb import SIZE, Orb
-from venus_node.voice.status import IDLE, SPEAKING, Status
+from venus_node.voice.status import IDLE, LISTENING, SPEAKING, Status
 from venus_node.voice.subtitle import subtitle_pixels
 
 TICK_MS = 33  # About 30 frames a second.
@@ -138,7 +138,8 @@ class Circle:
             self.last_state = state
             if subtitle != self.subtitle:
                 self.subtitle = subtitle
-                self.subtitle_image = subtitle_pixels(subtitle, TEXT_WIDTH, SIZE)
+                # While you talk it's your words: keep the newest ones when long.
+                self.subtitle_image = subtitle_pixels(subtitle, TEXT_WIDTH, SIZE, newest=state == LISTENING)
         target = 0.0 if state == IDLE or self.status.web_watching else 1.0
         if self.shown == 0.0 and target == 0.0:
             return  # Already hidden: nothing to redraw.
@@ -150,7 +151,7 @@ class Circle:
         # While fading out keep drawing the last state, just dimmer.
         pixels = np.zeros((SIZE, WIDTH, 4), dtype=np.uint8)
         pixels[:, WIDTH - SIZE:] = self.orb.frame(self.last_state, level, time.monotonic() - self.start)
-        if self.last_state == SPEAKING:
+        if self.last_state in (LISTENING, SPEAKING):
             pixels[:, :TEXT_WIDTH] = self.subtitle_image
         if self.shown < 1.0:
             pixels = (pixels * self.shown).astype(np.uint8)

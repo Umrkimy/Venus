@@ -9,6 +9,7 @@ import numpy as np
 import venus_node.cli.listen as listen
 from venus_node.config import NodeSettings
 from venus_node.voice.conversation import VoiceChat
+from venus_node.voice.live_words import LiveWords
 from venus_node.voice.status import SPEAKING, THINKING, Status
 from venus_node.voice.timing import Timer
 
@@ -269,6 +270,41 @@ def test_hear_calls_the_tray_mute_when_you_say_mute(monkeypatch):
 
     assert muted.is_set()
     assert status.snapshot()[0] == "idle"
+
+
+class GuessesOpenSpotify:
+    """A free-text Vosk that always guesses the same words."""
+
+    def AcceptWaveform(self, data):
+        return False
+
+    def PartialResult(self):
+        return '{"partial": "open spotify"}'
+
+    def Reset(self):
+        pass
+
+
+def test_hear_waits_as_long_as_the_pause_setting_and_shows_your_words(monkeypatch):
+    monkeypatch.setattr(listen, "answer", lambda *args: "mute")
+    status = Status()
+    status.set_end_pause_ms(2000)
+    recorded = {}
+
+    def record(frames, **limits):
+        recorded.update(limits)
+        next(iter(frames))  # One frame through the live words.
+        recorded["subtitle"] = status.report()[1]
+        return b""
+
+    monkeypatch.setattr(listen, "record_until_silence", record)
+    words = LiveWords(GuessesOpenSpotify())
+    muted = Event()
+
+    listen.hear(SETTINGS, None, HearsOnce(), FakeListener(), status, FakeMic([]), muted, muted.set, None, words)
+
+    assert recorded["quiet_frames"] == 25  # 2 s of 80 ms frames.
+    assert recorded["subtitle"] == "open spotify"
 
 
 def test_answer_says_so_when_the_voice_stream_breaks(monkeypatch, capsys):

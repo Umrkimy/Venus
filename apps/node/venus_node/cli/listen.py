@@ -14,6 +14,7 @@ import numpy as np
 
 from venus_node.config import NodeSettings, load_settings
 from venus_node.voice.conversation import VoiceChat
+from venus_node.voice.live_words import LiveWords, captioned
 from venus_node.voice.core_client import chat, speak_stream, transcribe
 from venus_node.voice.player import play_pcm
 from venus_node.voice.recorder import heard_speech, record_until_silence, trim_silence
@@ -196,6 +197,7 @@ def listen_loop(
     open_stream: Callable | None = None,
     mute: Callable[[], None] | None = None,
     stopper: WakeListener | None = None,
+    words: LiveWords | None = None,
 ) -> None:
     muted = muted if muted is not None else Event()
     open_stream = open_stream or partial(open_mic, settings.mic)
@@ -206,7 +208,7 @@ def listen_loop(
             time.sleep(0.2)
             continue
         with open_stream() as stream:
-            hear(settings, voice, listener, resume, status, stream, muted, mute, stopper)
+            hear(settings, voice, listener, resume, status, stream, muted, mute, stopper, words)
 
 
 def web_in_front(status: Status) -> bool:
@@ -224,10 +226,12 @@ def hear(
     muted: Event,
     mute: Callable[[], None] | None = None,
     stopper: WakeListener | None = None,
+    words: LiveWords | None = None,
 ) -> None:
     """Wake, record, answer, until muted or closed.
 
     `mute` is the tray's Mute mic; without a tray (dev window) "mute" sleeps instead.
+    `words` shows what you say under the orb while you talk.
     """
     # The frames while the phrase was holding may already have "open ..." in them.
     recent: deque[np.ndarray] = deque(maxlen=5)
@@ -269,7 +273,9 @@ def hear(
         status.set(LISTENING)
         timer = Timer()
         try:
-            pcm = b"".join(f.tobytes() for f in recent) + record_until_silence(frames)
+            pcm = b"".join(f.tobytes() for f in recent) + record_until_silence(
+                captioned(frames, words, status), quiet_frames=status.end_pause_frames,
+            )
             timer.lap("record")
             outcome = answer(settings, voice, pcm, stream, status, timer, stopper)
             print(timer.report())
@@ -279,7 +285,10 @@ def hear(
                 status.set(LISTENING)
                 timer = Timer()
                 pcm = record_until_silence(
-                    frames, start_frames=FOLLOW_UP_FRAMES, max_frames=FOLLOW_UP_FRAMES + 125,
+                    captioned(frames, words, status),
+                    quiet_frames=status.end_pause_frames,
+                    start_frames=FOLLOW_UP_FRAMES,
+                    max_frames=FOLLOW_UP_FRAMES + 125,
                 )
                 timer.lap("record")
                 if not heard_speech(pcm):
@@ -307,8 +316,9 @@ def hear(
 
 def wake_listeners(
     env_file: Path, settings: NodeSettings,
-) -> tuple[WakeListener, WakeListener, WakeListener] | None:
-    """The "Hey Venus", "start listening" and "stop venus" listeners, or None without a model."""
+) -> tuple[WakeListener, WakeListener, WakeListener, LiveWords] | None:
+    """The "Hey Venus", "start listening" and "stop venus" listeners and your
+    live words, or None without a model."""
     if not settings.voice:
         # Checked before importing Vosk, so the model never loads.
         print("Voice is off on this PC (VENUS_NODE_VOICE=false).")
@@ -330,7 +340,9 @@ def wake_listeners(
     stopper = WakeListener(
         vosk.KaldiRecognizer(model, RATE, grammar(STOP_TALKING_PHRASES)), STOP_TALKING_PHRASES,
     )
-    return listener, resume, stopper
+    # And free text, for your words under the orb: about 3 MB more, 13 MB while you talk.
+    words = LiveWords(vosk.KaldiRecognizer(model, RATE))
+    return listener, resume, stopper, words
 
 
 def start_listening(
@@ -338,13 +350,14 @@ def start_listening(
     listener: WakeListener,
     resume: WakeListener,
     stopper: WakeListener,
+    words: LiveWords,
     status: Status,
     muted: Event | None = None,
     mute: Callable[[], None] | None = None,
 ) -> threading.Thread:
     def loop() -> None:
         try:
-            listen_loop(settings, listener, resume, status, muted, mute=mute, stopper=stopper)
+            listen_loop(settings, listener, resume, status, muted, mute=mute, stopper=stopper, words=words)
         finally:
             # A mic error ends the loop; take the circle down with it.
             status.close()

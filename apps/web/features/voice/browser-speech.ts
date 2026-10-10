@@ -44,10 +44,8 @@ export function makeBrowserSpeech(): BrowserSpeech | null {
   return speech;
 }
 
-// How long you can pause before your sentence is sent.
-const END_PAUSE_MS = 1500;
-// After "uh", "and", "so"... you're still thinking: wait longer.
-const THINKING_PAUSE_MS = 3000;
+// After "uh", "and", "so"... you're still thinking: wait twice as long.
+const THINKING_TIMES = 2;
 const FILLERS = new Set([
   "uh",
   "uhh",
@@ -81,11 +79,12 @@ function wordsOf(text: string): string[] {
   return text.toLowerCase().match(/[a-z']+/g) ?? [];
 }
 
-export function pauseAfter(text: string): number {
+// `endPauseMs` is the Settings slider: how long you can pause before your sentence is sent.
+export function pauseAfter(text: string, endPauseMs: number): number {
   const last = wordsOf(text).at(-1) ?? "";
   return FILLERS.has(last) || LINKS.has(last)
-    ? THINKING_PAUSE_MS
-    : END_PAUSE_MS;
+    ? endPauseMs * THINKING_TIMES
+    : endPauseMs;
 }
 
 // "Uh", "um hmm": nothing worth sending.

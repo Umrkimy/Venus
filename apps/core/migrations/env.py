@@ -15,6 +15,7 @@ from features.projects.models.project import Project
 from features.personalities.models.personality import Personality
 from features.memories.models.memory import Memory
 from features.settings.models.command_mode import CommandModeSetting
+from features.settings.models.listening import ListeningSetting
 from features.settings.models.llm import LlmSetting
 from features.settings.models.time import TimeSetting
 from features.settings.models.voice import VoiceSetting

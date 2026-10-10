@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
+from features.settings.dependencies import get_settings_repository
+from features.settings.repository import SettingsRepository
 from features.voice.live import LiveVoice, get_live_voice
 from main import app
 from tests.database import make_test_engine
@@ -42,6 +44,7 @@ def live(clock: Clock) -> LiveVoice:
     # which CI doesn't have.
     engine = make_test_engine()
     app.dependency_overrides[get_auth_repository] = lambda: AuthRepository(engine)
+    app.dependency_overrides[get_settings_repository] = lambda: SettingsRepository(engine)
     app.dependency_overrides[get_live_voice] = lambda: fake
     yield fake
     app.dependency_overrides.clear()
@@ -123,3 +126,13 @@ def test_voice_state_needs_owner_or_node(live: LiveVoice):
     assert client.get("/voice/state").status_code == status.HTTP_401_UNAUTHORIZED
     assert client.put("/voice/state", json={"state": "idle"}).status_code == status.HTTP_401_UNAUTHORIZED
     assert client.post("/voice/stop").status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_node_hears_the_pause_setting(live: LiveVoice):
+    # Nothing saved: the default 1.5 s.
+    assert report()["end_pause_ms"] == 1500
+
+    client.put("/settings/listening", json={"end_pause_ms": 2250}, headers=OWNER_HEADERS)
+
+    # The PC picks up a new slider value on its next report.
+    assert report()["end_pause_ms"] == 2250

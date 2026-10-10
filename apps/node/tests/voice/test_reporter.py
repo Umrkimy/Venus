@@ -17,7 +17,7 @@ def test_reports_state_subtitle_muted_and_learns_web_is_watching():
     def send(state: str, subtitle: str, is_muted: bool):
         sent.append((state, subtitle, is_muted))
         status.close()  # One round is enough.
-        return True, True, False
+        return True, True, False, 1500
 
     report_loop(SETTINGS, status, muted, send=send, every=0.01)
 
@@ -31,7 +31,7 @@ def test_web_stop_button_stops_luna():
 
     def send(state: str, subtitle: str, is_muted: bool):
         status.close()
-        return True, False, True
+        return True, False, True, 1500
 
     report_loop(SETTINGS, status, send=send, every=0.01)
 
@@ -61,7 +61,7 @@ def test_a_change_is_reported_without_waiting_for_the_next_tick():
         first.set()
         if len(sent) == 2:
             status.close()
-        return False, False, False
+        return False, False, False, 1500
 
     thread = threading.Thread(target=report_loop, kwargs={"settings": SETTINGS, "status": status, "send": send, "every": 60})
     thread.start()
@@ -72,3 +72,28 @@ def test_a_change_is_reported_without_waiting_for_the_next_tick():
     # A 60 s tick would still be waiting; the change woke it.
     assert not thread.is_alive()
     assert sent == ["idle", "speaking"]
+
+
+def test_pause_setting_from_core_reaches_the_recorder():
+    status = Status()
+
+    def send(state: str, subtitle: str, is_muted: bool):
+        status.close()
+        return False, False, False, 2500
+
+    report_loop(SETTINGS, status, send=send, every=0.01)
+
+    assert status.end_pause_frames == 31  # 2.5 s of 80 ms frames.
+
+
+def test_core_down_keeps_the_last_pause_setting():
+    status = Status()
+    status.set_end_pause_ms(800)
+
+    def send(state: str, subtitle: str, is_muted: bool):
+        status.close()
+        raise ConnectionRefusedError("Core is down")
+
+    report_loop(SETTINGS, status, send=send, every=0.01)
+
+    assert status.end_pause_frames == 10

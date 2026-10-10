@@ -263,3 +263,35 @@ def test_time_settings_require_owner():
     assert get.status_code == 401
     assert put.status_code == 401
 
+
+def test_listening_settings_default_to_one_and_a_half_seconds():
+    response = client.get("/settings/listening", headers=OWNER_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == {"end_pause_ms": 1500}
+
+
+def test_listening_settings_put_is_remembered():
+    response = client.put("/settings/listening", json={"end_pause_ms": 750}, headers=OWNER_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == {"end_pause_ms": 750}
+    assert client.get("/settings/listening", headers=OWNER_HEADERS).json() == {"end_pause_ms": 750}
+
+
+@pytest.mark.parametrize("end_pause_ms", [250, 3250, 1600])
+def test_listening_settings_reject_values_off_the_slider(end_pause_ms: int):
+    # Below 0.5 s, above 3 s, or between the quarter-second steps.
+    response = client.put(
+        "/settings/listening", json={"end_pause_ms": end_pause_ms}, headers=OWNER_HEADERS,
+    )
+
+    assert response.status_code == 422
+
+
+def test_listening_settings_require_owner():
+    get = client.get("/settings/listening")
+    put = client.put("/settings/listening", json={"end_pause_ms": 1500})
+
+    assert get.status_code == 401
+    assert put.status_code == 401
