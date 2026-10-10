@@ -11,6 +11,7 @@ from features.settings.models.voice import VoiceSetting
 from features.settings.repository import SettingsRepository
 from features.settings.schemas import (
     CommandModeRequest,
+    ListeningSettingsRequest,
     LlmSettingsRequest,
     TimeSettingsRequest,
     VoiceSettingsRequest,
@@ -164,3 +165,25 @@ def set_time_settings(
 ):
     settings_repository.set_time(request.time_zone, request.country.strip())
     return time_settings_json(settings_repository.get_time())
+
+
+@router.get("/listening", dependencies=[Depends(require_owner)])
+def get_listening_settings(
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
+    ],
+):
+    return {"end_pause_ms": settings_repository.get_end_pause_ms()}
+
+
+@router.put("/listening", dependencies=[Depends(require_owner)])
+def set_listening_settings(
+    request: ListeningSettingsRequest,
+    settings_repository: Annotated[
+        SettingsRepository,
+        Depends(get_settings_repository),
+    ],
+):
+    settings_repository.set_end_pause_ms(request.end_pause_ms)
+    return {"end_pause_ms": settings_repository.get_end_pause_ms()}

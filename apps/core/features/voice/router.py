@@ -7,6 +7,8 @@ from openai import OpenAIError
 from pydantic import BaseModel, Field
 
 from features.auth.dependencies import require_owner_or_node
+from features.settings.dependencies import get_settings_repository
+from features.settings.repository import SettingsRepository
 from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.repository import ShortcutRepository
 from features.voice.dependencies import get_speaker, get_transcriber
@@ -142,6 +144,8 @@ class VoiceReportReply(BaseModel):
     web_watching: bool
     web_listening: bool
     stop: bool
+    # The Settings pause slider: the PC waits this long after you stop talking.
+    end_pause_ms: int
 
 
 class VoiceState(BaseModel):
@@ -156,12 +160,14 @@ class VoiceState(BaseModel):
 async def report_state(
     body: VoiceReport,
     live: Annotated[LiveVoice, Depends(get_live_voice)],
+    settings_repository: Annotated[SettingsRepository, Depends(get_settings_repository)],
 ) -> VoiceReportReply:
     """The PC's orb reports here. The answer says if a web tab shows the orb
-    (and listens) instead, and passes on the web's stop button."""
+    (and listens) instead, passes on the web's stop button and the pause setting."""
     reply = live.report(body.state, body.subtitle, body.muted)
     return VoiceReportReply(
         web_watching=reply.web_watching, web_listening=reply.web_listening, stop=reply.stop,
+        end_pause_ms=settings_repository.get_end_pause_ms(),
     )
 
 

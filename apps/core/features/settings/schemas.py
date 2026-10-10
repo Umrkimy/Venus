@@ -45,3 +45,10 @@ class TimeSettingsRequest(BaseModel):
         except (ZoneInfoNotFoundError, ValueError):
             raise ValueError("Unknown time zone") from None
         return value
+
+
+class ListeningSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # 0.5 to 3 s in quarter seconds, the steps of the web's slider.
+    end_pause_ms: int = Field(ge=500, le=3000, multiple_of=250)
