@@ -54,6 +54,8 @@ type ChatBoxProps = {
   // Hands-free in this tab (null when off), and how to stop its turn.
   localVoice?: VoiceStateName | null;
   onStopVoice?: () => void;
+  // Which PC runs your commands (shows only with two or more online).
+  pcPicker?: ReactNode;
 };
 
 function Dots() {
@@ -125,6 +127,7 @@ export default function ChatBox({
   liveWords = "",
   localVoice = null,
   onStopVoice = () => {},
+  pcPicker,
 }: ChatBoxProps) {
   const [text, setText] = useState("");
   const endRef = useRef<HTMLLIElement>(null);
@@ -241,6 +244,7 @@ export default function ChatBox({
             autoComplete="off"
             className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 outline-none placeholder:text-muted-foreground field-sizing-content"
           />
+          {pcPicker}
           <SpeakerButton speaker={speaker} />
           <MuteButton />
           <Button
