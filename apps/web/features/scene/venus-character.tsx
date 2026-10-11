@@ -7,6 +7,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import { voiceLevel, wantVoiceLevel } from "@/features/chat/use-speaker";
+import { type Body, createBody, moveBody } from "./body-motion";
+import { getMood } from "./scene-mood";
 import { setResetView, useStage } from "./stage-store";
 
 // Shipped with Venus for everyone; your own model comes from Core instead.
@@ -40,21 +42,13 @@ function saveView(view: View | null) {
 const BLINK_GAP = [2, 6];
 const BLINK_LENGTH = 0.15;
 
-// Breathing, blinking, eyes on you, mouth moving with Luna's voice.
-function animate(vrm: VRM, time: number, delta: number, state: { nextBlink: number; mouth: number }) {
-  const bone = (name: Parameters<NonNullable<VRM["humanoid"]>["getNormalizedBoneNode"]>[0]) =>
-    vrm.humanoid?.getNormalizedBoneNode(name);
-  const breath = Math.sin(time * 1.6);
+// Body moves with her mood; she blinks, and her mouth follows Luna's voice.
+type FaceState = { nextBlink: number; mouth: number };
 
-  // Arms down from the T-pose the model is saved in.
-  const leftArm = bone("leftUpperArm");
-  const rightArm = bone("rightUpperArm");
-  if (leftArm) leftArm.rotation.z = -1.2 + breath * 0.015;
-  if (rightArm) rightArm.rotation.z = 1.2 - breath * 0.015;
-  const chest = bone("chest") ?? bone("spine");
-  if (chest) chest.rotation.x = breath * 0.015;
-  const hips = bone("hips");
-  if (hips) hips.rotation.y = Math.sin(time * 0.4) * 0.04;
+function animate(vrm: VRM, body: Body, camera: THREE.Camera, time: number, delta: number, state: FaceState) {
+  // Eased toward the voice's loudness, so the mouth doesn't flicker.
+  state.mouth += (voiceLevel() - state.mouth) * Math.min(1, delta * 18);
+  moveBody(vrm, body, camera, getMood(), state.mouth, time, delta);
 
   const faces = vrm.expressionManager;
   if (faces) {
@@ -65,9 +59,6 @@ function animate(vrm: VRM, time: number, delta: number, state: { nextBlink: numb
     }
     const blinking = sinceBlink >= 0 && sinceBlink <= BLINK_LENGTH;
     faces.setValue("blink", blinking ? Math.sin((sinceBlink / BLINK_LENGTH) * Math.PI) : 0);
-
-    // Eased toward the voice's loudness, so the mouth doesn't flicker.
-    state.mouth += (voiceLevel() - state.mouth) * Math.min(1, delta * 18);
     faces.setValue("aa", state.mouth);
   }
   vrm.update(delta);
@@ -77,8 +68,10 @@ function animate(vrm: VRM, time: number, delta: number, state: { nextBlink: numb
 async function loadModel(loader: GLTFLoader, own: boolean) {
   if (own) {
     // The browser keeps the file and only asks Core whether it changed.
+    // A download cut halfway fails on reading the body: then the template too.
     const response = await fetch(OWN_MODEL_URL).catch(() => null);
-    if (response?.ok) return loader.parseAsync(await response.arrayBuffer(), "");
+    const file = response?.ok ? await response.arrayBuffer().catch(() => null) : null;
+    if (file) return loader.parseAsync(file, "");
   }
   return loader.loadAsync(TEMPLATE_URL);
 }
@@ -122,6 +115,7 @@ export default function VenusCharacter({ own }: { own: boolean }) {
     fit();
 
     let vrm: VRM | null = null;
+    let body: Body | null = null;
     let stopped = false;
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -136,9 +130,9 @@ export default function VenusCharacter({ own }: { own: boolean }) {
         VRMUtils.removeUnnecessaryVertices(gltf.scene);
         VRMUtils.combineSkeletons(gltf.scene);
         VRMUtils.rotateVRM0(loaded);
-        if (loaded.lookAt) loaded.lookAt.target = camera;
         scene.add(loaded.scene);
         vrm = loaded;
+        body = createBody(loaded);
         setReady(true);
       },
       // No model at all: the plain glow behind stays.
@@ -152,7 +146,7 @@ export default function VenusCharacter({ own }: { own: boolean }) {
       const delta = Math.min(0.1, (now - last) / 1000);
       last = now;
       controlsRef.current?.update(delta);
-      if (vrm) animate(vrm, now / 1000, delta, state);
+      if (vrm && body) animate(vrm, body, camera, now / 1000, delta, state);
       renderer.render(scene, camera);
     });
 
