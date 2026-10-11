@@ -46,7 +46,7 @@ export function usePersonalityActions() {
       await queryClient.invalidateQueries({ queryKey: ["personalities"] });
       return response;
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
       return null;
     }
   }

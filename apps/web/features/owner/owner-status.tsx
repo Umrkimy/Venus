@@ -13,7 +13,7 @@ export default function OwnerStatus({ owner }: { owner: OwnerState }) {
   if (owner.status === "unreachable") {
     return (
       <p role="alert" className="mt-4 text-sm text-destructive">
-        Can&apos;t reach Venus Core. Is it running?
+        Can&apos;t reach Venus. Is it running?
       </p>
     );
   }

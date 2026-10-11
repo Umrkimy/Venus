@@ -123,7 +123,7 @@ function CommandRow({
       if (!response.ok) setError("Couldn't send your answer.");
       await command.refetch();
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }

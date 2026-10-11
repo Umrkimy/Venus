@@ -51,7 +51,7 @@ export default function CharacterMoves() {
       // The scene sees the new list and loads the moves again.
       await queryClient.invalidateQueries({ queryKey: ["character", "animations"] });
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }
@@ -166,7 +166,7 @@ export default function CharacterMoves() {
       </Button>
       <p className="mt-2 text-sm text-muted-foreground">
         New moves start as idle; pick when each plays. Free moves: pixiv&apos;s VRMA motion pack on
-        BOOTH. Kept by Venus Core on this PC, never in git.
+        BOOTH.
       </p>
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">

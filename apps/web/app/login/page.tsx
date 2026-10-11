@@ -7,7 +7,7 @@ function messageForStatus(status: number): string {
   if (status === 401) return "Wrong username or password.";
   if (status === 422) return "Username or password is too long.";
   if (status === 429) return "Too many attempts. Try again in 15 minutes.";
-  return "Can't reach Venus Core. Is it running?";
+  return "Can't reach Venus. Is it running?";
 }
 
 export default function LoginPage() {

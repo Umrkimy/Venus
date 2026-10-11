@@ -36,7 +36,7 @@ export function useSessionActions() {
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
       return true;
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
       return false;
     }
   }

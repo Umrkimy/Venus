@@ -35,7 +35,7 @@ async function saveListening(
     if (!response.ok) return "Saving failed.";
     return await response.json();
   } catch {
-    return "Can't reach Venus Core. Is it running?";
+    return "Can't reach Venus. Is it running?";
   }
 }
 

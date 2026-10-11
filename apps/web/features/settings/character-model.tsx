@@ -32,7 +32,7 @@ export default function CharacterModel() {
       // The scene sees the new answer and loads her again.
       await queryClient.invalidateQueries({ queryKey: ["character"] });
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }
@@ -91,7 +91,7 @@ export default function CharacterModel() {
         )}
       </div>
       <p className="mt-2 text-sm text-muted-foreground">
-        Kept by Venus Core on this PC, never in git. Get models from VRoid Hub; check the creator&apos;s conditions.
+        Get models from VRoid Hub. Check each creator&apos;s terms before using one.
       </p>
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">

@@ -38,7 +38,7 @@ export function useMemoryActions() {
       await queryClient.invalidateQueries({ queryKey: ["memories"] });
       return true;
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
       return false;
     }
   }

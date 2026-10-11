@@ -76,7 +76,7 @@ function TimeForm({ initial }: { initial: TimeResponse }) {
       const saved: TimeResponse = await response.json();
       setMessage(`Saved: ${saved.time_zone}${saved.country ? `, ${saved.country}` : ""}`);
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }

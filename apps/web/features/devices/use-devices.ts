@@ -48,7 +48,7 @@ export function useDeviceActions() {
       // A delete answers 204 with no body.
       return response.status === 204 ? {} : response.json();
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
       return null;
     }
   }
