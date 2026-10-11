@@ -57,27 +57,34 @@ def test_is_vrm_refuses_plain_gltf_and_other_files():
     assert not is_vrm(b"glTF")
 
 
+def upload(name: str, data: bytes = VRM1) -> dict:
+    response = client.post(f"/character/models?name={name}", content=data, headers=OWNER_HEADERS)
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
 def test_no_upload_means_the_template(character):
     response = client.get("/character", headers=OWNER_HEADERS)
 
     assert response.json() == {"custom": False}
+    assert client.get("/character/models", headers=OWNER_HEADERS).json() == []
     assert client.get("/character/model", headers=OWNER_HEADERS).status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_upload_then_download_gives_the_same_file(character):
-    put = client.put("/character/model?name=fdl.vrm", content=VRM1, headers=OWNER_HEADERS)
+def test_upload_puts_the_model_in_use_and_download_gives_the_same_file(character):
+    added = upload("fdl.vrm")
 
-    assert put.status_code == status.HTTP_200_OK
-    assert put.json()["custom"] is True
-    assert put.json()["name"] == "fdl.vrm"
-    assert put.json()["size"] == len(VRM1)
+    assert (added["name"], added["size"], added["active"]) == ("fdl.vrm", len(VRM1), True)
+    info = client.get("/character", headers=OWNER_HEADERS).json()
+    assert info["custom"] is True
+    assert info["id"] == added["id"]
     got = client.get("/character/model", headers=OWNER_HEADERS)
     assert got.content == VRM1
     assert got.headers["content-type"] == "model/gltf-binary"
 
 
 def test_unchanged_model_is_not_sent_again(character):
-    client.put("/character/model?name=a.vrm", content=VRM1, headers=OWNER_HEADERS)
+    upload("a.vrm")
     first = client.get("/character/model", headers=OWNER_HEADERS)
 
     again = client.get(
@@ -89,36 +96,77 @@ def test_unchanged_model_is_not_sent_again(character):
     assert again.content == b""
 
 
-def test_a_new_upload_replaces_the_old_one(character):
-    client.put("/character/model?name=a.vrm", content=VRM1, headers=OWNER_HEADERS)
-    newer = glb({"VRM": {}}, b"other")
+def test_a_new_upload_is_kept_beside_the_old_one(character):
+    older = upload("a.vrm")
+    newer_file = glb({"VRM": {}}, b"other")
 
-    client.put("/character/model?name=b.vrm", content=newer, headers=OWNER_HEADERS)
+    newer = upload("b.vrm", newer_file)
 
-    assert client.get("/character", headers=OWNER_HEADERS).json()["name"] == "b.vrm"
-    assert client.get("/character/model", headers=OWNER_HEADERS).content == newer
+    listed = client.get("/character/models", headers=OWNER_HEADERS).json()
+    assert [(item["id"], item["active"]) for item in listed] == [(older["id"], False), (newer["id"], True)]
+    assert client.get("/character/model", headers=OWNER_HEADERS).content == newer_file
+
+
+def test_switching_to_the_template_keeps_the_model(character):
+    added = upload("fdl.vrm")
+
+    response = client.put("/character/active", json={"id": None}, headers=OWNER_HEADERS)
+
+    assert response.json() == {"custom": False}
+    assert [item["id"] for item in client.get("/character/models", headers=OWNER_HEADERS).json()] == [added["id"]]
+    back = client.put("/character/active", json={"id": added["id"]}, headers=OWNER_HEADERS)
+    assert back.json()["name"] == "fdl.vrm"
+    assert client.get("/character/model", headers=OWNER_HEADERS).content == VRM1
+
+
+def test_switching_changes_the_etag(character):
+    first = upload("a.vrm")
+    upload("b.vrm", glb({"VRM": {}}, b"other"))
+    newer_tag = client.get("/character/model", headers=OWNER_HEADERS).headers["etag"]
+
+    client.put("/character/active", json={"id": first["id"]}, headers=OWNER_HEADERS)
+
+    assert client.get("/character/model", headers=OWNER_HEADERS).headers["etag"] != newer_tag
+
+
+def test_switching_to_a_missing_model_is_404(character):
+    response = client.put("/character/active", json={"id": 999}, headers=OWNER_HEADERS)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 def test_upload_refuses_a_file_that_is_not_vrm(character):
-    response = client.put("/character/model?name=cat.png", content=b"not a model", headers=OWNER_HEADERS)
+    response = client.post("/character/models?name=cat.png", content=b"not a model", headers=OWNER_HEADERS)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert character.get_info() is None
+    assert character.list_info() == []
 
 
-def test_delete_goes_back_to_the_template(character):
-    client.put("/character/model?name=a.vrm", content=VRM1, headers=OWNER_HEADERS)
+def test_delete_a_model_not_in_use(character):
+    older = upload("a.vrm")
+    upload("b.vrm")
 
-    response = client.delete("/character/model", headers=OWNER_HEADERS)
+    response = client.delete(f"/character/models/{older['id']}", headers=OWNER_HEADERS)
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
-    assert client.get("/character", headers=OWNER_HEADERS).json() == {"custom": False}
+    assert [item["name"] for item in client.get("/character/models", headers=OWNER_HEADERS).json()] == ["b.vrm"]
+    missing = client.delete(f"/character/models/{older['id']}", headers=OWNER_HEADERS)
+    assert missing.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_the_model_in_use_cannot_be_deleted(character):
+    added = upload("fdl.vrm")
+
+    response = client.delete(f"/character/models/{added['id']}", headers=OWNER_HEADERS)
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert client.get("/character", headers=OWNER_HEADERS).json()["name"] == "fdl.vrm"
 
 
 def test_character_needs_the_owner_not_a_node(character):
     assert client.get("/character/model").status_code == status.HTTP_401_UNAUTHORIZED
     node = {"Authorization": "Bearer test-node-token"}
-    response = client.put("/character/model?name=a.vrm", content=VRM1, headers=node)
+    response = client.post("/character/models?name=a.vrm", content=VRM1, headers=node)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 

@@ -3,21 +3,20 @@ import struct
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, load_only
 
 from features.character.models.character_animation import CharacterAnimation
 from features.character.models.character_model import CharacterModel
 
-ROW_ID = 1
-
-
 @dataclass
 class CharacterInfo:
+    id: int
     name: str
     size: int
     uploaded_at: datetime
+    active: bool
 
 
 @dataclass
@@ -62,39 +61,61 @@ class CharacterRepository:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
 
-    def get_info(self) -> CharacterInfo | None:
+    def list_info(self) -> list[CharacterInfo]:
         with Session(self.engine) as session:
-            # Leaves the file itself (megabytes) in the database.
-            row = session.scalar(
+            # Leaves the files themselves (megabytes each) in the database.
+            rows = session.scalars(
                 select(CharacterModel)
-                .where(CharacterModel.id == ROW_ID)
-                .options(load_only(CharacterModel.name, CharacterModel.size, CharacterModel.uploaded_at))
+                .options(
+                    load_only(
+                        CharacterModel.name,
+                        CharacterModel.size,
+                        CharacterModel.uploaded_at,
+                        CharacterModel.active,
+                    )
+                )
+                .order_by(CharacterModel.id)
             )
-            if row is None:
-                return None
-            return CharacterInfo(row.name, row.size, row.uploaded_at)
+            return [model_info(row) for row in rows]
+
+    def get_info(self) -> CharacterInfo | None:
+        """The model in use, or None for the template."""
+        return next((info for info in self.list_info() if info.active), None)
 
     def get_data(self) -> bytes | None:
         with Session(self.engine) as session:
-            return session.scalar(select(CharacterModel.data).where(CharacterModel.id == ROW_ID))
+            return session.scalar(select(CharacterModel.data).where(CharacterModel.active.is_(True)))
 
-    def save(self, name: str, data: bytes) -> CharacterInfo:
-        uploaded_at = datetime.now(timezone.utc)
+    def add(self, name: str, data: bytes) -> CharacterInfo:
+        """Keeps the upload and puts it in use."""
+        row = CharacterModel(name, len(data), datetime.now(timezone.utc), data, active=True)
         with Session(self.engine) as session:
-            row = session.get(CharacterModel, ROW_ID)
-            if row is None:
-                session.add(CharacterModel(ROW_ID, name, len(data), uploaded_at, data))
-            else:
-                row.name, row.size, row.uploaded_at, row.data = name, len(data), uploaded_at, data
+            session.execute(update(CharacterModel).values(active=False))
+            session.add(row)
             session.commit()
-        return CharacterInfo(name, len(data), uploaded_at)
+            return model_info(row)
 
-    def delete(self) -> None:
+    def activate(self, model_id: int | None) -> bool:
+        """Puts one model in use (None = the template). False if there's no such model."""
         with Session(self.engine) as session:
-            row = session.get(CharacterModel, ROW_ID)
-            if row is not None:
-                session.delete(row)
-                session.commit()
+            if model_id is not None and session.get(CharacterModel, model_id) is None:
+                return False
+            session.execute(update(CharacterModel).values(active=CharacterModel.id == model_id))
+            session.commit()
+            return True
+
+    def delete(self, model_id: int) -> bool:
+        with Session(self.engine) as session:
+            row = session.get(CharacterModel, model_id)
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
+
+
+def model_info(row: CharacterModel) -> CharacterInfo:
+    return CharacterInfo(row.id, row.name, row.size, row.uploaded_at, row.active)
 
 
 class AnimationRepository:
