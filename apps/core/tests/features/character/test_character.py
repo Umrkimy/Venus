@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
-from features.character.dependencies import get_character_repository
-from features.character.repository import CharacterRepository, is_vrm
+from features.character.dependencies import get_animation_repository, get_character_repository
+from features.character.repository import AnimationRepository, CharacterRepository, is_vrm, is_vrma
 from main import app
 from tests.database import make_test_engine
 
@@ -119,5 +119,87 @@ def test_character_needs_the_owner_not_a_node(character):
     assert client.get("/character/model").status_code == status.HTTP_401_UNAUTHORIZED
     node = {"Authorization": "Bearer test-node-token"}
     response = client.put("/character/model?name=a.vrm", content=VRM1, headers=node)
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+VRMA = glb({"VRMC_vrm_animation": {"specVersion": "1.0"}}, b"keyframes")
+
+
+@pytest.fixture
+def animations(character):
+    engine = make_test_engine()
+    repository = AnimationRepository(engine)
+    app.dependency_overrides[get_animation_repository] = lambda: repository
+    yield repository
+    engine.dispose()
+
+
+def test_is_vrma_knows_animations_and_refuses_models():
+    assert is_vrma(VRMA)
+    assert not is_vrma(VRM1)
+    assert not is_vrma(b"not a file at all")
+
+
+def test_no_animations_means_coded_moves_only(animations):
+    response = client.get("/character/animations", headers=OWNER_HEADERS)
+
+    assert response.json() == []
+
+
+def test_upload_animation_then_list_and_download(animations):
+    post = client.post("/character/animations?name=wave.vrma&use=hello", content=VRMA, headers=OWNER_HEADERS)
+
+    assert post.status_code == status.HTTP_201_CREATED
+    body = post.json()
+    assert (body["name"], body["use"], body["size"]) == ("wave.vrma", "hello", len(VRMA))
+    listed = client.get("/character/animations", headers=OWNER_HEADERS).json()
+    assert [item["id"] for item in listed] == [body["id"]]
+    got = client.get(f"/character/animations/{body['id']}", headers=OWNER_HEADERS)
+    assert got.content == VRMA
+    assert "immutable" in got.headers["cache-control"]
+
+
+def test_animation_use_defaults_to_idle(animations):
+    post = client.post("/character/animations?name=a.vrma", content=VRMA, headers=OWNER_HEADERS)
+
+    assert post.json()["use"] == "idle"
+
+
+def test_upload_refuses_a_model_or_unknown_use(animations):
+    model = client.post("/character/animations?name=fdl.vrm", content=VRM1, headers=OWNER_HEADERS)
+    odd_use = client.post("/character/animations?name=a.vrma&use=dance", content=VRMA, headers=OWNER_HEADERS)
+
+    assert model.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert odd_use.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert animations.list_info() == []
+
+
+def test_change_animation_use(animations):
+    added = client.post("/character/animations?name=a.vrma", content=VRMA, headers=OWNER_HEADERS).json()
+
+    response = client.patch(f"/character/animations/{added['id']}", json={"use": "talking"}, headers=OWNER_HEADERS)
+
+    assert response.json()["use"] == "talking"
+    assert animations.list_info()[0].use == "talking"
+
+
+def test_delete_animation_and_missing_ones_are_404(animations):
+    added = client.post("/character/animations?name=a.vrma", content=VRMA, headers=OWNER_HEADERS).json()
+
+    first = client.delete(f"/character/animations/{added['id']}", headers=OWNER_HEADERS)
+    again = client.delete(f"/character/animations/{added['id']}", headers=OWNER_HEADERS)
+
+    assert first.status_code == status.HTTP_204_NO_CONTENT
+    assert again.status_code == status.HTTP_404_NOT_FOUND
+    assert client.get(f"/character/animations/{added['id']}", headers=OWNER_HEADERS).status_code == 404
+    patch = client.patch(f"/character/animations/{added['id']}", json={"use": "idle"}, headers=OWNER_HEADERS)
+    assert patch.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_animations_need_the_owner(animations):
+    assert client.get("/character/animations").status_code == status.HTTP_401_UNAUTHORIZED
+    node = {"Authorization": "Bearer test-node-token"}
+    response = client.post("/character/animations?name=a.vrma", content=VRMA, headers=node)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED

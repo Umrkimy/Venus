@@ -22,6 +22,7 @@ from features.settings.models.time import TimeSetting  # noqa: F401
 from features.settings.models.voice import VoiceSetting  # noqa: F401
 from features.shortcuts.models.site_shortcut import SiteShortcut  # noqa: F401
 from features.usage.models.llm_usage import LlmUsage  # noqa: F401
+from features.character.models.character_animation import CharacterAnimation  # noqa: F401
 from features.character.models.character_model import CharacterModel  # noqa: F401
 from storage.base import Base
 

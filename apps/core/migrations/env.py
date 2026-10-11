@@ -21,6 +21,7 @@ from features.settings.models.time import TimeSetting
 from features.settings.models.voice import VoiceSetting
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.usage.models.llm_usage import LlmUsage
+from features.character.models.character_animation import CharacterAnimation
 from features.character.models.character_model import CharacterModel
 from storage.base import Base
 
