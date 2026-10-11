@@ -101,7 +101,7 @@ export default function Shortcuts() {
       }
       await shortcuts.refetch();
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }
@@ -122,7 +122,7 @@ export default function Shortcuts() {
       if (editing === name) clearForm();
       await shortcuts.refetch();
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }

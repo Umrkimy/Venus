@@ -13,6 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { type Mood, setMood } from "@/features/scene/scene-mood";
 import { setStage, useResetView } from "@/features/scene/stage-store";
 import MuteButton from "@/features/voice/mute-button";
 import type { VoiceStateName } from "@/features/voice/use-voice-state";
@@ -188,6 +189,17 @@ export default function ChatBox({
   // A project's chat list fills the stage: then it scrolls instead of moving the camera.
   const listOnStage = empty && emptyState !== undefined;
   const resetView = useResetView();
+
+  // Venus's body shows what's going on: talking, thinking, or listening to you.
+  const mood: Mood = speaker.speaking
+    ? "talking"
+    : thinking
+      ? "thinking"
+      : hearing || text !== ""
+        ? "listening"
+        : "idle";
+  useEffect(() => setMood(mood), [mood]);
+  useEffect(() => () => setMood("idle"), []);
 
   const stageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

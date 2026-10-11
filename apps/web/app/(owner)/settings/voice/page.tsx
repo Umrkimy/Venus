@@ -8,19 +8,19 @@ export default function VoiceSettingsPage() {
     <>
       <SettingsSection
         title="Venus's voice"
-        description="Fish Audio speaks Venus's replies. The key is stored encrypted in Core."
+        description="Fish Audio speaks Venus's replies. Your key is stored encrypted."
       >
         <VoiceSettings />
       </SettingsSection>
       <SettingsSection
         title="Listening"
-        description="When Venus sends what you said (web and PC) and which mic the PC hears you with. Saved in Core."
+        description="When Venus sends what you said (web and PC) and which mic the PC hears you with."
       >
         <ListeningSettings />
       </SettingsSection>
       <SettingsSection
         title="Voice & text"
-        description="How Venus's replies come out in chat. Saved in this browser."
+        description="How Venus's replies come out in chat. Only on this device."
       >
         <ReadingForm />
       </SettingsSection>

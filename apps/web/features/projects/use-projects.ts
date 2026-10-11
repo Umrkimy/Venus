@@ -48,7 +48,7 @@ export function useProjectActions() {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       return response;
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
       return null;
     }
   }

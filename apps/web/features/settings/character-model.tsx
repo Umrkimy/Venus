@@ -1,23 +1,81 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useCharacterInfo } from "@/features/scene/use-character-info";
+import { type CharacterModelInfo, useCharacterModels } from "@/features/scene/use-character-info";
 
 function megabytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// Your own .vrm: Core keeps it (private, backed up), every device shows it.
+// One row: the template or an uploaded model, with "Use this" when it isn't in use.
+function ModelRow({
+  name,
+  detail,
+  active,
+  busy,
+  onUse,
+  onDelete,
+}: {
+  name: string;
+  detail: string;
+  active: boolean;
+  busy: boolean;
+  onUse: () => void;
+  onDelete?: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-2">
+      <span className="min-w-0 flex-1 truncate text-sm" title={name}>
+        {name} <span className="text-muted-foreground">({detail})</span>
+      </span>
+      {active ? (
+        <Badge>In use</Badge>
+      ) : (
+        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onUse}>
+          Use this
+        </Button>
+      )}
+      {/* The one in use can't be deleted, so its button isn't offered. */}
+      {onDelete && !active && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          disabled={busy}
+          aria-label={`Delete ${name}`}
+          onClick={onDelete}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 />
+        </Button>
+      )}
+    </li>
+  );
+}
+
+// Your own .vrm models: every device shows the one in use. Switching keeps the others.
 export default function CharacterModel() {
   const queryClient = useQueryClient();
-  const info = useCharacterInfo();
+  const models = useCharacterModels();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<CharacterModelInfo | null>(null);
 
   async function change(request: () => Promise<Response>, failed: string) {
     setBusy(true);
@@ -32,7 +90,7 @@ export default function CharacterModel() {
       // The scene sees the new answer and loads her again.
       await queryClient.invalidateQueries({ queryKey: ["character"] });
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }
@@ -41,8 +99,8 @@ export default function CharacterModel() {
   function upload(file: File) {
     void change(
       () =>
-        fetch(`/api/character/model?name=${encodeURIComponent(file.name)}`, {
-          method: "PUT",
+        fetch(`/api/character/models?name=${encodeURIComponent(file.name)}`, {
+          method: "POST",
           headers: { "Content-Type": "application/octet-stream" },
           body: file,
         }),
@@ -50,54 +108,109 @@ export default function CharacterModel() {
     );
   }
 
-  function backToTemplate() {
+  function use(id: number | null) {
     void change(
-      () => fetch("/api/character/model", { method: "DELETE" }),
-      "Couldn't go back to the template.",
+      () =>
+        fetch("/api/character/active", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        }),
+      "Couldn't switch models.",
     );
   }
 
-  const own = info.data?.custom ? info.data : null;
+  function confirmDelete() {
+    const model = deleting;
+    setDeleting(null);
+    if (model) {
+      void change(
+        () => fetch(`/api/character/models/${model.id}`, { method: "DELETE" }),
+        "Couldn't delete that model.",
+      );
+    }
+  }
+
+  const list = models.data ?? [];
+  const templateInUse = !list.some((model) => model.active);
 
   return (
-    <div className="mt-4">
-      <p className="text-sm">
-        {info.isPending
-          ? "Checking your model..."
-          : own
-            ? `Your model: ${own.name} (${megabytes(own.size)})`
-            : "Template model (AvatarSample_A)"}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".vrm"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) upload(file);
-            event.target.value = ""; // Picking the same file again still uploads.
-          }}
-        />
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-          <Upload />
-          {busy ? "Saving..." : "Upload .vrm"}
-        </Button>
-        {own && (
-          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={backToTemplate}>
-            Use template
-          </Button>
-        )}
-      </div>
+    <div>
+      {models.isPending ? (
+        <p className="text-sm text-muted-foreground">Checking your models...</p>
+      ) : (
+        <ul className="space-y-2">
+          <ModelRow
+            name="AvatarSample_A"
+            detail="template"
+            active={templateInUse}
+            busy={busy}
+            onUse={() => use(null)}
+          />
+          {list.map((model) => (
+            <ModelRow
+              key={model.id}
+              name={model.name}
+              detail={megabytes(model.size)}
+              active={model.active}
+              busy={busy}
+              onUse={() => use(model.id)}
+              onDelete={() => setDeleting(model)}
+            />
+          ))}
+        </ul>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".vrm"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) upload(file);
+          event.target.value = ""; // Picking the same file again still uploads.
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-2"
+        disabled={busy}
+        onClick={() => fileRef.current?.click()}
+      >
+        <Upload />
+        {busy ? "Saving..." : "Upload .vrm"}
+      </Button>
       <p className="mt-2 text-sm text-muted-foreground">
-        Kept by Venus Core on this PC, never in git. Get models from VRoid Hub; check the creator&apos;s conditions.
+        Get models from VRoid Hub. Check each creator&apos;s terms before using one.
       </p>
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">
           {error}
         </p>
       )}
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{deleting?.name}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This can&apos;t be undone. You&apos;d have to upload the file again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={confirmDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

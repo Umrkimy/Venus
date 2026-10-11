@@ -101,7 +101,7 @@ function VoiceForm({ initial }: { initial: VoiceResponse }) {
       setMessage(`Saved: ${saved.model}${apiKey ? ", key updated" : ""}`);
       setApiKey("");
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }
@@ -131,7 +131,7 @@ function VoiceForm({ initial }: { initial: VoiceResponse }) {
       audioRef.current = audio;
       await audio.play();
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setTesting(false);
     }

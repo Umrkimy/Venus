@@ -188,7 +188,7 @@ export default function ChatPanel({
       }
       return data;
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
       return null;
     } finally {
       setBusy(false);
@@ -249,7 +249,7 @@ export default function ChatPanel({
         placeholder={
           deviceId
             ? "Ask Venus anything, e.g. open spotify"
-            : "Your PC is offline. Start Venus Node to chat."
+            : "Your PC is offline. Start Venus on your PC to chat."
         }
         messages={messages}
         onSend={chat}

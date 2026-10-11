@@ -280,7 +280,7 @@ export function useSpeaker() {
         setError(
           problem instanceof VoiceError
             ? problem.message
-            : "Can't reach Venus Core. Is it running?",
+            : "Can't reach Venus. Is it running?",
         );
         // The rest of the words show at once instead of getting stuck.
         setSpeaking(null);

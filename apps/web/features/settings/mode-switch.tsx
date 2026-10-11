@@ -38,7 +38,7 @@ export default function ModeSwitch() {
       // Re-read from Core so the switch shows what was actually saved.
       await mode.refetch();
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
     } finally {
       setBusy(false);
     }

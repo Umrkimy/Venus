@@ -54,7 +54,7 @@ export function useChatActions() {
       await queryClient.invalidateQueries({ queryKey: ["conversations"] });
       return true;
     } catch {
-      setError("Can't reach Venus Core. Is it running?");
+      setError("Can't reach Venus. Is it running?");
       return false;
     }
   }
