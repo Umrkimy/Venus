@@ -8,7 +8,6 @@ import {
   type Pose,
   TALKING_GESTURES,
   type Turn,
-  WAVE,
 } from "./poses";
 import type { Mood } from "./scene-mood";
 
@@ -25,7 +24,7 @@ const GLANCE_LENGTH = [0.8, 1.8];
 const between = ([low, high]: number[]) => low + Math.random() * (high - low);
 const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
 
-type Playing = { move: Gesture; start: number; mood: Mood | null };
+type Playing = { move: Gesture; start: number; mood: Mood };
 
 // Everything her body remembers between frames.
 export type Body = {
@@ -55,8 +54,7 @@ export function createBody(vrm: VRM): Body {
     turns: new Map(),
     bones,
     hipsRest: hips ? hips.position.clone() : new THREE.Vector3(),
-    // Hello as soon as she appears; the start time is filled in on the first frame.
-    playing: { move: WAVE, start: -1, mood: null },
+    playing: null,
     nextMove: 0,
     eyes,
     glance: new THREE.Vector3(),
@@ -69,10 +67,9 @@ export function createBody(vrm: VRM): Body {
 // Starts a new move when it's time, and drops one that no longer fits the mood.
 function chooseMove(body: Body, mood: Mood, time: number) {
   const playing = body.playing;
-  if (playing && playing.start < 0) playing.start = time;
   if (
     playing &&
-    (time - playing.start > playing.move.length || (playing.mood && playing.mood !== mood))
+    (time - playing.start > playing.move.length || playing.mood !== mood)
   ) {
     body.playing = null;
     body.nextMove = time + between(mood === "talking" ? TALKING_GAP : FIDGET_GAP);

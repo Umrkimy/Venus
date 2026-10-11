@@ -51,20 +51,9 @@ export function moodPose(mood: Mood): Pose {
   return { ...RELAXED, ...MOOD_POSES[mood] };
 }
 
-// A short move played on top of the pose, like a wave. pose(t) gets the
+// A short move played on top of the pose, like a fidget. pose(t) gets the
 // seconds since it started and says where the bones should be then.
 export type Gesture = { length: number; pose: (t: number) => Pose };
-
-// Hello: right arm up and out, forearm swinging side to side.
-export const WAVE: Gesture = {
-  length: 2.4,
-  pose: (t) => ({
-    rightUpperArm: [-0.2, 0.2, 0.3],
-    rightLowerArm: [0, 0.3, -1.6 + Math.sin(t * 9) * 0.35],
-    rightHand: [0, 0, 0],
-    head: [0, 0, 0.08],
-  }),
-};
 
 // Small hand moves while she talks, picked at random.
 export const TALKING_GESTURES: Gesture[] = [
