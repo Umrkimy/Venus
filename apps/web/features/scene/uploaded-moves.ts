@@ -3,6 +3,7 @@ import {
   createVRMAnimationClip,
   type VRMAnimation,
   VRMAnimationLoaderPlugin,
+  VRMLookAtQuaternionProxy,
 } from "@pixiv/three-vrm-animation";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -39,6 +40,12 @@ export class UploadedMoves {
 
   constructor(private vrm: VRM) {
     this.mixer = new THREE.AnimationMixer(vrm.scene);
+    // Moves can turn her eyes too; this is what they turn (the library looks for it by name).
+    if (vrm.lookAt) {
+      const eyes = new VRMLookAtQuaternionProxy(vrm.lookAt);
+      eyes.name = "VRMLookAtQuaternionProxy";
+      vrm.scene.add(eyes);
+    }
   }
 
   // Fetches and turns each file into a clip for this model; a broken file is skipped.
