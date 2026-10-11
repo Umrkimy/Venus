@@ -25,9 +25,9 @@ export default function SceneBackground() {
     <div aria-hidden="true" className="pointer-events-none absolute inset-0">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_35%,var(--scene-from),var(--scene-to)_70%)]" />
       {/* Wait for Core's answer, so the template isn't loaded just to be swapped.
-          A new upload changes the key, which loads her again. */}
+          Another model in use changes the key, which loads her again. */}
       {characterOn && !info.isPending && (
-        <VenusCharacter key={own?.uploaded_at ?? "template"} own={own !== null} moves={moves.data ?? NO_MOVES} />
+        <VenusCharacter key={own?.id ?? "template"} own={own !== null} moves={moves.data ?? NO_MOVES} />
       )}
     </div>
   );

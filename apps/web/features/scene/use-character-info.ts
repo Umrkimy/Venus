@@ -8,7 +8,16 @@ import type { MoveInfo } from "./uploaded-moves";
 // Your own uploaded model, if any (Core keeps it; never in git).
 export type CharacterInfo =
   | { custom: false }
-  | { custom: true; name: string; size: number; uploaded_at: string };
+  | { custom: true; id: number; name: string; size: number; uploaded_at: string };
+
+// Every model you uploaded; the active one is the one Venus shows.
+export type CharacterModelInfo = {
+  id: number;
+  name: string;
+  size: number;
+  uploaded_at: string;
+  active: boolean;
+};
 
 export function useCharacterInfo() {
   return useQuery({
@@ -24,6 +33,14 @@ export function useCharacterMoves() {
   return useQuery({
     queryKey: ["character", "animations"],
     queryFn: () => getJson<MoveInfo[]>("/api/character/animations"),
+    retry: false,
+  });
+}
+
+export function useCharacterModels() {
+  return useQuery({
+    queryKey: ["character", "models"],
+    queryFn: () => getJson<CharacterModelInfo[]>("/api/character/models"),
     retry: false,
   });
 }
