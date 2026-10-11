@@ -3,6 +3,7 @@
 import {
   Archive,
   AudioLines,
+  Box,
   Brain,
   ChartColumn,
   Heart,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 const PAGES = [
   { href: "/settings/general", label: "General", icon: SlidersHorizontal },
   { href: "/settings/personality", label: "Personality", icon: Heart },
+  { href: "/settings/character", label: "3D model", icon: Box },
   { href: "/settings/memory", label: "Memory", icon: Brain },
   { href: "/settings/ai", label: "AI model", icon: Sparkles },
   { href: "/settings/usage", label: "Usage", icon: ChartColumn },

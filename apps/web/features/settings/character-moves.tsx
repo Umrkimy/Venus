@@ -95,14 +95,13 @@ export default function CharacterMoves() {
   const list = moves.data ?? [];
 
   return (
-    <div className="mt-6">
-      <p className="text-sm font-medium">Moves</p>
+    <div>
       {list.length === 0 ? (
-        <p className="mt-1 text-sm text-muted-foreground">
-          {moves.isPending ? "Checking your moves..." : "None yet: Venus uses her coded moves."}
+        <p className="text-sm text-muted-foreground">
+          {moves.isPending ? "Checking your moves..." : "None yet: Venus uses her built-in moves."}
         </p>
       ) : (
-        <ul className="mt-2 space-y-2">
+        <ul className="space-y-2">
           {list.map((move) => (
             <li key={move.id} className="flex items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-sm" title={move.name}>

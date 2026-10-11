@@ -135,12 +135,11 @@ export default function CharacterModel() {
   const templateInUse = !list.some((model) => model.active);
 
   return (
-    <div className="mt-4">
-      <p className="text-sm font-medium">Model</p>
+    <div>
       {models.isPending ? (
-        <p className="mt-1 text-sm text-muted-foreground">Checking your models...</p>
+        <p className="text-sm text-muted-foreground">Checking your models...</p>
       ) : (
-        <ul className="mt-2 space-y-2">
+        <ul className="space-y-2">
           <ModelRow
             name="AvatarSample_A"
             detail="template"
