@@ -30,6 +30,9 @@ type Playing = { move: Gesture; start: number; mood: Mood | null };
 // Everything her body remembers between frames.
 export type Body = {
   turns: Map<VRMHumanBoneName, Turn>;
+  // Every bone the model has, and where her hips stand, to go back to after an uploaded move.
+  bones: [VRMHumanBoneName, THREE.Object3D][];
+  hipsRest: THREE.Vector3;
   playing: Playing | null;
   nextMove: number;
   // Where her eyes go: the camera plus a small offset when she glances away.
@@ -43,8 +46,15 @@ export type Body = {
 export function createBody(vrm: VRM): Body {
   const eyes = new THREE.Object3D();
   if (vrm.lookAt) vrm.lookAt.target = eyes;
+  const bones = Object.keys(vrm.humanoid?.humanBones ?? {}).flatMap((name) => {
+    const node = vrm.humanoid?.getNormalizedBoneNode(name as VRMHumanBoneName);
+    return node ? [[name as VRMHumanBoneName, node] as [VRMHumanBoneName, THREE.Object3D]] : [];
+  });
+  const hips = vrm.humanoid?.getNormalizedBoneNode("hips");
   return {
     turns: new Map(),
+    bones,
+    hipsRest: hips ? hips.position.clone() : new THREE.Vector3(),
     // Hello as soon as she appears; the start time is filled in on the first frame.
     playing: { move: WAVE, start: -1, mood: null },
     nextMove: 0,
@@ -88,8 +98,12 @@ function moveEyes(body: Body, camera: THREE.Camera, mood: Mood, time: number, ea
   body.eyes.updateMatrixWorld();
 }
 
+const goal = new THREE.Quaternion();
+const turnEuler = new THREE.Euler();
+
 // One frame of body movement: the mood's pose, any move on top, then small
 // always-on motion (breathing, weight shift, head drift, nods while talking).
+// weight: how much of this wins over an uploaded move already on the bones (1 = all).
 export function moveBody(
   vrm: VRM,
   body: Body,
@@ -98,6 +112,7 @@ export function moveBody(
   voice: number,
   time: number,
   delta: number,
+  weight = 1,
 ) {
   chooseMove(body, mood, time);
   const target: Pose = { ...moodPose(mood) };
@@ -138,12 +153,14 @@ export function moveBody(
   // Older VRM 0 models are turned around to face you, which swaps the sign of
   // turns around x and z. Poses are written for VRM 1.
   const flip = vrm.meta?.metaVersion === "0" ? -1 : 1;
-  const names = new Set([...body.turns.keys(), ...(Object.keys(extra) as VRMHumanBoneName[])]);
-  for (const name of names) {
-    const node = vrm.humanoid?.getNormalizedBoneNode(name);
-    if (!node) continue;
+  for (const [name, node] of body.bones) {
     const turn = body.turns.get(name) ?? [0, 0, 0];
     const add = extra[name] ?? [0, 0, 0];
-    node.rotation.set(flip * (turn[0] + add[0]), turn[1] + add[1], flip * (turn[2] + add[2]));
+    turnEuler.set(flip * (turn[0] + add[0]), turn[1] + add[1], flip * (turn[2] + add[2]));
+    // Bones the coded moves don't use get no turn: back to rest after an uploaded move.
+    goal.setFromEuler(turnEuler);
+    if (weight >= 1) node.quaternion.copy(goal);
+    else node.quaternion.slerp(goal, weight);
+    if (name === "hips") node.position.lerp(body.hipsRest, weight);
   }
 }

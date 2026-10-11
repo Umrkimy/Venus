@@ -1,4 +1,5 @@
 import CharacterModel from "@/features/settings/character-model";
+import CharacterMoves from "@/features/settings/character-moves";
 import CharacterSwitch from "@/features/settings/character-switch";
 import ModeSwitch from "@/features/settings/mode-switch";
 import SettingsSection from "@/features/settings/settings-section";
@@ -20,6 +21,7 @@ export default function GeneralSettingsPage() {
       >
         <CharacterSwitch />
         <CharacterModel />
+        <CharacterMoves />
       </SettingsSection>
       <SettingsSection
         title="Command mode"

@@ -10,6 +10,7 @@ import { voiceLevel, wantVoiceLevel } from "@/features/chat/use-speaker";
 import { type Body, createBody, moveBody } from "./body-motion";
 import { getMood } from "./scene-mood";
 import { setResetView, useStage } from "./stage-store";
+import { type MoveInfo, UploadedMoves } from "./uploaded-moves";
 
 // Shipped with Venus for everyone; your own model comes from Core instead.
 // AvatarSample_A by pixiv Inc.; conditions in public/models/CREDITS.md.
@@ -45,10 +46,15 @@ const BLINK_LENGTH = 0.15;
 // Body moves with her mood; she blinks, and her mouth follows Luna's voice.
 type FaceState = { nextBlink: number; mouth: number };
 
-function animate(vrm: VRM, body: Body, camera: THREE.Camera, time: number, delta: number, state: FaceState) {
+type Parts = { vrm: VRM; body: Body; moves: UploadedMoves };
+
+function animate({ vrm, body, moves }: Parts, camera: THREE.Camera, time: number, delta: number, state: FaceState) {
   // Eased toward the voice's loudness, so the mouth doesn't flicker.
   state.mouth += (voiceLevel() - state.mouth) * Math.min(1, delta * 18);
-  moveBody(vrm, body, camera, getMood(), state.mouth, time, delta);
+  // Uploaded moves first; the coded ones blend over them where there's no file.
+  const mood = getMood();
+  moves.update(mood, delta);
+  moveBody(vrm, body, camera, mood, state.mouth, time, delta, 1 - moves.weight());
 
   const faces = vrm.expressionManager;
   if (faces) {
@@ -76,11 +82,12 @@ async function loadModel(loader: GLTFLoader, own: boolean) {
   return loader.loadAsync(TEMPLATE_URL);
 }
 
-export default function VenusCharacter({ own }: { own: boolean }) {
+export default function VenusCharacter({ own, moves }: { own: boolean; moves: MoveInfo[] }) {
   const holder = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const [ready, setReady] = useState(false);
+  const movesRef = useRef<UploadedMoves | null>(null);
   const stage = useStage();
 
   useEffect(() => {
@@ -114,8 +121,7 @@ export default function VenusCharacter({ own }: { own: boolean }) {
     resize.observe(element);
     fit();
 
-    let vrm: VRM | null = null;
-    let body: Body | null = null;
+    let parts: Parts | null = null;
     let stopped = false;
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -131,8 +137,8 @@ export default function VenusCharacter({ own }: { own: boolean }) {
         VRMUtils.combineSkeletons(gltf.scene);
         VRMUtils.rotateVRM0(loaded);
         scene.add(loaded.scene);
-        vrm = loaded;
-        body = createBody(loaded);
+        parts = { vrm: loaded, body: createBody(loaded), moves: new UploadedMoves(loaded) };
+        movesRef.current = parts.moves;
         setReady(true);
       },
       // No model at all: the plain glow behind stays.
@@ -146,7 +152,7 @@ export default function VenusCharacter({ own }: { own: boolean }) {
       const delta = Math.min(0.1, (now - last) / 1000);
       last = now;
       controlsRef.current?.update(delta);
-      if (vrm && body) animate(vrm, body, camera, now / 1000, delta, state);
+      if (parts) animate(parts, camera, now / 1000, delta, state);
       renderer.render(scene, camera);
     });
 
@@ -155,13 +161,26 @@ export default function VenusCharacter({ own }: { own: boolean }) {
       renderer.setAnimationLoop(null);
       resize.disconnect();
       cameraRef.current = null;
-      if (vrm) VRMUtils.deepDispose(vrm.scene);
+      movesRef.current = null;
+      parts?.moves.dispose();
+      if (parts) VRMUtils.deepDispose(parts.vrm.scene);
       renderer.dispose();
       // Hands the graphics memory back now instead of whenever the browser likes.
       renderer.forceContextLoss();
       renderer.domElement.remove();
     };
   }, [own]);
+
+  // Your uploaded .vrma moves, loaded again when the list changes in Settings.
+  useEffect(() => {
+    const uploaded = movesRef.current;
+    if (!ready || !uploaded) return;
+    let stopped = false;
+    void uploaded.load(moves, () => stopped || movesRef.current !== uploaded);
+    return () => {
+      stopped = true;
+    };
+  }, [ready, moves]);
 
   // Drag to turn around her, scroll or pinch to zoom, right-drag or two fingers to pan.
   useEffect(() => {
