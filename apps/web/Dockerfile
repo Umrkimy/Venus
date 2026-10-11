@@ -26,6 +26,8 @@ ENV NODE_ENV=production \
 
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+# Files served as they are, e.g. the 3D character in public/models.
+COPY --from=build --chown=node:node /app/public ./public
 
 USER node
 EXPOSE 3000

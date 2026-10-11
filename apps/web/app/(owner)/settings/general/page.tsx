@@ -1,3 +1,5 @@
+import CharacterModel from "@/features/settings/character-model";
+import CharacterSwitch from "@/features/settings/character-switch";
 import ModeSwitch from "@/features/settings/mode-switch";
 import SettingsSection from "@/features/settings/settings-section";
 import ThemeSwitch from "@/features/settings/theme-switch";
@@ -11,6 +13,13 @@ export default function GeneralSettingsPage() {
         description="Light or dark, or match your PC."
       >
         <ThemeSwitch />
+      </SettingsSection>
+      <SettingsSection
+        title="3D character"
+        description="Venus behind the chat. On or off per device; your own model on every device."
+      >
+        <CharacterSwitch />
+        <CharacterModel />
       </SettingsSection>
       <SettingsSection
         title="Command mode"

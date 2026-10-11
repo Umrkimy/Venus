@@ -37,3 +37,9 @@ backups/
 
 # Caddy download for your own domain (scripts/domain-access.ps1)
 tools/caddy/
+
+# Your own 3D models stay private (upload them in Settings; Core keeps them).
+# Only the template ships with Venus.
+apps/web/models-original/
+apps/web/public/models/**/*.vrm
+!apps/web/public/models/avatar-sample-a.vrm
