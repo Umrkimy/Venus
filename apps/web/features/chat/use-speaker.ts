@@ -83,7 +83,46 @@ function silence(): string {
   return URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
 }
 
+// How loud Luna is right now, for the 3D character's mouth. The player's
+// sound goes through an analyser once; made on a tap, since browsers only
+// start audio after one.
+let analyser: AnalyserNode | null = null;
+let samples: Uint8Array<ArrayBuffer> | null = null;
+// Only while the character is on: otherwise sound plays the plain way.
+let levelWanted = false;
+
+export function wantVoiceLevel() {
+  levelWanted = true;
+}
+
+function connectAnalyser() {
+  if (analyser || !levelWanted) return;
+  try {
+    const context = new AudioContext();
+    analyser = context.createAnalyser();
+    analyser.fftSize = 512;
+    samples = new Uint8Array(analyser.fftSize);
+    context.createMediaElementSource(player()).connect(analyser);
+    analyser.connect(context.destination);
+  } catch {
+    analyser = null; // No analyser: the mouth just stays shut.
+  }
+}
+
+// 0 = silent, about 1 = loud.
+export function voiceLevel(): number {
+  if (!analyser || !samples || player().paused) return 0;
+  analyser.getByteTimeDomainData(samples);
+  let sum = 0;
+  for (const sample of samples) sum += ((sample - 128) / 128) ** 2;
+  return Math.min(1, Math.sqrt(sum / samples.length) * 4);
+}
+
 function unlock() {
+  connectAnalyser();
+  const context = analyser?.context;
+  if (context instanceof AudioContext && context.state === "suspended")
+    void context.resume();
   const audio = player();
   // Playing already means the phone allows it.
   if (unlocked || !audio.paused) return;

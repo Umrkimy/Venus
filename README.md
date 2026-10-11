@@ -235,8 +235,12 @@ the others). Revoking the device cuts that PC off at once.
 ## Troubleshooting
 
 - **Port 5432, 9000 or 3000 in use**: another Postgres, or dev mode and server
-  mode at once. Stop the other one. After a reboot Windows can reserve 5432;
-  in an admin terminal run `net stop winnat` then `net start winnat`.
+  mode at once. Stop the other one.
+- **Port in use or "access forbidden" after a reboot** (also Caddy on 9443):
+  Windows blocks random port ranges at boot. Fix it for good: quit Docker
+  Desktop and the tray app, then in an admin terminal (it opens in
+  `C:\Windows\system32`, so use the full path) run once:
+  `powershell -ExecutionPolicy Bypass -File "<your Venus folder>\scripts\reserve-ports.ps1"`.
 - **"password authentication failed"**: the Postgres data was created with an
   older password than the one in `.env`. Put the old password back, or (this
   deletes all Venus data) `docker compose down -v` and run setup again.

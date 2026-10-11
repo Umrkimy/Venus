@@ -1,22 +1,9 @@
-import winreg
 from threading import Event
-from uuid import uuid4
 
 import pystray
-import pytest
 
 from venus_node.app import autostart
 from venus_node.app.tray import GREY, CRIMSON, Tray, status_text
-
-
-@pytest.fixture
-def run_key():
-    key = rf"Software\VenusTest-{uuid4().hex}"
-    yield key
-    try:
-        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
-    except FileNotFoundError:
-        pass
 
 
 def make_tray(run_key, events=None):

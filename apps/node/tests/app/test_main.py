@@ -8,6 +8,7 @@ def fake_start(monkeypatch, claimed: bool):
     monkeypatch.setattr(app_main, "claim", lambda name: claimed)
     monkeypatch.setattr(app_main, "log_to_file", lambda path: events.append("log"))
     monkeypatch.setattr(app_main, "show_message", lambda text: events.append(f"popup {text}"))
+    monkeypatch.setattr(app_main, "approve_missing", lambda: events.append("approve"))
     monkeypatch.setattr(app_main, "run_app", lambda directory: events.append("run"))
     return events
 
@@ -31,10 +32,10 @@ def test_second_console_start_prints_instead(monkeypatch, capsys):
     assert "Venus is already running" in capsys.readouterr().out
 
 
-def test_first_hidden_start_logs_to_file_then_runs(monkeypatch):
+def test_first_hidden_start_logs_fixes_autostart_then_runs(monkeypatch):
     events = fake_start(monkeypatch, claimed=True)
     monkeypatch.setattr(sys, "stdout", None)
 
     app_main.main()
 
-    assert events == ["log", "run"]
+    assert events == ["log", "approve", "run"]

@@ -21,6 +21,11 @@ const nextConfig: NextConfig = {
   // Dev mode only: let the phone open it through Tailscale
   // (scripts/phone-access.ps1) or your own domain (scripts/domain-access.ps1).
   allowedDevOrigins: ["*.ts.net", ...ownDomain()],
+  experimental: {
+    // /api passes requests on to Core but cuts bodies at 10 MB by default.
+    // 3D models (Settings upload) are bigger; Core itself refuses over 100 MB.
+    proxyClientMaxBodySize: "110mb",
+  },
   // /settings has no page of its own; open the first page in its menu.
   async redirects() {
     return [

@@ -5,7 +5,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-from venus_node.app.autostart import launch_command
+from venus_node.app.autostart import approve_missing, launch_command
 from venus_node.app.domain import start_domain
 from venus_node.app.single import (
     CONNECTION,
@@ -119,4 +119,5 @@ def main() -> None:
         return
     if hidden:
         log_to_file(NODE_DIRECTORY / "data" / "venus-node.log")
+    approve_missing()  # "Start with Windows" ticked before S28 never ran at login.
     run_app(NODE_DIRECTORY)
