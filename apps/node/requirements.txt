@@ -6,7 +6,9 @@ python-dotenv==1.2.2
 websockets==17.1
 numpy==2.4.6
 sounddevice==0.5.6
-vosk==0.3.45
+# 0.3.45 has no Mac build; 0.3.44 is the newest with one (same API).
+vosk==0.3.45; sys_platform != "darwin"
+vosk==0.3.44; sys_platform == "darwin"
 pystray==0.19.5
 Pillow==12.3.0
 # Home control (imported only when used): Tuya lights, Cast TV, Windows volume.
