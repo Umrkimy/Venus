@@ -11,7 +11,7 @@ Rough order, not promises. Ideas welcome in the issues.
 
 ## Later
 
-- Turn the TV on and off (Android TV over ADB).
+- Turn the TV on and off without Home Assistant (Android TV over ADB).
 - Calendar reminders spoken out loud by Venus.
 - Let Venus add events to your calendar, not only read them.
 - Email: summaries and drafts, with an Approve step before anything is sent.
@@ -28,3 +28,4 @@ Rough order, not promises. Ideas welcome in the issues.
 - Linux support
 - Home control: Tuya lights and plugs, TV volume, Wake-on-LAN, PC volume and lock
 - Google and Outlook calendars
+- Home Assistant: lights, switches, TV power, air-con, scenes

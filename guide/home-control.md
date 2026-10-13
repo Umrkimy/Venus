@@ -6,6 +6,27 @@ home Wi-Fi, so it only works at home (or with the PC at home). Add your
 devices in **Settings, Home**. Like PC actions, they ask for Approve first
 unless you're in Full mode.
 
+**Home Assistant (easiest if you have it).** If you run
+[Home Assistant](https://www.home-assistant.io/), Venus can control
+everything it knows, whatever the brand: lights, switches, TVs and speakers
+(including turning the TV on and off), air-con, and your scenes and scripts.
+Apple Home, Google Home and Alexa devices work this way too, once they're in
+Home Assistant (they have no API Venus can use directly).
+
+1. In Home Assistant, click your profile (bottom left), then Security, then
+   **Long-lived access tokens**, Create token. Copy it (it's shown once).
+2. In Venus, Settings, Home, Home Assistant: paste the address you open Home
+   Assistant at (like `http://192.168.1.50:8123`) and the token, Connect.
+   If `homeassistant.local` doesn't work, use the IP address.
+3. Click **Find devices**, tick the ones you want, and change the names to
+   what you'll say. Add selected.
+
+Then try `turn on the tv`, `set the aircon to 24`, `set the ac to cool`,
+`turn off the bedroom light`, or a scene's name on its own (`movie time`).
+Venus only offers lights, switches, fans, TVs and speakers, air-con, scenes
+and scripts: never locks, alarms or cameras. Disconnect forgets the token and
+the devices you added from Home Assistant.
+
 **Lights and plugs (Tuya / Smart Life).** Venus talks to them directly on
 your Wi-Fi, no cloud needed after setup. It needs each device's id and
 "local key", which you get once:
