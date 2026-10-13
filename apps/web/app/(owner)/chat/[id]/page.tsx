@@ -1,11 +1,12 @@
-"use client";
+import { DEMO, DEMO_CHAT_IDS } from "@/features/demo/demo-mode";
+import ChatPage from "./chat-page";
 
-import { useParams } from "next/navigation";
+// Real Venus makes each chat's page when it's opened. The static demo can't,
+// so it builds a page for each of its chat ids up front.
+export function generateStaticParams() {
+  return DEMO ? DEMO_CHAT_IDS.map((id) => ({ id })) : [];
+}
 
-import { SavedChat } from "@/features/chat/chat-panel";
-
-export default function ChatPage() {
-  const { id } = useParams<{ id: string }>();
-  // key: opening another chat starts a fresh card instead of reusing state.
-  return <SavedChat key={id} conversationId={id} />;
+export default function Page() {
+  return <ChatPage />;
 }

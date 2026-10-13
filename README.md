@@ -360,6 +360,27 @@ the Docker images and tests a backup restore. To run Core's tests on Postgres
 locally, make a scratch database whose name ends in `_test` (the tests wipe
 its tables) and set `VENUS_CORE_TEST_DATABASE_URL` to it.
 
+## Portfolio demo
+
+There's a small version of Venus for my portfolio: the real web page, but
+with a pretend Core that lives in the browser. No server, no AI, no keys,
+nothing touches a PC. She answers a few scripted lines, the Approve buttons
+work, links really open in a new tab, and everything else resets when you
+close the tab.
+
+```bash
+cd apps/web
+npm run build:demo     # plain files in apps/web/out
+```
+
+Put `out/` on any static host. On Cloudflare Pages or Vercel: root
+`apps/web`, build command `npm run build:demo`, output `out`. Build it on
+Linux (the host or CI does): a Windows build names some prefetch files
+wrong, which only makes page switches a bit slower.
+
+The pretend Core is `apps/web/features/demo/fake-core.ts` and her lines
+are in `features/demo/script.ts`.
+
 ## Credits
 
 - 3D model support: [@pixiv/three-vrm](https://github.com/pixiv/three-vrm)

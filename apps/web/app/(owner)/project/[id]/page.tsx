@@ -1,11 +1,11 @@
-"use client";
+import { DEMO, DEMO_PROJECT_IDS } from "@/features/demo/demo-mode";
+import ProjectPage from "./project-page";
 
-import { useParams } from "next/navigation";
+// Same as chat/[id]: the static demo builds its project pages up front.
+export function generateStaticParams() {
+  return DEMO ? DEMO_PROJECT_IDS.map((id) => ({ id })) : [];
+}
 
-import ProjectView from "@/features/projects/project-view";
-
-export default function ProjectPage() {
-  const { id } = useParams<{ id: string }>();
-  // key: opening another project starts a fresh page instead of reusing state.
-  return <ProjectView key={id} projectId={id} />;
+export default function Page() {
+  return <ProjectPage />;
 }

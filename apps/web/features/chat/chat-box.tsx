@@ -68,6 +68,8 @@ type ChatBoxProps = {
   onStopVoice?: () => void;
   // Which PC runs your commands (shows only with two or more online).
   pcPicker?: ReactNode;
+  // Things to try, as buttons above the input (the portfolio demo).
+  suggestions?: string[];
 };
 
 function Dots() {
@@ -174,6 +176,7 @@ export default function ChatBox({
   localVoice = null,
   onStopVoice = () => {},
   pcPicker,
+  suggestions,
 }: ChatBoxProps) {
   const [text, setText] = useState("");
   const lineRef = useRef<HTMLDivElement>(null);
@@ -319,6 +322,21 @@ export default function ChatBox({
       </div>
 
       <form onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl px-4 pt-3 pb-3">
+        {suggestions && suggestions.length > 0 && (
+          <div className="mb-2 flex gap-2 overflow-x-auto [scrollbar-width:none]" aria-label="Things to try">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                disabled={disabled}
+                onClick={() => onSend(suggestion)}
+                className="shrink-0 rounded-full border border-input bg-background/40 px-3 py-1 text-sm text-foreground/80 backdrop-blur-md hover:bg-background/60 hover:text-foreground disabled:opacity-50"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
         <label htmlFor="chat-input" className="sr-only">
           Message Venus
         </label>

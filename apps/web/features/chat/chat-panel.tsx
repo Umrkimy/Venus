@@ -14,6 +14,8 @@ import { useListenOn } from "@/features/voice/listen-store";
 import { useHandsFree } from "@/features/voice/use-hands-free";
 import { useFrontTab, useVoiceState, type VoiceStateName } from "@/features/voice/use-voice-state";
 import { POLL_MS, VOICE_POLL_MS } from "@/lib/poll";
+import { DEMO } from "@/features/demo/demo-mode";
+import { DEMO_SUGGESTIONS } from "@/features/demo/script";
 
 type SavedMessage = {
   role: "user" | "assistant";
@@ -261,6 +263,7 @@ export default function ChatPanel({
         localVoice={localVoice}
         onStopVoice={stopVoice}
         pcPicker={<PcPicker {...pc} />}
+        suggestions={DEMO ? DEMO_SUGGESTIONS : undefined}
       />
 
       <div aria-live="polite" className="empty:hidden mx-auto w-full max-w-3xl px-4 pb-3">
