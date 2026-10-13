@@ -106,3 +106,27 @@ def test_an_unknown_light_is_an_answer(home_setup):
 
     assert body["type"] == "reply"
     assert "Settings, Home" in body["reply"]
+
+
+HA_TOKEN = "ha-long-lived-token"
+
+
+def test_home_assistant_aircon_end_to_end_keeps_the_token_off_the_page(
+    home_setup, command_records: CommandRecordRepository,  # noqa: F811
+):
+    devices = app.dependency_overrides[get_home_device_repository]()
+    devices.set_assistant("http://192.168.1.60:8123", encrypt_text(HA_TOKEN, SECRET))
+    devices.add("bedroom aircon", "aircon", datetime.now(timezone.utc), ha_entity_id="climate.bedroom_ac")
+
+    with connected_pc_umar() as websocket:
+        body = chat("set the aircon to 24")
+        approved = client.post(f"/commands/{body['command_id']}/approval", json={"approved": True}, headers=OWNER)
+        sent = websocket.receive_json()
+
+    assert body["actions"][0]["label"] == "Bedroom aircon: 24°C"
+    assert HA_TOKEN not in str(body) + str(approved.json())
+    assert HA_TOKEN not in command_records.get(UUID(body["command_id"])).payload
+    assert (sent["device"], sent["action"], sent["value"]) == ("aircon", "temperature", 24)
+    assert (sent["ha_url"], sent["ha_token"], sent["ha_entity_id"]) == (
+        "http://192.168.1.60:8123", HA_TOKEN, "climate.bedroom_ac",
+    )

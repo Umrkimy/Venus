@@ -427,6 +427,11 @@ async function route(method: string, path: string, query: URLSearchParams, body:
       return missing("No own model; use the template");
 
     case "home":
+      if (id === "assistant") {
+        return method === "GET" && !parts[2]
+          ? json({ url: null, connected: false })
+          : json({ detail: "Home Assistant isn't in the demo" }, 403);
+      }
       if (id !== "devices") return missing();
       return collection(state.home, method, parts[2], body, (b) => ({
         ...b,

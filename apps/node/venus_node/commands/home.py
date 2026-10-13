@@ -1,5 +1,6 @@
 """Home control from the Node: Tuya lights and plugs, the TV over Google Cast,
-Wake-on-LAN for another PC, and this PC's own volume and lock.
+Home Assistant devices, Wake-on-LAN for another PC, and this PC's own volume
+and lock.
 
 The Node runs on your PC, inside your home network, so it can reach the
 bulbs and the TV directly (Core runs in Docker, which can't send the
@@ -7,9 +8,12 @@ network-wide broadcast Wake-on-LAN needs). Each library is imported only
 when its device is used, so an unused one costs no RAM.
 """
 
+import json
 import shutil
 import socket
 import subprocess
+import urllib.error
+import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -103,6 +107,59 @@ def run_tv(command: HomeCommand, connect: Callable = cast_device) -> str:
     return {"volume_up": "Volume up", "volume_down": "Volume down", "mute": "Muted", "unmute": "Unmuted"}.get(
         command.action, f"Volume {command.value}"
     )
+
+
+# --- Home Assistant --------------------------------------------------------
+
+
+def post_json(url: str, token: str, body: dict) -> None:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=8):
+        pass
+
+
+def ha_service(command: HomeCommand) -> tuple[str, str, dict, str]:
+    """(domain, service, extra data, what to show) for one command."""
+    domain = command.ha_entity_id.split(".")[0]
+    action = command.action
+    if command.device == "scene":
+        return domain, "turn_on", {}, "Started"
+    if action in ("on", "off"):
+        return domain, f"turn_{action}", {}, action.title()
+    if action == "brightness":
+        if command.value == 0:
+            return domain, "turn_off", {}, "Off"
+        return domain, "turn_on", {"brightness_pct": command.value}, f"Brightness {command.value}%"
+    if action == "color":
+        return domain, "turn_on", {"rgb_color": list(hex_to_rgb(command.color))}, f"Color {command.color}"
+    if action in ("volume_up", "volume_down"):
+        return domain, action, {}, "Volume up" if action == "volume_up" else "Volume down"
+    if action == "volume_set":
+        return domain, "volume_set", {"volume_level": command.value / 100}, f"Volume {command.value}"
+    if action in ("mute", "unmute"):
+        return domain, "volume_mute", {"is_volume_muted": action == "mute"}, "Muted" if action == "mute" else "Unmuted"
+    if action == "temperature":
+        return domain, "set_temperature", {"temperature": command.value}, f"{command.value}°C"
+    return domain, "set_hvac_mode", {"hvac_mode": command.mode}, f"Mode {command.mode.replace('_', ' ')}"
+
+
+def run_home_assistant(command: HomeCommand, post: Callable[[str, str, dict], None] = post_json) -> str:
+    domain, service, data, detail = ha_service(command)
+    url = f"{command.ha_url}/api/services/{domain}/{service}"
+    try:
+        post(url, command.ha_token, {"entity_id": command.ha_entity_id, **data})
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            raise HomeError("Home Assistant didn't accept the token. Make a new one in Settings, Home.") from exc
+        raise HomeError(f"Home Assistant said no ({exc.code}). Is {command.ha_entity_id} still there?") from exc
+    except OSError as exc:
+        raise HomeError("Couldn't reach Home Assistant. Is it on and on the same network?") from exc
+    return detail
 
 
 # --- Wake-on-LAN -----------------------------------------------------------
@@ -221,12 +278,14 @@ def create_home_executor(
     tv: Callable[[HomeCommand], str] = run_tv,
     wake: Callable[[HomeCommand], str] = run_wake,
     pc: Callable[[HomeCommand], str] = run_pc,
+    home_assistant: Callable[[HomeCommand], str] = run_home_assistant,
 ) -> Callable[[HomeCommand], CommandResult]:
     by_device = {"light": tuya, "plug": tuya, "tv": tv, "wake": wake, "pc": pc}
 
     def execute(command: HomeCommand) -> CommandResult:
         try:
-            detail = by_device[command.device](command)
+            run = home_assistant if command.ha_entity_id else by_device[command.device]
+            detail = run(command)
         except HomeError as exc:
             return CommandResult(command_id=command.command_id, status="failed", detail=str(exc))
         return CommandResult(command_id=command.command_id, status="succeeded", detail=detail)

@@ -303,7 +303,8 @@ async def propose_home(
     settings_repository: SettingsRepository,
 ) -> dict:
     device = home_devices.get(intent.home_device_id) if intent.home_device_id else None
-    command = home_command(intent, device, node_id, settings.secret_key)
+    assistant = home_devices.get_assistant() if device is not None and device.ha_entity_id else None
+    command = home_command(intent, device, node_id, settings.secret_key, assistant=assistant)
     response = await propose(
         command, registry, result_registry, command_records, settings_repository,
         payload=intent_payload(intent),
@@ -891,9 +892,10 @@ def command_from_record(
             device = home_devices.get(intent.home_device_id) if home_devices else None
             if device is None:
                 raise HomeTextError("That device was removed from Settings, Home")
+        assistant = home_devices.get_assistant() if device is not None and device.ha_entity_id else None
         return home_command(
             intent, device, record.device_id, secret_key,
-            command_id=record.command_id, expires_at=expires_at,
+            command_id=record.command_id, expires_at=expires_at, assistant=assistant,
         )
     if record.kind == "open_url":
         return OpenUrlCommand(

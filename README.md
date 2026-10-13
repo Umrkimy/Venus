@@ -55,7 +55,7 @@ Type these in the chat, or say "Hey Venus" first and then say them.
 | `youtube lofi beats` | Searches YouTube (also `google ...`, `netflix ...`) |
 | `open project venus` | Opens that code project in VS Code |
 | `remember I have class at 9 on mondays` | Saves it and uses it later in chats |
-| `turn off the bedroom light` / `tv volume 20` | Smart lights and plugs (Tuya), Google TV volume |
+| `turn off the bedroom light` / `set the aircon to 24` | Lights, plugs, TV, air-con and scenes (Home Assistant or Tuya) |
 | `what's on today?` | Reads your Google and Outlook calendars |
 | `what should I cook tonight?` | Normal chat with the AI |
 | `stop Venus` / `thank you Venus` | Cuts her off / ends the voice chat |

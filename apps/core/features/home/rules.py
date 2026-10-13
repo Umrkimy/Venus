@@ -1,4 +1,5 @@
-"""Home phrases: "turn off the bedroom light", "tv volume 20", "wake laptop".
+"""Home phrases: "turn off the bedroom light", "tv volume 20", "wake laptop",
+"set the aircon to 24", "movie time".
 
 Rules first, like opening apps: they're instant, free and predictable. Luna's
 control_home tool writes the same kind of sentence, so both go through here.
@@ -30,8 +31,15 @@ THIS_PC = {"pc", "computer", "my pc", "this pc", "my computer", "this computer",
 TV_WORDS = {"tv", "television", "the tv"}
 LIGHT_WORDS = {"light", "lamp"}
 ALL_LIGHTS = {"lights", "all lights", "all the lights", "the lights", "every light"}
+AIRCON_WORDS = {"aircon", "air con", "air-con", "ac", "air conditioner", "air conditioning", "aircond"}
 # Words that mean the owner meant a home device, so an unknown name is an answer, not "maybe an app".
-HOME_WORDS = ("light", "lamp", "plug", "tv", "television", "fan")
+HOME_WORDS = ("light", "lamp", "plug", "tv", "television", "fan", "aircon", "air con", "air-con", "air conditioner")
+# Air-con modes as people say them -> Home Assistant's names.
+MODES = {
+    "cool": "cool", "cooling": "cool", "heat": "heat", "heating": "heat", "fan": "fan_only",
+    "fan only": "fan_only", "dry": "dry", "auto": "auto",
+}
+COLDEST, HOTTEST = 16, 30
 
 
 class HomeTextError(CommandTextError):
@@ -40,12 +48,13 @@ class HomeTextError(CommandTextError):
 
 @dataclass(frozen=True)
 class HomeIntent:
-    device: str  # light, plug, tv, wake or pc (this PC)
+    device: str  # light, plug, tv, aircon, scene, wake or pc (this PC)
     action: str
     label: str
     home_device_id: UUID | None = None
     value: int | None = None
     color: str | None = None
+    mode: str | None = None  # air-con mode
 
 
 def clean(text: str) -> str:
@@ -93,6 +102,11 @@ def by_name(name: str, devices: list[HomeDevice], kinds: set[str]) -> list[HomeD
     tvs = [d for d in devices if d.kind == "tv" and "tv" in kinds]
     if name in TV_WORDS and tvs:
         return tvs[:1]
+    aircons = [d for d in devices if d.kind == "aircon" and "aircon" in kinds]
+    if name in AIRCON_WORDS and aircons:
+        if len(aircons) > 1:
+            raise HomeTextError(f"Which air-con: {', '.join(d.name for d in aircons)}?")
+        return aircons
     return None
 
 
@@ -100,6 +114,8 @@ def unknown(name: str) -> HomeTextError | None:
     name = strip_article(name)
     if name in TV_WORDS:
         return HomeTextError("There's no TV in Settings, Home yet. Add it there first.")
+    if name in AIRCON_WORDS:
+        return HomeTextError("There's no air-con in Settings, Home yet. Add it from Home Assistant there.")
     if any(word in name for word in HOME_WORDS):
         return HomeTextError(f"I don't have a device called {name}. Add it in Settings, Home.")
     return None
@@ -152,6 +168,16 @@ ON_OFF = re.compile(r"^(?:turn|switch|put) (?P<state>on|off) (?P<name>.+)$")
 ON_OFF_AFTER = re.compile(r"^(?:turn|switch) (?P<name>.+?) (?P<state>on|off)$")
 BRIGHTNESS = re.compile(r"^(?:set |turn |make )?(?P<name>.+?) (?:brightness )?(?:to |at )?(?P<value>\d{1,3}) ?(?:%|percent)$")
 DIM_OR_BRIGHTEN = re.compile(r"^(?P<how>dim|brighten) (?P<name>.+)$")
+TEMPERATURE = re.compile(
+    r"^(?:set |turn |put |change |make )?(?P<name>.+?) (?:temperature |temp )?(?:to |at )?(?P<value>\d{1,2})"
+    r" ?(?:°c|°|degrees?(?: celsius| c)?|c)?$"
+)
+MODE = re.compile(
+    r"^(?:set |turn |put |switch |change )?(?P<name>.+?) (?:to |on |in )?(?P<mode>"
+    + "|".join(sorted(MODES, key=len, reverse=True))
+    + r")(?: mode)?$"
+)
+ACTIVATE = re.compile(r"^(?:activate|run|start|do|play) (?:the |my )?(?P<name>.+?)(?: scene| script)?$")
 COLOR = re.compile(
     r"^(?:set|make|turn|change) (?P<name>.+?) (?:to |colou?r to |colou?r )?(?P<color>#[0-9a-f]{6}|"
     + "|".join(sorted(COLORS, key=len, reverse=True))
@@ -162,6 +188,15 @@ COLOR = re.compile(
 def parse_home_text(text: str, devices: list[HomeDevice]) -> list[HomeIntent] | None:
     """What to do at home, None if this isn't a home phrase, or HomeTextError as an answer."""
     text = clean(text)
+
+    # A scene's own name is the phrase: "movie time".
+    scenes = by_name(text, devices, {"scene"})
+    if scenes:
+        return scene_intents(scenes)
+    if match := ACTIVATE.match(text):
+        scenes = by_name(match["name"], devices, {"scene"})
+        if scenes:
+            return scene_intents(scenes)
 
     if LOCK.match(text):
         return [HomeIntent("pc", "lock", "This PC: lock")]
@@ -194,9 +229,37 @@ def parse_home_text(text: str, devices: list[HomeDevice]) -> list[HomeIntent] | 
             if state == "off":
                 raise HomeTextError("I can wake another PC, but not turn one off yet.")
             return wake_intents(name, devices)
-        if by_name(name, devices, {"tv"}):
-            raise HomeTextError("I can only change the TV's volume for now, not turn it on or off.")
+        tvs = by_name(name, devices, {"tv"})
+        if tvs:
+            if not tvs[0].ha_entity_id:
+                raise HomeTextError(
+                    "I can only change this TV's volume. Add it from Home Assistant to turn it on or off."
+                )
+            return [HomeIntent("tv", state, f"{title(tvs[0].name)}: {state}", tvs[0].id)]
+        aircons = by_name(name, devices, {"aircon"})
+        if aircons:
+            return [HomeIntent("aircon", state, f"{title(d.name)}: {state}", d.id) for d in aircons]
+        scenes = by_name(name, devices, {"scene"})
+        if scenes:
+            if state == "off":
+                raise HomeTextError("A scene can only be started, not turned off.")
+            return scene_intents(scenes)
         return light_intents(name, devices, state, label=state)
+
+    if match := TEMPERATURE.match(text):
+        aircons = by_name(match["name"], devices, {"aircon"})
+        if aircons:
+            value = int(match["value"])
+            if not COLDEST <= value <= HOTTEST:
+                raise HomeTextError(f"Pick {COLDEST} to {HOTTEST} °C")
+            return [HomeIntent("aircon", "temperature", f"{title(d.name)}: {value}°C", d.id, value) for d in aircons]
+
+    if match := MODE.match(text):
+        aircons = by_name(match["name"], devices, {"aircon"})
+        if aircons:
+            mode = MODES[match["mode"]]
+            label = mode.replace("_", " ")
+            return [HomeIntent("aircon", "mode", f"{title(d.name)}: {label}", d.id, mode=mode) for d in aircons]
 
     if match := DIM_OR_BRIGHTEN.match(text):
         value = DIM if match["how"] == "dim" else 100
@@ -221,3 +284,7 @@ def wake_intents(name: str, devices: list[HomeDevice]) -> list[HomeIntent] | Non
             raise HomeTextError("I run on this PC, so it's already awake.")
         return None
     return [HomeIntent("wake", "wake", f"Wake {d.name}", d.id) for d in found]
+
+
+def scene_intents(scenes: list[HomeDevice]) -> list[HomeIntent]:
+    return [HomeIntent("scene", "activate", f"Start {d.name}", d.id) for d in scenes]
