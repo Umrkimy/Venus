@@ -209,10 +209,19 @@ def test_opening_a_message_marks_it_read_and_html_becomes_plain_text():
     assert FakeImap.instances[-1].stored == [("8", "+FLAGS", "(\\Seen)")]
 
 
-@pytest.mark.parametrize("uid", ["7 8", "7;DELETE", "abc"])
-def test_message_ids_are_numbers_only(uid):
+@pytest.mark.parametrize("uid", ["7 8", "7;DELETE", "7:*"])
+def test_message_ids_are_plain_ids(uid):
     account = add()
     assert client.get(f"/email/accounts/{account}/messages/{uid}", headers=OWNER).status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_imap_message_ids_are_numbers():
+    account = add()
+
+    response = client.get(f"/email/accounts/{account}/messages/abc", headers=OWNER)
+
+    assert "isn't a message id" in response.json()["detail"]
+    assert FakeImap.instances[-1:] == FakeImap.instances[:1]  # Never got as far as the server.
 
 
 def test_draft_reply_is_professional_signed_and_guarded(luna: RecordingLuna):

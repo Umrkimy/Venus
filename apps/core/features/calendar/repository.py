@@ -47,12 +47,15 @@ class CalendarRepository:
             session.commit()
             return account
 
-    def connect(self, provider: str, refresh_token_encrypted: str, email: str | None, now: datetime) -> None:
+    def connect(
+        self, provider: str, refresh_token_encrypted: str, email: str | None, now: datetime, mail: bool = False,
+    ) -> None:
         with Session(self.engine) as session:
             account = session.get(CalendarAccount, provider)
             account.refresh_token_encrypted = refresh_token_encrypted
             account.account_email = email
             account.connected_at = now
+            account.mail = mail
             session.commit()
 
     def save_refresh_token(self, provider: str, refresh_token_encrypted: str) -> None:

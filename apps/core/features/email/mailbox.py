@@ -65,6 +65,8 @@ class MailMessage:
     message_id: str
     references: str
     attachments: list[str] = field(default_factory=list)
+    # Gmail's conversation id, so a reply stays in the same thread there.
+    thread_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,7 @@ class Outgoing:
     # Replying: the original's Message-ID and References, so it stays in the thread.
     in_reply_to: str = ""
     references: str = ""
+    thread_id: str = ""
 
 
 # --- HTML mail as plain text ------------------------------------------------
@@ -259,6 +262,11 @@ def read(settings: MailSettings, uid: str, connect=open_imap) -> MailMessage:
         imap.uid("STORE", uid, "+FLAGS", "(\\Seen)")
     finally:
         close(imap)
+    return parse_message(uid, raw)
+
+
+def parse_message(uid: str, raw: bytes, thread_id: str = "") -> MailMessage:
+    """A whole raw message (RFC 822) as Venus shows it: plain text, attachments by name."""
     message = email.message_from_bytes(raw, policy=default_policy)
     part = message.get_body(preferencelist=("plain", "html"))
     body = ""
@@ -278,6 +286,7 @@ def read(settings: MailSettings, uid: str, connect=open_imap) -> MailMessage:
         message_id=decoded(message.get("Message-ID")),
         references=decoded(message.get("References")),
         attachments=[decoded(item.get_filename()) or "attachment" for item in message.iter_attachments()],
+        thread_id=thread_id,
     )
 
 

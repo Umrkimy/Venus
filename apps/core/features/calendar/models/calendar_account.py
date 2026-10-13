@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from storage.base import Base
@@ -20,6 +20,8 @@ class CalendarAccount(Base):
     refresh_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     account_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The sign-in also allows mail (Settings, Email): reading, marking read, sending.
+    mail: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     def __init__(self, provider: str, client_id: str, client_secret_encrypted: str) -> None:
         self.provider = provider
@@ -28,3 +30,4 @@ class CalendarAccount(Base):
         self.refresh_token_encrypted = None
         self.account_email = None
         self.connected_at = None
+        self.mail = False
