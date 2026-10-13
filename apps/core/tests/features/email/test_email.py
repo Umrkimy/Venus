@@ -12,6 +12,9 @@ from fastapi.testclient import TestClient
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
+from features.calendar.dependencies import get_calendar_service
+from features.calendar.repository import CalendarRepository
+from features.calendar.service import CalendarService
 from features.chat.dependencies import get_chat_provider
 from features.email import mailbox
 from features.email.dependencies import get_email_repository, get_mail_connectors
@@ -128,6 +131,8 @@ def repository(luna):
     app.dependency_overrides[get_email_repository] = lambda: repository
     app.dependency_overrides[get_mail_connectors] = lambda: (FakeImap, FakeSmtp)
     app.dependency_overrides[get_chat_provider] = lambda: luna
+    # IMAP mailboxes never use it, but the routes ask for it: the same test database.
+    app.dependency_overrides[get_calendar_service] = lambda: CalendarService(CalendarRepository(engine), SECRET)
     yield repository
     app.dependency_overrides.clear()
     engine.dispose()
