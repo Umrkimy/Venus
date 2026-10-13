@@ -51,6 +51,35 @@ jobs:
         shell: pwsh
         run: .\apps\node\.venv\Scripts\python.exe -m pytest packages/venus-protocol/tests
 
+  # The Node on Linux (CachyOS and friends): app list from .desktop files,
+  # xdg-open, autostart file, lock files. xvfb gives the orb and tray icon
+  # a screen. Also lints the Linux setup and start scripts.
+  node-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: System packages
+        run: sudo apt-get update && sudo apt-get install -y xvfb libportaudio2 python3-tk
+
+      - name: Install Node dependencies
+        working-directory: apps/node
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-dev.txt
+
+      - name: Test Node on Linux
+        working-directory: apps/node
+        run: xvfb-run -a python -m pytest
+
+      - name: Lint shell scripts
+        run: shellcheck -x -S warning setup-venus.sh start-venus.sh scripts/*.sh scripts/backup/*.sh
+
   # Same Postgres as server mode. The Windows job above uses SQLite (fast);
   # this one catches what only real Postgres does (time zones, types,
   # migrations). Service containers need a Linux runner.
@@ -158,3 +187,6 @@ jobs:
           ls -l backups/daily backups/weekly
           pwsh -File scripts/restore-db.ps1 -File "$(ls backups/daily/*.dump)" -Target venus_restore_test
           test "$(docker compose exec -T postgres psql -U venus -d venus_restore_test -tAc 'select count(*) from ci_check')" = "2"
+          # The Linux script does the same.
+          ./scripts/restore-db.sh "$(ls backups/daily/*.dump)" venus_restore_sh
+          test "$(docker compose exec -T postgres psql -U venus -d venus_restore_sh -tAc 'select count(*) from ci_check')" = "2"
