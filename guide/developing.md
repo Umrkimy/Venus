@@ -39,7 +39,7 @@ cd apps/web && npx tsc --noEmit && npm run lint # Web
 
 (On Windows it's `.venv\Scripts\python.exe` instead of `.venv/bin/python`.)
 
-CI runs all of that on Windows and Linux, Core again on real Postgres, builds
+CI runs all of that on Windows and Linux (and the PC app on macOS), Core again on real Postgres, builds
 the Docker images and tests a backup restore. To run Core's tests on Postgres
 locally, make a scratch database whose name ends in `_test` (the tests wipe
 its tables) and set `VENUS_CORE_TEST_DATABASE_URL` to it.

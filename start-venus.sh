@@ -28,7 +28,7 @@ running() { pgrep -f "$1" >/dev/null 2>&1; }
 
 [[ -f "$root/apps/core/.env" && -x "$node_python" ]] || fail "Venus is not set up yet. Run ./setup-venus.sh first."
 docker info >/dev/null 2>&1 ||
-    fail "Docker isn't running. Start it with: sudo systemctl enable --now docker"
+    fail "Docker isn't running. Linux: sudo systemctl enable --now docker. Mac: open Docker Desktop."
 
 compose() { docker compose --project-directory "$root" "$@"; }
 

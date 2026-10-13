@@ -37,7 +37,9 @@ case "$(uname -m)" in
     aarch64 | arm64) arch=arm64 ;;
     *) fail "No Caddy download for $(uname -m) here; put a caddy with the Cloudflare module in $caddy yourself." ;;
 esac
-download="https://caddyserver.com/api/download?os=linux&arch=$arch&p=github.com%2Fcaddy-dns%2Fcloudflare"
+os=linux
+[[ "$(uname -s)" == "Darwin" ]] && os=darwin
+download="https://caddyserver.com/api/download?os=$os&arch=$arch&p=github.com%2Fcaddy-dns%2Fcloudflare"
 
 domain="$(env_value VENUS_DOMAIN)"
 [[ -n "$domain" ]] || fail "Set VENUS_DOMAIN in $env_file first (see guide/remote-access.md)."

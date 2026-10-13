@@ -4,8 +4,8 @@ Rough order, not promises. Ideas welcome in the issues.
 
 ## Next
 
-- **macOS.** The server parts already run in Docker on a Mac. The PC app
-  (opening apps, mic, tray icon, volume and lock) needs its Mac version.
+- **macOS, tested on a real Mac.** The Mac version is built and passes its
+  tests on GitHub's Macs; it still needs a check on a real one.
 - **Portfolio demo** at [umrkimy.dev](https://umrkimy.dev): a small version
   that runs in the browser, no install.
 
@@ -26,6 +26,7 @@ Rough order, not promises. Ideas welcome in the issues.
 - Phone access over Tailscale, your own domain, more PCs
 - Backups and a restore script
 - Linux support
+- macOS support (apps, links, projects, volume, lock, login item, notifications)
 - Home control: Tuya lights and plugs, TV volume, Wake-on-LAN, PC volume and lock
 - Google and Outlook calendars, plus .ics links and files (uni timetables)
 - Home Assistant: lights, switches, TV power, air-con, scenes

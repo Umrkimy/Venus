@@ -21,7 +21,7 @@ set -euo pipefail
 fail() { printf '\033[31m%s\033[0m\n' "$1" >&2; exit 1; }
 
 command -v tailscale >/dev/null 2>&1 ||
-    fail "Tailscale is not installed. Arch/CachyOS: sudo pacman -S tailscale && sudo systemctl enable --now tailscaled && sudo tailscale up. Others: https://tailscale.com/download"
+    fail "Tailscale is not installed. Arch/CachyOS: sudo pacman -S tailscale && sudo systemctl enable --now tailscaled && sudo tailscale up. Mac: install the Tailscale app, then in its menu Settings, enable the CLI. Others: https://tailscale.com/download"
 
 if [[ "${1:-}" == "--off" ]]; then
     tailscale serve --https=443 off || fail "tailscale serve off failed."

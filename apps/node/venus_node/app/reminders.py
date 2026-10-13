@@ -14,7 +14,7 @@ from datetime import datetime
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from venus_node.commands.pc import IS_WINDOWS
+from venus_node.commands.pc import IS_MAC, IS_WINDOWS
 from venus_node.config import NodeSettings
 from venus_node.voice.core_client import core_http_url
 
@@ -68,11 +68,16 @@ class Reminders:
 
 
 def desktop_notifier(tray_notify: Callable[[str, str], None]) -> Callable[[str], None]:
-    """Windows: the tray icon's toast. Linux: notify-send, which every desktop shows."""
+    """Windows: the tray icon's toast. Mac: Notification Center. Linux: notify-send, which every desktop shows."""
 
     def notify(text: str) -> None:
         if IS_WINDOWS:
             tray_notify(text, "Venus reminder")
+            return
+        if IS_MAC:
+            from venus_node.commands.mac_apps import notify_mac
+
+            notify_mac("Venus reminder", text)
             return
         notify_send = shutil.which("notify-send")
         if notify_send:

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# First-time setup for Venus on Linux (tested on Arch/CachyOS and Debian/Ubuntu).
+# First-time setup for Venus on Linux (tested on Arch/CachyOS and Debian/Ubuntu)
+# and macOS (Docker Desktop + Python from python.org or Homebrew).
 # Run once after cloning:  ./setup-venus.sh
 #
 # 1. Checks for Docker (with compose) and Python 3.11+.
@@ -20,6 +21,7 @@
 # System packages the PC part needs (the script tells you if one is missing):
 #   Arch/CachyOS:  sudo pacman -S --needed python tk portaudio libnotify
 #   Debian/Ubuntu: sudo apt install python3-venv python3-tk libportaudio2 libnotify-bin
+#   macOS:         Python from python.org (tkinter included), or brew install python python-tk
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,6 +29,21 @@ vosk_name="vosk-model-small-en-us-0.15"
 vosk_url="https://alphacephei.com/vosk/models/$vosk_name.zip"
 node_only=false
 [[ "${1:-}" == "--node-only" ]] && node_only=true
+
+# What to install differs per system; only the hints change, not the steps.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    docker_hint="Install Docker Desktop from https://www.docker.com/products/docker-desktop/ and open it once."
+    docker_run_hint="Open Docker Desktop and wait until it says it's running."
+    python_hint="Install it from https://www.python.org/downloads/ (or: brew install python python-tk)."
+    tk_hint="Use Python from python.org, or: brew install python-tk."
+    audio_hint="brew install portaudio"
+else
+    docker_hint="Arch/CachyOS: sudo pacman -S docker docker-compose && sudo systemctl enable --now docker."
+    docker_run_hint="Try: sudo systemctl enable --now docker && sudo usermod -aG docker \$USER (then log out and in)."
+    python_hint="Arch/CachyOS: sudo pacman -S python. Debian/Ubuntu: sudo apt install python3 python3-venv."
+    tk_hint="Arch: sudo pacman -S tk. Debian/Ubuntu: sudo apt install python3-tk."
+    audio_hint="Arch: sudo pacman -S portaudio. Debian/Ubuntu: sudo apt install libportaudio2."
+fi
 
 step() { printf '\n\033[36m== %s\033[0m\n' "$1"; }
 fail() { printf '\033[31m%s\033[0m\n' "$1" >&2; exit 1; }
@@ -73,16 +90,16 @@ echo "Venus setup"
 step "Checking requirements"
 if ! $node_only; then
     command -v docker >/dev/null 2>&1 ||
-        fail "Docker is missing. Arch/CachyOS: sudo pacman -S docker docker-compose && sudo systemctl enable --now docker. Then run setup again."
+        fail "Docker is missing. $docker_hint Then run setup again."
     docker compose version >/dev/null 2>&1 ||
-        fail "Docker Compose is missing. Arch/CachyOS: sudo pacman -S docker-compose. Debian/Ubuntu: sudo apt install docker-compose-plugin."
+        fail "Docker Compose is missing. Arch/CachyOS: sudo pacman -S docker-compose. Debian/Ubuntu: sudo apt install docker-compose-plugin. Mac: it comes with Docker Desktop."
     docker info >/dev/null 2>&1 ||
-        fail "Docker isn't running or you can't use it. Try: sudo systemctl enable --now docker && sudo usermod -aG docker \$USER (then log out and in)."
+        fail "Docker isn't running or you can't use it. $docker_run_hint"
 fi
-python="$(find_python)" || fail "Python 3.11 or newer (with venv) is missing. Arch/CachyOS: sudo pacman -S python. Debian/Ubuntu: sudo apt install python3 python3-venv."
+python="$(find_python)" || fail "Python 3.11 or newer (with venv) is missing. $python_hint"
 echo "Python: $python"
 "$python" -c 'import tkinter' 2>/dev/null ||
-    echo "Note: tkinter is missing, so the orb window won't show. Arch: sudo pacman -S tk. Debian/Ubuntu: sudo apt install python3-tk."
+    echo "Note: tkinter is missing, so the orb window won't show. $tk_hint"
 
 # --- 2. Settings files -----------------------------------------------------
 step "Writing settings (.env files)"
@@ -183,7 +200,7 @@ fi
 (cd "$node_dir" && "$venv_python" -m pip install --disable-pip-version-check -q -r requirements.txt) ||
     fail "Installing the PC part failed (see pip's message above)."
 "$venv_python" -c 'import sounddevice' 2>/dev/null ||
-    echo "Note: PortAudio is missing, so Venus can't use the mic. Arch: sudo pacman -S portaudio. Debian/Ubuntu: sudo apt install libportaudio2."
+    echo "Note: PortAudio is missing, so Venus can't use the mic. $audio_hint"
 echo "PC part installed."
 
 if $node_only; then

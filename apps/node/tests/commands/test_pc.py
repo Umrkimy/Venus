@@ -10,6 +10,7 @@ def linux(monkeypatch):
     """Pretend this is Linux and record what would be started."""
     calls = []
     monkeypatch.setattr(pc, "IS_WINDOWS", False)
+    monkeypatch.setattr(pc, "IS_MAC", False)
     monkeypatch.setattr(pc.shutil, "which", lambda name: f"/usr/bin/{name}" if name != "code" else None)
     monkeypatch.setattr(pc.subprocess, "Popen", lambda command, **options: calls.append((command, options)))
     return calls

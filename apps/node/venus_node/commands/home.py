@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 from venus_protocol.schemas.commands import CommandResult, HomeCommand
 
-from venus_node.commands.pc import IS_WINDOWS
+from venus_node.commands.pc import IS_MAC, IS_WINDOWS
 
 # Steps for "volume up/down": a tenth of the range.
 VOLUME_STEP = 10
@@ -252,8 +252,28 @@ def linux_pc() -> ThisPc:
     )
 
 
+def mac_pc(run: Callable[[list[str]], str] = run_quiet) -> ThisPc:
+    # AppleScript's volume is 0-100 already; pmset sleeps the screen, which locks
+    # it when "require password after sleep" is on (the Mac default).
+    def osascript(script: str) -> str:
+        return run(["osascript", "-e", script])
+
+    return ThisPc(
+        get_volume=lambda: int(osascript("output volume of (get volume settings)").strip() or 0),
+        set_volume=lambda level: osascript(f"set volume output volume {int(level)}") and None,
+        set_muted=lambda muted: osascript(f"set volume output muted {'true' if muted else 'false'}") and None,
+        lock=lambda: run(["pmset", "displaysleepnow"]) and None,
+    )
+
+
+def this_pc() -> ThisPc:
+    if IS_WINDOWS:
+        return windows_pc()
+    return mac_pc() if IS_MAC else linux_pc()
+
+
 def run_pc(command: HomeCommand, pc: ThisPc | None = None) -> str:
-    pc = pc or (windows_pc() if IS_WINDOWS else linux_pc())
+    pc = pc or this_pc()
     if command.action == "lock":
         pc.lock()
         return "Locked"
