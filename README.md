@@ -301,6 +301,9 @@ Venus can open things on your PC, so I tried to lock it down:
   only get in through Tailscale.
 - Passwords are hashed (Argon2). Login tries are rate limited.
 - Session cookies are `HttpOnly` and `SameSite=Lax`, and `Secure` over HTTPS.
+- Core refuses changes sent by another website's page (it checks the
+  browser's `Sec-Fetch-Site` header), so a random site can't press buttons
+  in your Venus for you.
 - API keys you save in Settings are encrypted (`VENUS_CORE_SECRET_KEY`) and
   never sent back to the page.
 - Every PC has its own token, stored only as a hash, and can be revoked.

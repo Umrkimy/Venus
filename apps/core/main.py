@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI
 
+from api.cross_site import CrossSiteGuard
 from api.router import api_router
 from features.commands.repository import CommandRecordRepository
 from storage.database import get_database_engine
@@ -19,4 +20,5 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(CrossSiteGuard)
 app.include_router(api_router)
