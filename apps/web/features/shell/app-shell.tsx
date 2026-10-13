@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { NewChatProvider } from "@/features/chat/new-chat";
+import DemoBanner from "@/features/demo/demo-banner";
+import { DEMO } from "@/features/demo/demo-mode";
 import OwnerStatus from "@/features/owner/owner-status";
 import AppSidebar from "@/features/shell/app-sidebar";
 import SceneBackground from "@/features/shell/scene-background";
@@ -29,6 +31,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {showScene && <SceneBackground />}
             <header className="relative z-10 flex h-12 shrink-0 items-center px-3">
               {signedIn && <SidebarTrigger />}
+              {DEMO && <DemoBanner />}
             </header>
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               <div className="px-4">
