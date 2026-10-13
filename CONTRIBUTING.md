@@ -24,7 +24,7 @@ PRs are welcome, but please know:
   first so we can talk about it.
 - Keep it small: one fix or feature per PR.
 - Run the tests ([developing guide](guide/developing.md#tests)). CI runs
-  them on Windows and Linux too.
+  them on Windows, Linux and macOS too.
 - Never commit `.env` files, keys, or your own 3D models and voices.
 
 Security problems: please don't open a public issue, see

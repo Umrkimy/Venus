@@ -13,8 +13,8 @@ her sits on the web page.
 <sub>The default character (pixiv's free VRoid sample). You can upload your own.</sub>
 
 Self-hosted: everything runs on your own PC, nothing is hosted for you, and
-you bring your own API keys. Works on **Windows 10/11** and **Linux**.
-**macOS** is coming next.
+you bring your own API keys. Works on **Windows 10/11**, **macOS** and
+**Linux**.
 
 ## How I built it
 
@@ -36,7 +36,7 @@ written by me", and it's not blind vibe coding either:
   Claude wrote most of the code while I tested it live on my PC, found the
   bugs and decided what stays.
 - **Everything goes through the same checks**: one pull request per
-  feature, about 850 automated tests, and CI on Windows and Linux.
+  feature, about 950 automated tests, and CI on Windows, Linux and macOS.
 
 A big part of what I learned is the setup around the AI itself, like
 building my own harness: a teaching mode (the

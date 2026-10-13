@@ -3,8 +3,8 @@
 Step by step, for people who haven't set up something like this before.
 It takes about 15 minutes, most of it waiting for downloads.
 
-Works on **Windows 10/11** and **Linux**. macOS isn't supported yet (it's
-next on the [roadmap](../ROADMAP.md)).
+Works on **Windows 10/11**, **macOS** and **Linux**. (The Mac version is new:
+if something doesn't work there, please open an issue.)
 
 ## 1. Install what Venus needs
 
@@ -21,6 +21,17 @@ next on the [roadmap](../ROADMAP.md)).
 3. Optional: [Git](https://git-scm.com/downloads), to download Venus and get
    updates easily. You can also download it as a ZIP instead (below).
 
+**macOS**
+
+1. [Docker Desktop](https://www.docker.com/products/docker-desktop/) (pick
+   Apple chip or Intel to match your Mac). Open it once and wait until it's
+   running.
+2. [Python](https://www.python.org/downloads/) 3.11 or newer from
+   python.org (it includes what the orb window needs). With Homebrew instead:
+   `brew install python python-tk`.
+3. Git comes with Apple's developer tools: type `git` in Terminal and macOS
+   offers to install them. Or use the ZIP (below).
+
 **Linux**
 
 ```bash
@@ -35,7 +46,7 @@ sudo apt install git docker.io docker-compose-plugin python3-venv python3-tk lib
 
 ## 2. Download Venus
 
-With Git (Windows: open **PowerShell**; Linux: a terminal):
+With Git (Windows: open **PowerShell**; Mac and Linux: **Terminal**):
 
 ```bash
 git clone https://github.com/Umrkimy/Venus.git
@@ -48,7 +59,7 @@ Without Git: on the GitHub page click the green **Code** button, then
 ## 3. Run the setup
 
 **Windows:** open the Venus folder and double-click `setup-venus.cmd`.
-**Linux:** in the Venus folder run `./setup-venus.sh`.
+**Mac and Linux:** in Terminal, in the Venus folder, run `./setup-venus.sh`.
 
 Make sure Docker is running first. The setup:
 
@@ -110,11 +121,21 @@ upload your `.env` files: they hold your passwords.
 
 ## Everyday use
 
-| | Windows | Linux |
+| | Windows | Mac and Linux |
 | --- | --- | --- |
 | Start Venus | double-click `start-venus-use.cmd` | `./start-venus.sh --use` |
 | Start with the PC | tray menu, Start with Windows | tray menu, Start at login |
 | Quit the PC part | tray menu, Quit | tray menu, Quit |
+
+**On a Mac** the Venus dot sits in the menu bar at the top. The first time,
+macOS asks a few things; say yes, or Venus can't do that part:
+
+- **Microphone** (for "Hey Venus"): System Settings, Privacy & Security,
+  Microphone, turn on Terminal (or Python).
+- **Notifications** (calendar reminders): allow them for Script Editor.
+- `lock my pc` turns the screen off, which locks the Mac when "Require
+  password after screen saver begins or display is turned off" is on
+  (System Settings, Lock Screen).
 
 The server parts restart by themselves if they crash and come back after a
 reboot once Docker is running. The tray icon is the PC part: right-click it
