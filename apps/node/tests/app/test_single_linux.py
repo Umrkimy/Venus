@@ -1,5 +1,8 @@
+import shutil
 import sys
+import tempfile
 import threading
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -13,7 +16,12 @@ if sys.platform != "win32":
 @pytest.fixture(autouse=True)
 def own_runtime_dir(tmp_path, monkeypatch):
     # Unix socket paths are short (about 100 characters): keep the folder short too.
-    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    # A Mac's pytest tmp_path (/private/var/folders/...) is already too long.
+    folder = Path(tempfile.mkdtemp(dir="/tmp")) if sys.platform == "darwin" else tmp_path
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(folder))
+    yield
+    if folder != tmp_path:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def test_claim_lets_only_the_first_holder_run():
