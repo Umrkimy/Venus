@@ -8,6 +8,7 @@ from pathlib import Path
 
 from venus_node.app.autostart import approve_missing, background_python, launch_command
 from venus_node.app.domain import start_domain
+from venus_node.app.reminders import Reminders, desktop_notifier, fetch_upcoming, start_reminders
 from venus_node.app.single import (
     CONNECTION,
     LISTENER,
@@ -95,6 +96,17 @@ def run_app(node_directory: Path) -> None:
     # Your own domain, only if VENUS_DOMAIN is set in the root .env.
     domain = start_domain(REPO_ROOT, node_directory / "data" / "caddy.log")
 
+    # A pop-up ~10 minutes before calendar events (when a calendar is connected).
+    reminders_stop = threading.Event()
+    start_reminders(
+        Reminders(
+            fetch=lambda: fetch_upcoming(settings),
+            notify=desktop_notifier(lambda text, title: tray.icon.notify(text, title)),
+            clock=lambda: datetime.now().astimezone(),
+        ),
+        reminders_stop,
+    )
+
     # setup runs once the icon is up: a toast, or a new icon is easy to miss under "^".
     tray.icon.run_detached(setup=announce)
     try:
@@ -105,6 +117,7 @@ def run_app(node_directory: Path) -> None:
         # The orb window owns the main thread until Quit (or a mic error).
         Circle(status).run()
     finally:
+        reminders_stop.set()
         if domain is not None:
             domain.stop()
         tray.icon.stop()
