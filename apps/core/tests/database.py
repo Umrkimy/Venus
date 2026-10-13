@@ -28,6 +28,7 @@ from features.home.models.home_device import HomeDevice  # noqa: F401
 from features.home.models.home_assistant import HomeAssistantSetting  # noqa: F401
 from features.settings.models.listening import ListeningSetting  # noqa: F401
 from features.calendar.models.calendar_account import CalendarAccount  # noqa: F401
+from features.calendar.models.ics_calendar import IcsCalendar  # noqa: F401
 from storage.base import Base
 
 # Set to a Postgres database (name must end in _test) to run the tests

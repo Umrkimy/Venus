@@ -26,6 +26,7 @@ from features.character.models.character_model import CharacterModel
 from features.home.models.home_device import HomeDevice
 from features.home.models.home_assistant import HomeAssistantSetting
 from features.calendar.models.calendar_account import CalendarAccount
+from features.calendar.models.ics_calendar import IcsCalendar
 from storage.base import Base
 
 # this is the Alembic Config object, which provides

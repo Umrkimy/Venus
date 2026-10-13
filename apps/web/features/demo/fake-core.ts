@@ -457,6 +457,7 @@ async function route(method: string, path: string, query: URLSearchParams, body:
         );
       }
       if (id === "upcoming") return json([]);
+      if (id === "ics") return method === "GET" && !parts[2] ? json([]) : json({ detail: "Calendars can't be added in the demo" }, 403);
       if (id === "events") return json({ events: [], errors: [] });
       return json({ detail: "Calendars can't connect in the demo" }, 403);
 
