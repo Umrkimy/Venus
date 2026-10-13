@@ -71,7 +71,7 @@ def test_answer_explains_when_venus_is_not_running(monkeypatch, capsys):
 
     listen.answer(SETTINGS, VoiceChat(not_connected), b"pc", FakeStream(events))
 
-    assert "Run start-venus.cmd first" in capsys.readouterr().out
+    assert "Start Venus first (start-venus)" in capsys.readouterr().out
     assert events == []
 
 
@@ -229,7 +229,7 @@ def test_find_mic_empty_means_windows_default():
 
 def test_find_mic_unknown_name_falls_back_to_default(capsys):
     assert listen.find_mic("blue yeti", DEVICES) is None
-    assert "using the Windows default mic" in capsys.readouterr().out
+    assert "using the default mic" in capsys.readouterr().out
 
 
 def test_answer_logs_time_per_step(monkeypatch):

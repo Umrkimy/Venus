@@ -39,7 +39,7 @@ def test_status_text_covers_connection_and_mute():
 def test_menu_has_status_open_stop_mute_autostart_quit(run_key):
     tray, _ = make_tray(run_key)
 
-    assert [i.text for i in items(tray)] == ["Core offline", "Open Venus", "Stop talking", "Mute mic", "Start with Windows", "Quit"]
+    assert [i.text for i in items(tray)] == ["Core offline", "Open Venus", "Stop talking", "Mute mic", autostart.LABEL, "Quit"]
     assert items(tray)[0].enabled is False  # Status line is only information.
 
 
@@ -85,14 +85,14 @@ def test_web_mute_and_unmute_go_through_set_muted(run_key):
 
 def test_start_with_windows_toggles_the_run_entry(run_key):
     tray, _ = make_tray(run_key)
-    assert item(tray, "Start with Windows").checked is False
+    assert item(tray, autostart.LABEL).checked is False
 
-    item(tray, "Start with Windows")(tray.icon)
+    item(tray, autostart.LABEL)(tray.icon)
 
     assert autostart.is_enabled(run_key)
-    assert item(tray, "Start with Windows").checked is True
+    assert item(tray, autostart.LABEL).checked is True
 
-    item(tray, "Start with Windows")(tray.icon)
+    item(tray, autostart.LABEL)(tray.icon)
 
     assert not autostart.is_enabled(run_key)
 

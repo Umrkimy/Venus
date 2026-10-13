@@ -34,7 +34,7 @@ class Tray:
         open_venus: Callable[[], None],
         autostart_command: str,
         quit: Callable[[], None],
-        autostart_key: str = autostart.RUN_KEY,
+        autostart_key: str = autostart.DEFAULT_KEY,
         stop_talking: Callable[[], None] = lambda: None,
     ) -> None:
         self._lock = Lock()
@@ -67,7 +67,7 @@ class Tray:
             pystray.MenuItem("Stop talking", self.stop_talking),
             pystray.MenuItem("Mute mic", self.toggle_mute, checked=lambda item: self.muted.is_set()),
             pystray.MenuItem(
-                "Start with Windows",
+                autostart.LABEL,
                 self.toggle_autostart,
                 checked=lambda item: autostart.is_enabled(self.autostart_key),
             ),
@@ -111,10 +111,10 @@ class Tray:
     def toggle_autostart(self) -> None:
         if autostart.is_enabled(self.autostart_key):
             autostart.disable(self.autostart_key)
-            print("Venus won't start with Windows.")
+            print("Venus won't start at login.")
         else:
             autostart.enable(self.autostart_command, self.autostart_key)
-            print("Venus will start with Windows.")
+            print("Venus will start at login.")
         self.refresh()
 
     def quit(self) -> None:

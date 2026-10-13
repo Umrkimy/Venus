@@ -1,7 +1,11 @@
-import winreg
 from pathlib import Path
 
-from venus_node.app import autostart
+import pytest
+
+# The registry exists only on Windows; Linux runs test_autostart_linux.py.
+winreg = pytest.importorskip("winreg")
+
+from venus_node.app import autostart_windows as autostart  # noqa: E402
 
 
 def read_value(key: str):
