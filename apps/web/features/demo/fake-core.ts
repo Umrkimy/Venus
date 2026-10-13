@@ -45,6 +45,7 @@ const state = {
   personalities: new Map<string, Record<string, unknown>>(),
   shortcuts: new Map<string, Record<string, unknown>>(),
   devices: new Map<string, Record<string, unknown>>(),
+  home: new Map<string, Record<string, unknown>>(),
   sessions: new Map<string, Record<string, unknown>>(),
   commands: new Map<string, Command>(),
   settings: {
@@ -122,6 +123,12 @@ function seed() {
     main: true,
     connected: true,
   });
+  for (const device of [
+    { id: "home-1", name: "bedroom light", kind: "light", address: "192.168.1.40", mac: null, tuya_id: "demo", tuya_version: 3.3, has_key: true },
+    { id: "home-2", name: "tv", kind: "tv", address: "192.168.1.50", mac: null, tuya_id: null, tuya_version: 3.3, has_key: false },
+  ]) {
+    state.home.set(device.id, device);
+  }
   state.sessions.set("this", {
     id: "this",
     user_agent: navigator.userAgent,
@@ -133,7 +140,7 @@ function seed() {
 
 // Kept per tab, so a full page load (a static host can't always do the
 // quick in-app switch) doesn't wipe your chats.
-const STORES = ["conversations", "projects", "memories", "personalities", "shortcuts", "devices", "sessions", "commands"] as const;
+const STORES = ["conversations", "projects", "memories", "personalities", "shortcuts", "devices", "home", "sessions", "commands"] as const;
 
 function save() {
   try {
@@ -213,7 +220,9 @@ function chat(body: { message: string; conversation_id?: string; project_id?: st
     state.commands.set(command.command_id, command);
     // Full mode: no Approve button, Venus just does it.
     if (state.mode === "full") finish(command, true);
-    const actions = [{ kind: "command", command_id: command.command_id, label: command.label }];
+    const actions = [
+      { kind: "command", command_id: command.command_id, label: command.label, ...(command.title ? { title: command.title } : {}) },
+    ];
     reply = { type: "command", command_id: command.command_id, label: command.label, reply: result.reply, actions };
   } else {
     reply = { type: "reply", reply: result.reply, actions: [] };
@@ -416,6 +425,16 @@ async function route(method: string, path: string, query: URLSearchParams, body:
       if (id === "models" || id === "animations") return method === "GET" ? json([]) : json({ detail: "Uploads are off in the demo" }, 403);
       if (id === "active") return json({ custom: false });
       return missing("No own model; use the template");
+
+    case "home":
+      if (id !== "devices") return missing();
+      return collection(state.home, method, parts[2], body, (b) => ({
+        ...b,
+        id: newId("home"),
+        name: String(b.name ?? "").toLowerCase(),
+        has_key: Boolean(b.local_key),
+        local_key: undefined,
+      }));
 
     case "health":
       return json({ status: "ok" });
