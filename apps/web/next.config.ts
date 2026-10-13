@@ -8,7 +8,7 @@ const coreUrl = process.env.CORE_URL ?? "http://127.0.0.1:8000";
 // /api forwarding, redirects or headers (the host sets those).
 const demo = process.env.NEXT_PUBLIC_VENUS_DEMO === "1";
 
-// Your own domain (README "Your own domain") is set in the repository
+// Your own domain (guide/remote-access.md) is set in the repository
 // root .env. Only VENUS_DOMAIN is read, not the other values there.
 function ownDomain(): string[] {
   const file = join(process.cwd(), "..", "..", ".env");

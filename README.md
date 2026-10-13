@@ -1,17 +1,49 @@
 # Venus
 
 My own assistant that lives on my PC. I say "Hey Venus", she opens my apps,
-sites and code projects, chats with me, remembers stuff I tell her and talks
-back. There's a 3D version of her on the web page too.
+sites and code projects, controls my lights and TV, reads my calendar,
+chats with me, remembers what I tell her and talks back. A 3D version of
+her sits on the web page.
 
-I started this to learn how real apps are built (a server, a database, a web
-UI, a desktop app talking to each other) instead of just doing tutorials.
-It's self-hosted: everything runs on your own PC, nothing is hosted for you,
-and you bring your own API keys. If you want your own Venus, clone it and
-follow the setup below.
+**[Install](guide/install.md)** · [Guides](#guides) · [Roadmap](ROADMAP.md) ·
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-Works on **Windows 10/11** and **Linux** (I'm moving to CachyOS, so Linux gets
-the same features).
+![Venus chat page with the default 3D character](.github/assets/venus-chat.png)
+
+<sub>The default character (pixiv's free VRoid sample). You can upload your own.</sub>
+
+Self-hosted: everything runs on your own PC, nothing is hosted for you, and
+you bring your own API keys. Works on **Windows 10/11** and **Linux**.
+**macOS** is coming next.
+
+## How I built it
+
+I'm a beginner, and Venus is how I'm learning to build real software: a
+server, a database, a web page and a desktop app that all talk to each
+other, instead of tutorials.
+
+I built it with [Claude Code](https://claude.com/claude-code) (an AI coding
+tool), but set up as a **mentor**, not a code machine. So it's not "fully
+written by me", and it's not blind vibe coding either:
+
+- **I decide what Venus is.** Most features came from me using her every
+  day and asking for things ("she should remember stuff", "control my
+  lights", "work on my phone").
+- **Claude teaches before building.** For each design choice it explains
+  the options, pros and cons (why PostgreSQL, why a WebSocket, why
+  Tailscale and not a public link), and I pick.
+- **Early parts I typed myself** from hints. Later, to finish the project,
+  Claude wrote most of the code while I tested it live on my PC, found the
+  bugs and decided what stays.
+- **Everything goes through the same checks**: one pull request per
+  feature, about 850 automated tests, and CI on Windows and Linux.
+
+A big part of what I learned is the setup around the AI itself, like
+building my own harness: a teaching mode (the
+[VibeWise](https://github.com/nykooi1/vibe-wise) skill), handoff notes so
+each session continues where the last stopped, a decisions log, and rules
+like "explain first, then code". Next I'm going through the whole codebase
+to understand every part myself.
 
 ## What she can do
 
@@ -19,42 +51,51 @@ Type these in the chat, or say "Hey Venus" first and then say them.
 
 | You say | What happens |
 | --- | --- |
-| `open spotify` | Opens any app from your Start menu (Windows) or app menu (Linux) |
-| `open github.com` | Opens a link in your default browser |
-| `youtube lofi beats` | Searches YouTube. Also `google ...` and `netflix ...` |
-| `open project venus` | Opens that folder from your projects folder in VS Code |
-| `remember I have class at 9 on mondays` | Saves it. She uses it later in chats |
-| `turn off the bedroom light` | Smart lights and plugs (Tuya / Smart Life). Also `bedroom light 30%`, `make the bedroom light blue` |
-| `tv volume 20` / `mute the tv` | Your Google / Android TV's volume |
-| `volume up` / `lock my pc` | This PC's own volume and lock |
-| `wake the laptop` | Wakes another PC with Wake-on-LAN |
-| `what's on today?` / `when's my next class?` | Reads your Google and Outlook calendars |
-| `what should I cook tonight?` | Normal chat with the AI (Luna) |
-| `stop Venus` | Cuts her off mid-sentence |
-| `go to sleep` | Stops the conversation, back to waiting for "Hey Venus" |
-| `mute the mic` | Mic off until you unmute it (tray menu or the web orb) |
-| `thank you Venus` / `bye` | Ends the voice conversation |
+| `open spotify` / `open github.com` | Opens an app from your Start menu, or a link |
+| `youtube lofi beats` | Searches YouTube (also `google ...`, `netflix ...`) |
+| `open project venus` | Opens that code project in VS Code |
+| `remember I have class at 9 on mondays` | Saves it and uses it later in chats |
+| `turn off the bedroom light` / `tv volume 20` | Smart lights and plugs (Tuya), Google TV volume |
+| `what's on today?` | Reads your Google and Outlook calendars |
+| `what should I cook tonight?` | Normal chat with the AI |
+| `stop Venus` / `thank you Venus` | Cuts her off / ends the voice chat |
 
-You can add your own shortcuts too (Settings, Shortcuts), like `comix` for a
-site you open all the time.
+PC actions ask first (an Approve button in the chat), unless you switch to
+Full mode in Settings. She can only open apps from your menu, web links and
+folders in your projects folder, nothing else.
 
-PC actions ask before running (an Approve button in the chat). If that gets
-annoying, Settings, General, switch to **Full** and she just does it. She can
-only open apps from your menu, http(s) links and folders in your projects
-folder, nothing else.
+Also: offline "Hey Venus" wake word, her voice through
+[Fish Audio](https://fish.audio/), a 3D character you can swap, switchable
+personalities, a memory page you can edit, a cost meter for the AI, use
+from your phone over Tailscale (private, not public), and more PCs joining
+the same Venus.
 
-Other things in there:
+## Quick start
 
-- **Voice**: "Hey Venus" wake word runs offline on your PC (Vosk). Her voice
-  comes from [Fish Audio](https://fish.audio/), and the web page has a mic
-  button too.
-- **3D Venus**: a VRM model in the chat, visual-novel style. Upload your own
-  `.vrm` model and `.vrma` moves in Settings, 3D model.
-- **Personality**: change how she talks in Settings, Personality.
-- **Memory**: see and edit everything she remembers.
-- **Usage**: how many tokens and how much money each OpenAI call cost.
-- **Phone**: open Venus on your phone over Tailscale (private, not public).
-- **More PCs**: a laptop can join and take commands too.
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+   and [Python 3.11+](https://www.python.org/downloads/) (tick "Add to
+   PATH"). Open Docker once.
+2. Download Venus: `git clone https://github.com/Umrkimy/Venus.git`, or
+   **Code, Download ZIP** on this page.
+3. Double-click `setup-venus.cmd` (Linux: `./setup-venus.sh`). It makes your
+   settings and secrets for you and asks for a username and password.
+4. Open <http://localhost:3000>, sign in, and add your OpenAI and Fish Audio
+   keys in **Settings**.
+5. **Before you rely on it**, open `apps/node/.env` once and check your
+   projects folder, wake words and mic.
+   [Which files to change, and which never to touch.](guide/install.md#5-check-your-settings-files)
+
+After that, start Venus with `start-venus-use.cmd`. The
+[full install guide](guide/install.md) explains every step slowly.
+
+## Guides
+
+- [Install and settings](guide/install.md): step by step, what each `.env` file is
+- [Home control](guide/home-control.md): lights, plugs, TV, waking a PC
+- [Calendar](guide/calendar.md): connect Google and Outlook
+- [Phone, own domain and other PCs](guide/remote-access.md)
+- [Backups and troubleshooting](guide/backups-and-troubleshooting.md)
+- [Developing](guide/developing.md): run from source, tests
 
 ## How it fits together
 
@@ -68,421 +109,40 @@ Other things in there:
 
 | Part | Folder | What it is |
 | --- | --- | --- |
-| Core | `apps/core` | The brain. FastAPI + PostgreSQL. Saves chats, memories and settings, talks to OpenAI and Fish Audio, sends commands to your PCs |
-| Web | `apps/web` | Next.js page at `http://localhost:3000`: chat, settings, 3D Venus |
-| Node | `apps/node` | Python tray app on each PC. Runs the commands, listens for "Hey Venus", shows the orb |
+| Core | `apps/core` | The brain: saves chats, memories and settings, talks to the AI, sends commands to your PCs |
+| Web | `apps/web` | The page at `http://localhost:3000`: chat, settings, 3D Venus |
+| Node | `apps/node` | The tray app on each PC: runs commands, listens for "Hey Venus" |
 | Protocol | `packages/venus-protocol` | Message formats Core and Node share |
 
 Core, the web page and Postgres run in Docker. The Node runs straight on
 your PC, because it has to open your apps and use your mic.
 
-## What you need
-
-- [Docker](https://www.docker.com/) (Docker Desktop on Windows, `docker` +
-  `docker compose` on Linux)
-- Python 3.11 or newer
-- Keys (optional): [OpenAI](https://platform.openai.com/) for chat and
-  [Fish Audio](https://fish.audio/) for her voice. Without keys she still
-  opens apps and sites from typed commands, she just can't chat.
-
-On Linux the PC part also needs a few system packages:
-
-```bash
-# Arch / CachyOS
-sudo pacman -S --needed docker docker-compose python tk portaudio libnotify
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER   # then log out and back in
-
-# Debian / Ubuntu
-sudo apt install docker.io docker-compose-plugin python3-venv python3-tk libportaudio2 libnotify-bin
-```
-
-## Install
-
-### Windows
-
-```powershell
-git clone https://github.com/Umrkimy/Venus.git
-cd Venus
-.\setup-venus.cmd
-```
-
-Or just double-click `setup-venus.cmd`.
-
-### Linux
-
-```bash
-git clone https://github.com/Umrkimy/Venus.git
-cd Venus
-./setup-venus.sh
-```
-
-Both do the same thing:
-
-1. check Docker and Python,
-2. write `.env`, `apps/core/.env` and `apps/node/.env` with fresh random
-   secrets (if a file already exists it's kept, so running it again is safe),
-3. install the PC part into `apps/node/.venv`,
-4. download the "Hey Venus" speech model (about 40 MB),
-5. build and start Venus in Docker (the first build takes a few minutes),
-6. ask you for a username and password.
-
-Then open `http://localhost:3000`, sign in, and put your keys in
-**Settings, AI model** and **Settings, Voice**. They're saved encrypted in
-the database.
-
-## Everyday use
-
-| | Windows | Linux |
-| --- | --- | --- |
-| Start Venus | double-click `start-venus-use.cmd` | `./start-venus.sh --use` |
-| Start with the PC | tray menu, Start with Windows | tray menu, Start at login |
-| Quit the PC part | tray menu, Quit | tray menu, Quit |
-
-Postgres, Core and the web page restart by themselves if they crash and come
-back after a reboot once Docker is running. The tray icon is the PC part:
-right-click it for Open Venus, Mute mic, Stop talking, start at login and
-Quit. Grey dot = not connected or muted, red = listening for "Hey Venus".
-
-After pulling new code, run the start command again. It rebuilds.
-
-## Settings files
-
-The setup writes these. The `.env.example` next to each one explains every
-value. Don't commit `.env` files.
-
-| File | What's in it |
-| --- | --- |
-| `.env` | Postgres password, backup folder, your own domain |
-| `apps/core/.env` | Node token, database address, encryption key, fallback keys |
-| `apps/node/.env` | This PC's name, its token, wake phrases, projects folder, mic |
-
-Things you'll probably change in `apps/node/.env`:
-
-```ini
-# Folder with your code projects, for "open project X"
-VENUS_NODE_PROJECTS_ROOT=D:/Projects        # or /home/you/projects on Linux
-# What wakes her up (lowercase, comma-separated)
-VENUS_NODE_WAKE_PHRASES=hey venus,venus
-# Part of your mic's name. Empty = default mic. Also in Settings, General.
-VENUS_NODE_MIC=Realtek
-```
-
-Quit the tray app and start Venus again after changing it.
-
-## Home control
-
-Venus can switch lights and plugs, change the TV volume, wake another PC,
-and change this PC's volume or lock it. The PC part sends these over your
-home Wi-Fi, so it only works at home (or with the PC at home). Add your
-devices in **Settings, Home**. Like PC actions, they ask for Approve first
-unless you're in Full mode.
-
-**Lights and plugs (Tuya / Smart Life).** Venus talks to them directly on
-your Wi-Fi, no cloud needed after setup. It needs each device's id and
-"local key", which you get once:
-
-1. Add the bulbs to the Smart Life app like normal.
-2. Make a free account on [iot.tuya.com](https://iot.tuya.com), create a
-   Cloud project (pick the data center for your region), then under
-   Devices, Link App Account, scan the QR code with Smart Life.
-3. On the PC, run the wizard and give it the project's Access ID and
-   Secret:
-
-   ```bash
-   cd apps/node
-   .venv/bin/python -m tinytuya wizard        # Windows: .venv\Scripts\python.exe -m tinytuya wizard
-   ```
-
-   It lists every device with its id, local key and IP address.
-4. In your router, give each bulb a fixed IP so it doesn't change.
-5. Settings, Home, Add a device: name it what you'll say ("bedroom light").
-
-**TV (Google / Android TV).** Uses Chromecast, which is built in, so
-there's nothing to set up on the TV. Find its IP in the TV's network
-settings or your router, give it a fixed IP, and add it as a TV. Venus can
-change the volume and mute it; turning the TV on or off isn't there yet.
-
-**Waking a PC.** Turn on Wake-on-LAN in that PC's BIOS and in its network
-card settings ("Wake on Magic Packet"), then add it with its MAC address
-(`ipconfig /all` on Windows, `ip link` on Linux). Note that Venus runs on
-your main PC, so when *that* PC is off nothing can wake it through Venus.
-Use a Wake-on-LAN app on your phone (on home Wi-Fi) for that.
-
-**This PC** needs nothing added: `volume up`, `volume 40`, `mute my pc`,
-`lock my pc`.
-
-## Calendar
-
-Venus can read your Google Calendar and Outlook (Microsoft 365) calendars.
-She knows your next 7 days, so you can ask "what's on tomorrow" or "do I
-have anything Friday", the first chat of the day starts with a short
-summary, and the PC part pops up a reminder about 10 minutes before each
-event. It's read-only: Venus can't add or change events.
-
-Because Venus is self-hosted, you sign in through **your own** small app
-at Google and Microsoft (free, a few minutes each). Do this on the PC with
-Venus open at `http://localhost:3000`, because that's the address the sign-in
-sends you back to. Settings, Calendar shows the exact redirect address
-to paste.
-
-**Google**
-
-1. [Google Cloud Console](https://console.cloud.google.com/): make a project,
-   then APIs & Services, Library, enable **Google Calendar API**.
-2. OAuth consent screen: External, fill in the app name and your email,
-   add yourself as a test user, then **Publish app** ("In production").
-   While it's in "Testing", Google signs you out of it every 7 days.
-   You'll see an "unverified app" warning when you connect; that's fine
-   for your own app (Advanced, continue).
-3. Credentials, Create credentials, OAuth client ID, type **Web
-   application**, and add the redirect address from Settings, Calendar.
-4. Copy the client ID and secret into Settings, Calendar, Save, then
-   **Connect Google**.
-
-**Outlook / Microsoft 365**
-
-1. [Entra admin center](https://entra.microsoft.com/), App registrations,
-   New registration. Account types: "Accounts in any organizational
-   directory and personal Microsoft accounts". Redirect URI: platform
-   **Web**, the address from Settings, Calendar.
-2. Certificates & secrets, New client secret: copy the **Value** (it's
-   only shown once).
-3. Paste the Application (client) ID and the secret in Settings,
-   Calendar, Save, **Connect Outlook**.
-
-A school or work Microsoft account might say it needs admin approval.
-That's your uni blocking outside apps, and only their IT can allow it. A
-personal Outlook.com account always works.
-
-The client secrets and sign-ins are stored encrypted. Remove in Settings,
-Calendar forgets them; you can also remove Venus's access in your Google
-or Microsoft account settings.
-
-## Use Venus on your phone
-
-[Tailscale](https://tailscale.com) is a free private network between your
-own devices. Only devices signed in to your Tailscale account can open
-Venus, nothing is on the public internet. You get HTTPS, so the phone's mic
-works too.
-
-1. Install Tailscale on the PC and the phone, same account.
-2. In the Tailscale admin console, DNS page: turn on MagicDNS and HTTPS
-   Certificates.
-3. With Venus running:
-
-```powershell
-.\scripts\phone-access.ps1          # Windows
-```
-
-```bash
-./scripts/phone-access.sh           # Linux
-```
-
-It prints something like `https://my-pc.tailnet-name.ts.net`. Open that on
-your phone with Tailscale connected and log in. It stays on after a reboot.
-`-Off` (Windows) or `--off` (Linux) stops it.
-
-On Linux, if `tailscale serve` says access denied, run
-`sudo tailscale set --operator=$USER` once.
-
-### Your own domain (optional)
-
-Instead of the `ts.net` name you can use a domain you own, like
-`https://venus.example.com`. Still private: the domain points at the PC's
-Tailscale address, which only your devices can reach.
-[Caddy](https://caddyserver.com) answers there (about 45 MB of RAM) and gets
-a free certificate through your DNS. These steps assume your DNS is on
-Cloudflare.
-
-1. Set up Tailscale as above. `tailscale ip -4` shows the PC's address
-   (starts with `100.`).
-2. In Cloudflare add an `A` record (for example `venus`) to that address,
-   proxy off ("DNS only", grey cloud).
-3. Make a Cloudflare API token with the "Edit zone DNS" template, only for
-   that domain.
-4. In the root `.env` set `VENUS_DOMAIN=venus.example.com` and
-   `CLOUDFLARE_API_TOKEN=...`.
-5. Run `.\scripts\domain-access.ps1` (Windows) or
-   `./scripts/domain-access.sh` (Linux).
-
-It downloads Caddy into `tools/caddy` (asks first), stops the `ts.net` share
-and restarts the tray app, which keeps Caddy running from then on. Caddy's
-log is `apps/node/data/caddy.log`. To go back: empty `VENUS_DOMAIN`, restart
-Venus, run phone-access again.
-
-## Another PC
-
-A second PC (a laptop, say) can run just the Node and take commands from
-the same Venus. It reaches Core over Tailscale.
-
-1. On the main PC, set up phone access or your own domain (above). Both
-   print the address for other PCs, like
-   `wss://venus.example.com:9443/nodes/connect`.
-2. On the main PC: Settings, Devices, Add device. Copy the token (it's only
-   shown once).
-3. On the other PC: install Tailscale (same account) and Python 3.11+, clone
-   Venus and run `setup-venus-node.cmd` (Windows) or
-   `./setup-venus.sh --node-only` (Linux). Give it the address and the token.
-   No Docker needed there.
-
-Once two PCs are online the chat shows a PC picker next to the send button.
-"Hey Venus" only runs on the main PC for now.
-
-## Devices and logins
-
-Settings, Devices shows every PC with its own token and when it was last
-seen. Revoke cuts one off right away.
-
-- The main PC's token (from setup) shows up as "Main PC". It can't be revoked
-  from the web, so someone with a stolen phone login can't lock you out of
-  your own PC. To change it, edit it in both `apps/core/.env` and
-  `apps/node/.env` and restart.
-- A token is locked to the first PC that uses it, so a copied token can't
-  pretend to be another PC.
-- Core only keeps a hash of each token.
-
-The same page lists every browser that's signed in. Sign out one, or "Sign
-out all other browsers" if you lose your phone. Logins expire after 30 days.
-
-## Backups
-
-A `backup` container saves the database once at start and then every day.
-It keeps the newest 7 daily and 4 weekly files in `./backups`, or wherever
-`VENUS_BACKUP_DIR` in the root `.env` points (another drive is better).
-
-Restoring (try it on a throwaway database first):
-
-```powershell
-.\scripts\restore-db.ps1 -File backups\daily\venus-2026-10-06.dump -Target venus_restore_test
-```
-
-```bash
-./scripts/restore-db.sh backups/daily/venus-2026-10-06.dump venus_restore_test
-```
-
-Without a target it replaces the real database. It asks you to type
-`RESTORE` and saves the current one as `pre-restore-<time>.dump` first.
-
-## Troubleshooting
-
-- **Port 5432, 9000 or 3000 in use**: something else is on it, or dev mode
-  and server mode are both running. Stop one.
-- **Windows: ports blocked after a reboot**: Windows reserves random port
-  ranges at boot. Quit Docker Desktop and the tray app, then in an admin
-  terminal run once:
-  `powershell -ExecutionPolicy Bypass -File "<your Venus folder>\scripts\reserve-ports.ps1"`
-- **"password authentication failed"**: the database was made with an older
-  password than the one in `.env`. Put the old one back, or wipe everything
-  with `docker compose down -v` (deletes all Venus data) and run setup again.
-- **Tray app does nothing**: check `apps/node/data/venus-node.log` (and
-  `data/startup.log` on Linux).
-- **Linux: no tray icon**: KDE shows it out of the box. GNOME needs the
-  "AppIndicator and KStatusNotifierItem Support" extension.
-- **Linux: "No desktop found"**: the tray app needs a desktop session. For a
-  PC without one, run just the connection:
-  `apps/node/.venv/bin/python -m venus_node.dev_connect`.
-- **Mic in the browser doesn't work**: browsers only allow it on `localhost`
-  or HTTPS (use phone access).
-- **Never** use Docker Desktop's "Reset to factory defaults". It deletes the
-  database. Restore a backup if it happens.
-
 ## Security
 
-Venus can open things on your PC, so I tried to lock it down:
+Venus can open things on your PC, so it's locked down: everything listens
+only on your own PC (other devices come in through Tailscale), passwords
+are hashed, saved keys are encrypted, each PC has its own revocable token,
+and the PC app re-checks every command itself. Details and how to report a
+problem: [SECURITY.md](SECURITY.md).
 
-- Core, the web page and Postgres only listen on `127.0.0.1`. Other devices
-  only get in through Tailscale.
-- Passwords are hashed (Argon2). Login tries are rate limited.
-- Session cookies are `HttpOnly` and `SameSite=Lax`, and `Secure` over HTTPS.
-- Core refuses changes sent by another website's page (it checks the
-  browser's `Sec-Fetch-Site` header), so a random site can't press buttons
-  in your Venus for you.
-- API keys, Tuya keys and calendar sign-ins you save in Settings are
-  encrypted (`VENUS_CORE_SECRET_KEY`) and never sent back to the page.
-  Calendar access is read-only and uses PKCE plus a one-time state, so a
-  sign-in can't be started by another site.
-- Every PC has its own token, stored only as a hash, and can be revoked.
-- The Node checks every command again on its own: only apps from your menu,
-  only `http`/`https` links, only folders inside your projects folder. No
-  shell commands, ever.
-- Core refuses to start with the example tokens from `.env.example`.
-- The web page sends security headers (no framing, no sniffing, mic only for
-  this site).
+## Portfolio
 
-Found a security problem? Please don't open a public issue, see
-[SECURITY.md](SECURITY.md).
+A small demo of Venus is coming to my portfolio at
+[umrkimy.dev](https://umrkimy.dev).
 
-## Developing
+## License
 
-For changing the code: Core and the web page run from source with
-auto-reload, Postgres stays in Docker. You also need
-[Node.js 22+](https://nodejs.org/). One-time setup after the normal setup:
+[MIT](LICENSE). The default 3D character is pixiv's VRoid sample model,
+under [its own terms](apps/web/public/models/CREDITS.md).
 
-```powershell
-# Windows
-cd apps/core;  py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m alembic upgrade head
-cd ../node;  .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-cd ../web;   npm ci
-```
+## Acknowledgements
 
-```bash
-# Linux
-cd apps/core && python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m alembic upgrade head
-cd ../node && .venv/bin/pip install -r requirements-dev.txt
-cd ../web && npm ci
-```
-
-Then `start-venus.cmd` (Windows, opens Core, Node, web and the listener as
-Windows Terminal tabs) or `./start-venus.sh` (Linux, all in one terminal,
-Ctrl+C stops everything). Quit the tray app first, it can't run next to the
-dev Node. After pulling new migrations run `alembic upgrade head` in
-`apps/core` (server mode does that by itself).
-
-### Tests
-
-```bash
-cd apps/core && .venv/bin/python -m pytest      # Core (SQLite in memory)
-cd apps/node && .venv/bin/python -m pytest      # Node
-apps/node/.venv/bin/python -m pytest packages/venus-protocol/tests
-cd apps/web && npx tsc --noEmit && npm run lint # Web
-```
-
-(On Windows it's `.venv\Scripts\python.exe` instead of `.venv/bin/python`.)
-
-CI runs all of that on Windows and Linux, Core again on real Postgres, builds
-the Docker images and tests a backup restore. To run Core's tests on Postgres
-locally, make a scratch database whose name ends in `_test` (the tests wipe
-its tables) and set `VENUS_CORE_TEST_DATABASE_URL` to it.
-
-## Portfolio demo
-
-There's a small version of Venus for my portfolio: the real web page, but
-with a pretend Core that lives in the browser. No server, no AI, no keys,
-nothing touches a PC. She answers a few scripted lines, the Approve buttons
-work, links really open in a new tab, and everything else resets when you
-close the tab.
-
-```bash
-cd apps/web
-npm run build:demo     # plain files in apps/web/out
-```
-
-Put `out/` on any static host. On Cloudflare Pages or Vercel: root
-`apps/web`, build command `npm run build:demo`, output `out`. Build it on
-Linux (the host or CI does): a Windows build names some prefetch files
-wrong, which only makes page switches a bit slower.
-
-The pretend Core is `apps/web/features/demo/fake-core.ts` and her lines
-are in `features/demo/script.ts`.
-
-## Credits
-
-- 3D model support: [@pixiv/three-vrm](https://github.com/pixiv/three-vrm)
-- Wake word: [Vosk](https://alphacephei.com/vosk/)
-- Voice: [Fish Audio](https://fish.audio/)
-- UI parts: [shadcn/ui](https://ui.shadcn.com/)
+- [Claude Code](https://claude.com/claude-code), my coding mentor, with the
+  [VibeWise](https://github.com/nykooi1/vibe-wise) teaching skill
+- [FastAPI](https://fastapi.tiangolo.com/), [PostgreSQL](https://www.postgresql.org/),
+  [Next.js](https://nextjs.org/), [shadcn/ui](https://ui.shadcn.com/)
+- [@pixiv/three-vrm](https://github.com/pixiv/three-vrm) and the VRoid sample model
+- [Vosk](https://alphacephei.com/vosk/) (wake word), [Fish Audio](https://fish.audio/) (voice)
+- [tinytuya](https://github.com/jasonacox/tinytuya), [pychromecast](https://github.com/home-assistant-libs/pychromecast)
+- [Tailscale](https://tailscale.com) and [Caddy](https://caddyserver.com)
+- README layout inspired by [Odysseus](https://github.com/odysseus-dev/odysseus)

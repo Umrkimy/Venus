@@ -252,7 +252,7 @@ export default function HomeDevices() {
                 className={FIELD_HOVER}
               />
               <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                Saved encrypted and never shown again. The README explains how to get the id and key.
+                Saved encrypted and never shown again. The Venus home control guide explains how to get the id and key.
               </span>
             </label>
             <label className={LABEL_CLASS}>

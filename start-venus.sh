@@ -13,7 +13,7 @@
 #       the "Hey Venus" listener in this terminal with auto-reload, their
 #       output mixed together. Ctrl+C stops them all (Postgres keeps running
 #       until `docker compose stop postgres`). Needs apps/core/.venv and
-#       `npm install` in apps/web (README "Developing").
+#       `npm install` in apps/web (guide/developing.md).
 #
 # Both modes use ports 9000 and 3000: this script stops the other mode first.
 set -euo pipefail

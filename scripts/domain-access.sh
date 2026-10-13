@@ -9,7 +9,7 @@
 #       takes its place on port 443) and restarts the Venus tray app, which
 #       keeps Caddy running from now on.
 #
-# Needs in the .env in the repository root (see README "Your own domain"):
+# Needs in the .env in the repository root (see guide/remote-access.md):
 #   VENUS_DOMAIN          your domain, DNS A record -> this PC's Tailscale address
 #   CLOUDFLARE_API_TOKEN  Cloudflare token with "Edit zone DNS" for that domain
 # Caddy listens on ports 443 and 9443 as you, not root, so allow that once:
@@ -40,7 +40,7 @@ esac
 download="https://caddyserver.com/api/download?os=linux&arch=$arch&p=github.com%2Fcaddy-dns%2Fcloudflare"
 
 domain="$(env_value VENUS_DOMAIN)"
-[[ -n "$domain" ]] || fail "Set VENUS_DOMAIN in $env_file first (see README 'Your own domain')."
+[[ -n "$domain" ]] || fail "Set VENUS_DOMAIN in $env_file first (see guide/remote-access.md)."
 # Only checked for being set: the token is never printed.
 [[ -n "$(env_value CLOUDFLARE_API_TOKEN)" ]] || fail "Set CLOUDFLARE_API_TOKEN in $env_file first."
 

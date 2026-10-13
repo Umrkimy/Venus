@@ -6,7 +6,7 @@
 #       phone-access.ps1 (Caddy takes its place on port 443) and restarts
 #       the Venus tray app, which keeps Caddy running from now on.
 #
-# Needs in the .env in the repository root (see README "Your own domain"):
+# Needs in the .env in the repository root (see guide/remote-access.md):
 #   VENUS_DOMAIN          your domain, DNS A record -> this PC's Tailscale address
 #   CLOUDFLARE_API_TOKEN  Cloudflare token with "Edit zone DNS" for that domain
 # To stop: empty VENUS_DOMAIN, Quit Venus in the tray and start it again,
@@ -45,7 +45,7 @@ function Get-TrayApp {
 }
 
 $domain = Read-EnvValue "VENUS_DOMAIN"
-if (-not $domain) { throw "Set VENUS_DOMAIN in $envFile first (see README 'Your own domain')." }
+if (-not $domain) { throw "Set VENUS_DOMAIN in $envFile first (see guide/remote-access.md)." }
 # Only checked for being set: the token is never printed.
 if (-not (Read-EnvValue "CLOUDFLARE_API_TOKEN")) { throw "Set CLOUDFLARE_API_TOKEN in $envFile first." }
 
