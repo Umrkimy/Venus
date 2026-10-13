@@ -168,20 +168,23 @@ def test_due_soon_is_timed_events_in_the_next_minutes():
     assert due_soon([soon, later, all_day], NOW, 10) == [soon]
 
 
-def test_google_sign_in_link_asks_offline_read_only_with_pkce():
+def test_google_sign_in_link_asks_offline_read_and_event_access_with_pkce():
     url = Google().auth_url("cid", "http://localhost:3000/api/calendar/google/callback", "st", "chal")
     query = parse_qs(urlsplit(url).query)
 
-    assert query["scope"] == ["https://www.googleapis.com/auth/calendar.readonly"]
+    # Read every calendar, change only events (not calendars or sharing).
+    assert query["scope"] == [
+        "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events"
+    ]
     assert query["access_type"] == ["offline"]
     assert query["code_challenge_method"] == ["S256"]
     assert query["state"] == ["st"]
 
 
-def test_microsoft_sign_in_link_asks_read_only_calendars():
+def test_microsoft_sign_in_link_asks_calendar_read_write():
     query = parse_qs(urlsplit(Microsoft().auth_url("cid", "http://x/cb", "st", "chal")).query)
 
-    assert query["scope"] == ["offline_access User.Read Calendars.Read"]
+    assert query["scope"] == ["offline_access User.Read Calendars.ReadWrite"]
 
 
 # --- routes ------------------------------------------------------------------

@@ -3,12 +3,15 @@ import secrets
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import httpx2
+from cryptography.fernet import InvalidToken
 
 from features.calendar.ics import fetch_ics, ics_events
-from features.calendar.providers import PROVIDERS, STATE_LIFETIME, CalendarError, Event, Provider
+from features.calendar.models.venus_event import VenusEvent
+from features.calendar.providers import PROVIDERS, STATE_LIFETIME, CalendarError, Event, EventDraft, Provider
 from features.calendar.repository import CalendarRepository
 from features.settings.secrets import decrypt_text, encrypt_text
 
@@ -85,28 +88,41 @@ class CalendarService:
         )
 
     async def events(self, now: datetime | None = None) -> tuple[list[Event], list[str]]:
-        """The next week's events from every connected calendar, sorted, plus what failed."""
+        """The next week's events from every calendar, sorted, plus what failed (cached 5 minutes)."""
         if time.monotonic() - self.cache.at < CACHE_SECONDS and self.cache.at:
             return self.cache.events, self.cache.errors
         now = now or datetime.now(timezone.utc)
         # From the start of today (UTC) so today's earlier events count too.
         start = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        end = now + timedelta(days=DAYS_AHEAD)
-        events: list[Event] = []
+        events, errors = await self.between(start, now + timedelta(days=DAYS_AHEAD))
+        self.cache.at, self.cache.events, self.cache.errors = time.monotonic(), events, errors
+        return events, errors
+
+    async def access_token(self, provider_name: str) -> str:
+        account = self.repository.get(provider_name)
+        if account is None or not account.refresh_token_encrypted:
+            raise CalendarError(f"{PROVIDERS[provider_name].label} isn't connected. Connect it in Settings, Calendar.")
+        try:
+            refresh_token = decrypt_text(account.refresh_token_encrypted, self.secret_key)
+            client_secret = decrypt_text(account.client_secret_encrypted, self.secret_key)
+        except InvalidToken as exc:
+            label = PROVIDERS[provider_name].label
+            raise CalendarError(f"{label}: the saved sign-in can't be read. Connect it again in Settings, Calendar.") from exc
+        tokens = await self.provider(provider_name).refresh(refresh_token, account.client_id, client_secret)
+        if tokens.refresh_token:
+            self.repository.save_refresh_token(provider_name, encrypt_text(tokens.refresh_token, self.secret_key))
+        return tokens.access_token
+
+    async def between(self, start: datetime, end: datetime) -> tuple[list[Event], list[str]]:
+        """Every calendar's events from start to end (no cache: the Calendar page's month or week)."""
+        events: list[Event] = [venus_event(event) for event in self.repository.venus_events(start, end)]
         errors: list[str] = []
         for account in self.repository.list_all():
             if not account.refresh_token_encrypted:
                 continue
             provider = self.provider(account.provider)
             try:
-                tokens = await provider.refresh(
-                    decrypt_text(account.refresh_token_encrypted, self.secret_key),
-                    account.client_id,
-                    decrypt_text(account.client_secret_encrypted, self.secret_key),
-                )
-                if tokens.refresh_token:
-                    self.repository.save_refresh_token(account.provider, encrypt_text(tokens.refresh_token, self.secret_key))
-                events.extend(await provider.events(tokens.access_token, start, end))
+                events.extend(await provider.events(await self.access_token(account.provider), start, end))
             except (CalendarError, httpx2.HTTPError, KeyError, ValueError) as exc:
                 logger.warning("Calendar %s failed: %s", account.provider, exc)
                 errors.append(str(exc) if isinstance(exc, CalendarError) else f"{provider.label} calendar didn't answer")
@@ -117,12 +133,63 @@ class CalendarService:
                 else:
                     text = calendar.content or ""
                 events.extend(ics_events(text, start, end, calendar.name, self.zone))
+            except InvalidToken:
+                errors.append(f"{calendar.name}: the saved link can't be read. Remove it and add it again.")
             except (CalendarError, httpx2.HTTPError, ValueError) as exc:
                 logger.warning("Calendar %s failed: %s", calendar.name, exc)
                 errors.append(f"{calendar.name}: {exc}" if isinstance(exc, CalendarError) else f"{calendar.name} couldn't be read")
         events.sort(key=lambda event: event.start)
-        self.cache.at, self.cache.events, self.cache.errors = time.monotonic(), events, errors
         return events, errors
+
+    def writable(self) -> list[dict]:
+        """Calendars a new event can go to: Venus's own, then connected Google/Outlook."""
+        options = [{"id": "venus", "label": "Venus"}]
+        for account in self.repository.list_all():
+            if account.refresh_token_encrypted:
+                label = PROVIDERS[account.provider].label
+                options.append({"id": account.provider, "label": f"{label} ({account.account_email})" if account.account_email else label})
+        return options
+
+    async def create(self, calendar: str, draft: EventDraft, now: datetime | None = None) -> str:
+        """Adds an event; its id (venus:..., google:..., microsoft:...)."""
+        if calendar == "venus":
+            event = self.repository.add_venus_event(VenusEvent(
+                draft.title, draft.start, draft.end, now or datetime.now(timezone.utc),
+                all_day=draft.all_day, location=draft.location, notes=draft.notes,
+            ))
+            new_id = f"venus:{event.id}"
+        elif calendar in PROVIDERS:
+            new_id = f"{calendar}:{await self.provider(calendar).create(await self.access_token(calendar), draft)}"
+        else:
+            raise CalendarError("Pick Venus, Google or Outlook.")
+        self.forget()
+        return new_id
+
+    async def update(self, event_id: str, draft: EventDraft) -> None:
+        source, _, inner = event_id.partition(":")
+        if source == "venus":
+            found = self.repository.update_venus_event(
+                venus_id(inner), title=draft.title, start=draft.start, end=draft.end,
+                all_day=draft.all_day, location=draft.location, notes=draft.notes,
+            )
+            if not found:
+                raise CalendarError("That event isn't on your Venus calendar anymore.")
+        elif source in PROVIDERS:
+            await self.provider(source).update(await self.access_token(source), inner, draft)
+        else:
+            raise CalendarError("Timetables (.ics) can't be changed from Venus.")
+        self.forget()
+
+    async def delete(self, event_id: str) -> None:
+        source, _, inner = event_id.partition(":")
+        if source == "venus":
+            if not self.repository.delete_venus_event(venus_id(inner)):
+                raise CalendarError("That event isn't on your Venus calendar anymore.")
+        elif source in PROVIDERS:
+            await self.provider(source).delete(await self.access_token(source), inner)
+        else:
+            raise CalendarError("Timetables (.ics) can't be changed from Venus.")
+        self.forget()
 
     def forget(self) -> None:
         self.cache.at = 0.0
@@ -167,3 +234,24 @@ def due_soon(events: list[Event], now: datetime, minutes: int) -> list[Event]:
     """Timed events starting within the next few minutes (for the PC's reminder pop-ups)."""
     until = now + timedelta(minutes=minutes)
     return [event for event in events if not event.all_day and now <= event.start <= until]
+
+
+def venus_id(text: str) -> UUID:
+    try:
+        return UUID(text)
+    except ValueError as exc:
+        raise CalendarError("That isn't a Venus event id.") from exc
+
+
+def venus_event(event: VenusEvent) -> Event:
+    return Event(
+        id=f"venus:{event.id}",
+        title=event.title,
+        start=event.start if event.start.tzinfo else event.start.replace(tzinfo=timezone.utc),
+        end=event.end if event.end.tzinfo else event.end.replace(tzinfo=timezone.utc),
+        all_day=event.all_day,
+        source="Venus",
+        location=event.location,
+        notes=event.notes,
+        editable=True,
+    )

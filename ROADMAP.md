@@ -13,7 +13,6 @@ Rough order, not promises. Ideas welcome in the issues.
 
 - Turn the TV on and off without Home Assistant (Android TV over ADB).
 - Calendar reminders spoken out loud by Venus.
-- Let Venus add events to your calendar, not only read them.
 - Email: summaries and drafts, with an Approve step before anything is sent.
 - Off-site backups (a copy that isn't on the same PC).
 
@@ -29,4 +28,5 @@ Rough order, not promises. Ideas welcome in the issues.
 - macOS support (apps, links, projects, volume, lock, login item, notifications)
 - Home control: Tuya lights and plugs, TV volume, Wake-on-LAN, PC volume and lock
 - Google and Outlook calendars, plus .ics links and files (uni timetables)
+- Calendar page: Venus's own calendar, add/move/edit events (also in Google and Outlook), add by chat
 - Home Assistant: lights, switches, TV power, air-con, scenes

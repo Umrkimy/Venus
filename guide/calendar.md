@@ -1,10 +1,34 @@
 # Calendar
 
-Venus can read your Google Calendar and Outlook (Microsoft 365) calendars.
-She knows your next 7 days, so you can ask "what's on tomorrow" or "do I
-have anything Friday", the first chat of the day starts with a short
-summary, and the PC part pops up a reminder about 10 minutes before each
-event. It's read-only: Venus can't add or change events.
+Venus has her own calendar, and can also show your Google Calendar,
+Outlook (Microsoft 365) and timetable (.ics) calendars. She knows your next
+7 days, so you can ask "what's on tomorrow" or "do I have anything Friday",
+the first chat of the day starts with a short summary, and the PC part pops
+up a reminder about 10 minutes before each event.
+
+## The Calendar page
+
+**Calendar** in the sidebar shows everything in one place: month, week, day
+or a list. Each kind has its own colour (Venus red, Google blue, Outlook
+teal, timetables purple).
+
+- **Add**: click a day (month view) or drag over the times (week or day
+  view), or **New event**. Pick which calendar it goes to: Venus's own
+  (works without any sign-in), or Google or Outlook if connected.
+- **Change**: click an event to edit or delete it, or drag it to another
+  time and drag its bottom edge to make it longer.
+- **By chat**: "add gym tomorrow at 6" or "put my exam on 2 November".
+  Luna adds it to the Venus calendar and shows a calendar card.
+
+Timetables (.ics) are read-only: change them in your uni portal. Google
+calendars you can only view (like a holiday calendar) are read-only too.
+
+**Already connected Google or Outlook before?** The first version only asked
+to read. To add or change events there, click Disconnect and Connect again
+in Settings, Calendar, so Google or Microsoft can ask you for the new
+permission.
+
+## Connecting Google and Outlook
 
 Because Venus is self-hosted, you sign in through **your own** small app
 at Google and Microsoft (free, a few minutes each). Do this on the PC with

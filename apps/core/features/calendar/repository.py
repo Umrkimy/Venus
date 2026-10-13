@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from features.calendar.models.calendar_account import CalendarAccount
 from features.calendar.models.ics_calendar import IcsCalendar
+from features.calendar.models.venus_event import VenusEvent
 
 
 class DuplicateNameError(Exception):
@@ -93,5 +94,36 @@ class CalendarRepository:
             if calendar is None:
                 return False
             session.delete(calendar)
+            session.commit()
+            return True
+
+    def venus_events(self, start: datetime, end: datetime) -> list[VenusEvent]:
+        """Venus's own events that overlap start..end."""
+        with Session(self.engine) as session:
+            query = select(VenusEvent).where(VenusEvent.start < end, VenusEvent.end >= start).order_by(VenusEvent.start)
+            return list(session.scalars(query))
+
+    def add_venus_event(self, event: VenusEvent) -> VenusEvent:
+        with Session(self.engine, expire_on_commit=False) as session:
+            session.add(event)
+            session.commit()
+        return event
+
+    def update_venus_event(self, event_id: UUID, **fields) -> bool:
+        with Session(self.engine) as session:
+            event = session.get(VenusEvent, event_id)
+            if event is None:
+                return False
+            for name, value in fields.items():
+                setattr(event, name, value)
+            session.commit()
+            return True
+
+    def delete_venus_event(self, event_id: UUID) -> bool:
+        with Session(self.engine) as session:
+            event = session.get(VenusEvent, event_id)
+            if event is None:
+                return False
+            session.delete(event)
             session.commit()
             return True

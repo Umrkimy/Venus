@@ -16,8 +16,9 @@ import { useOwner } from "@/lib/use-owner";
 export default function AppShell({ children }: { children: ReactNode }) {
   const { owner, logout } = useOwner();
   const signedIn = owner.status === "signed-in";
-  // The scene belongs to the chat; settings get a plain solid page.
-  const showScene = !usePathname().startsWith("/settings");
+  // The scene belongs to the chat; settings and the calendar get a plain solid page.
+  const path = usePathname();
+  const showScene = !path.startsWith("/settings") && !path.startsWith("/calendar");
 
   return (
     // "user": skip movement when the OS asks for reduced motion.

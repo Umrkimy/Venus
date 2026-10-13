@@ -11,7 +11,7 @@ import hashlib
 import secrets
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx2
 
@@ -27,8 +27,23 @@ class Event:
     start: datetime  # Timezone-aware; all-day events start at midnight UTC of that day.
     end: datetime
     all_day: bool
-    source: str  # "Google" or "Outlook"
+    source: str  # "Google", "Outlook", "Venus" or an .ics calendar's name
     location: str = ""
+    notes: str = ""
+    # Can Venus change it? Its own, and Google/Outlook ones you may edit; .ics never.
+    editable: bool = False
+
+
+@dataclass(frozen=True)
+class EventDraft:
+    """A new or changed event, as the Calendar page sends it."""
+
+    title: str
+    start: datetime
+    end: datetime
+    all_day: bool = False
+    location: str = ""
+    notes: str = ""
 
 
 @dataclass(frozen=True)
@@ -124,10 +139,34 @@ class Provider:
             raise CalendarError(f"{self.label} calendar answered HTTP {response.status_code}")
         return response.json()
 
+    async def _send(self, method: str, url: str, token: str, body: dict | None = None) -> dict:
+        async with self.client() as client:
+            response = await client.request(method, url, json=body, headers={"Authorization": f"Bearer {token}"})
+        if response.status_code in (401, 403):
+            raise CalendarError(
+                f"{self.label} didn't let Venus change events. Reconnect it in Settings, Calendar "
+                "to give Venus permission."
+            )
+        if response.status_code == 404:
+            raise CalendarError(f"That event isn't in your {self.label} calendar anymore.")
+        if response.status_code >= 300:
+            raise CalendarError(f"{self.label} calendar answered HTTP {response.status_code}")
+        return response.json() if response.content else {}
+
     async def email(self, access_token: str) -> str | None:
         raise NotImplementedError
 
     async def events(self, access_token: str, start: datetime, end: datetime) -> list[Event]:
+        raise NotImplementedError
+
+    async def create(self, access_token: str, draft: EventDraft) -> str:
+        """Adds the event; its new id."""
+        raise NotImplementedError
+
+    async def update(self, access_token: str, event_id: str, draft: EventDraft) -> None:
+        raise NotImplementedError
+
+    async def delete(self, access_token: str, event_id: str) -> None:
         raise NotImplementedError
 
 
@@ -140,7 +179,8 @@ class Google(Provider):
     label = "Google"
     auth_endpoint = "https://accounts.google.com/o/oauth2/v2/auth"
     token_endpoint = "https://oauth2.googleapis.com/token"
-    scope = "https://www.googleapis.com/auth/calendar.readonly"
+    # Read every calendar, and add or change events (Settings, Calendar: reconnect after upgrading).
+    scope = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events"
     api = "https://www.googleapis.com/calendar/v3"
     MAX_CALENDARS = 10
 
@@ -176,15 +216,46 @@ class Google(Provider):
                     begins = datetime.fromisoformat(item["start"]["dateTime"])
                     ends = datetime.fromisoformat(item["end"]["dateTime"])
                 events.append(Event(
-                    id=f"google:{item['id']}",
+                    # The calendar too: changing an event needs both.
+                    id=f"google:{calendar['id']}|{item['id']}",
                     title=item.get("summary") or "(no title)",
                     start=begins,
                     end=ends,
                     all_day=all_day,
                     source="Google",
                     location=item.get("location") or "",
+                    notes=item.get("description") or "",
+                    editable=calendar.get("accessRole") in ("owner", "writer"),
                 ))
         return events
+
+    @staticmethod
+    def body(draft: EventDraft) -> dict:
+        if draft.all_day:
+            # Google's all-day end is the day after, like FullCalendar's.
+            start, end = {"date": draft.start.date().isoformat()}, {"date": draft.end.date().isoformat()}
+        else:
+            start, end = {"dateTime": iso(draft.start)}, {"dateTime": iso(draft.end)}
+        return {"summary": draft.title, "location": draft.location, "description": draft.notes, "start": start, "end": end}
+
+    @staticmethod
+    def split(event_id: str) -> tuple[str, str]:
+        calendar_id, _, item_id = event_id.partition("|")
+        if not calendar_id or not item_id:
+            raise CalendarError("That isn't a Google event id.")
+        return quote(calendar_id, safe=""), quote(item_id, safe="")
+
+    async def create(self, access_token: str, draft: EventDraft) -> str:
+        item = await self._send("POST", f"{self.api}/calendars/primary/events", access_token, self.body(draft))
+        return f"primary|{item.get('id', '')}"
+
+    async def update(self, access_token: str, event_id: str, draft: EventDraft) -> None:
+        calendar_id, item_id = self.split(event_id)
+        await self._send("PATCH", f"{self.api}/calendars/{calendar_id}/events/{item_id}", access_token, self.body(draft))
+
+    async def delete(self, access_token: str, event_id: str) -> None:
+        calendar_id, item_id = self.split(event_id)
+        await self._send("DELETE", f"{self.api}/calendars/{calendar_id}/events/{item_id}", access_token)
 
 
 def graph_time(value: dict) -> datetime:
@@ -199,7 +270,8 @@ class Microsoft(Provider):
     # "common" = personal Outlook.com and work/school accounts both work.
     auth_endpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
     token_endpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
-    scope = "offline_access User.Read Calendars.Read"
+    # ReadWrite: add and change events from the Calendar page (reconnect after upgrading).
+    scope = "offline_access User.Read Calendars.ReadWrite"
     api = "https://graph.microsoft.com/v1.0"
 
     def extra_auth_params(self) -> dict:
@@ -219,7 +291,7 @@ class Microsoft(Provider):
             {
                 "startDateTime": iso(start),
                 "endDateTime": iso(end),
-                "$select": "id,subject,start,end,location,isAllDay,isCancelled",
+                "$select": "id,subject,start,end,location,isAllDay,isCancelled,bodyPreview,isOrganizer",
                 "$orderby": "start/dateTime",
                 "$top": "50",
             },
@@ -237,8 +309,34 @@ class Microsoft(Provider):
                 all_day=bool(item.get("isAllDay")),
                 source="Outlook",
                 location=(item.get("location") or {}).get("displayName") or "",
+                notes=item.get("bodyPreview") or "",
+                editable=True,
             ))
         return events
+
+    @staticmethod
+    def body(draft: EventDraft) -> dict:
+        def when(moment: datetime) -> dict:
+            return {"dateTime": moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": "UTC"}
+
+        return {
+            "subject": draft.title,
+            "body": {"contentType": "text", "content": draft.notes},
+            "start": when(draft.start),
+            "end": when(draft.end),
+            "isAllDay": draft.all_day,
+            "location": {"displayName": draft.location},
+        }
+
+    async def create(self, access_token: str, draft: EventDraft) -> str:
+        item = await self._send("POST", f"{self.api}/me/events", access_token, self.body(draft))
+        return str(item.get("id", ""))
+
+    async def update(self, access_token: str, event_id: str, draft: EventDraft) -> None:
+        await self._send("PATCH", f"{self.api}/me/events/{quote(event_id, safe='')}", access_token, self.body(draft))
+
+    async def delete(self, access_token: str, event_id: str) -> None:
+        await self._send("DELETE", f"{self.api}/me/events/{quote(event_id, safe='')}", access_token)
 
 
 PROVIDERS: dict[str, type[Provider]] = {"google": Google, "microsoft": Microsoft}

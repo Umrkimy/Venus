@@ -302,3 +302,17 @@ def test_openai_provider_counts_nothing_when_the_call_fails():
     asyncio.run(provider.reply("hi", [], ""))
 
     assert usage.records == []
+
+
+def test_openai_provider_adds_a_calendar_event_and_answers():
+    client = FakeClient(
+        output=[function_call("add_calendar_event", '{"title": "Gym", "start": "2026-10-15T18:00", "location": "Uni gym"}')],
+        output_text="",
+    )
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    reply = asyncio.run(provider.reply("add gym tomorrow at 6pm at the uni gym", [], ""))
+
+    assert reply.events == [{"title": "Gym", "start": "2026-10-15T18:00", "location": "Uni gym"}]
+    assert reply.commands == []
+    assert client.responses.calls[1]["input"][0]["output"] == "Added to the calendar."

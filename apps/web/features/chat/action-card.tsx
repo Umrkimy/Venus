@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Brain,
+  CalendarDays,
   Check,
   ChevronRight,
   Clock,
@@ -10,6 +11,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +21,8 @@ import { getJson } from "@/lib/get-json";
 export type ChatAction =
   // title: home actions read as they are ("Bedroom light: off"), not "Open ...".
   | { kind: "command"; command_id: string; label: string; title?: string }
-  | { kind: "memory"; text: string };
+  | { kind: "memory"; text: string }
+  | { kind: "event"; text: string };
 
 type CommandStatus = { command_id: string; status: string; detail?: string };
 
@@ -95,6 +98,8 @@ export default function ActionCard({ actions, startOpen }: ActionCardProps) {
                 // Old chats only ask Core once you look inside.
                 watch={open}
               />
+            ) : action.kind === "event" ? (
+              <EventRow text={action.text} />
             ) : (
               <MemoryRow text={action.text} />
             )}
@@ -203,6 +208,20 @@ function MemoryRow({ text }: { text: string }) {
       <Brain className="mt-0.5 size-4 text-primary" aria-hidden="true" />
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">Saved to memory</p>
+        <p className="break-words">{text}</p>
+      </div>
+    </div>
+  );
+}
+
+function EventRow({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2 text-sm">
+      <CalendarDays className="mt-0.5 size-4 text-primary" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">
+          Added to your <Link href="/calendar" className="underline underline-offset-2 hover:text-foreground">calendar</Link>
+        </p>
         <p className="break-words">{text}</p>
       </div>
     </div>

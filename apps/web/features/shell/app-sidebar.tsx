@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, LogOut, Plus, Settings } from "lucide-react";
+import { CalendarDays, Folder, LogOut, Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -67,6 +67,14 @@ export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
               <Link href="/" onClick={startNewChat}>
                 <Plus />
                 <span>New chat</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === "/calendar"}>
+              <Link href="/calendar">
+                <CalendarDays />
+                <span>Calendar</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
