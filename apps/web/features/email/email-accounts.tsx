@@ -1,13 +1,16 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mail, Trash2 } from "lucide-react";
+import { Check, Mail, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FIELD_HOVER, LABEL_CLASS } from "@/features/settings/field-styles";
+import StatusBadge from "@/features/settings/status-badge";
 import { getJson } from "@/lib/get-json";
 
 export type EmailAccount = {
@@ -117,10 +120,17 @@ export default function EmailAccounts() {
             >
               <Mail className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{account.address}</p>
+                <p className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium">{account.address}</span>
+                  <StatusBadge tone="on">Connected</StatusBadge>
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  Sends as {account.display_name} ·{" "}
-                  {account.kind === "imap" ? account.imap_host : `signed in with ${account.kind === "google" ? "Google" : "Microsoft"}`}
+                  {account.display_name} ·{" "}
+                  {account.kind === "imap"
+                    ? "App password"
+                    : account.kind === "google"
+                      ? "Google sign-in"
+                      : "Microsoft sign-in"}
                 </p>
               </div>
               <Button
@@ -139,123 +149,169 @@ export default function EmailAccounts() {
       )}
 
       {signedIn && (
-        <p role="status" className="mb-4 text-sm text-muted-foreground">
-          Signed in with {signedIn === "google" ? "Google" : "Microsoft"}. Open Email in the sidebar.
+        <p
+          role="status"
+          className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm"
+        >
+          <Check className="size-4 text-emerald-500" aria-hidden="true" />
+          Mailbox connected.
+          <Link href="/email" className="font-medium underline underline-offset-2">
+            Open Email
+          </Link>
         </p>
       )}
       {signInError && (
-        <p role="alert" className="mb-4 text-sm text-destructive">
+        <p
+          role="alert"
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
           {signInError}
         </p>
       )}
-
-      <div className="mb-6 space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-semibold">Sign in with Microsoft or Google</p>
-        <p className="text-sm text-muted-foreground">
-          For uni Microsoft 365, Outlook.com and Gmail. It uses the same app you made in Settings, Calendar (make that
-          first) and asks Microsoft or Google to also allow mail. Your uni might need to approve Venus.
+      {accounts.isSuccess && accounts.data.length === 0 && (
+        <p className="mb-4">
+          <StatusBadge tone="off">No mailbox yet</StatusBadge>
         </p>
-        <label className={LABEL_CLASS}>
-          Your name (on mail you send)
-          <Input
-            value={senderName}
-            onChange={(e) => setSenderName(e.target.value)}
-            maxLength={100}
-            placeholder="Umar Hakimi"
-            className={FIELD_HOVER}
-          />
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {(["microsoft", "google"] as const).map((provider) => (
-            <Button key={provider} variant="outline" asChild>
-              <a href={`/api/calendar/${provider}/connect?mail=true&name=${encodeURIComponent(senderName.trim())}`}>
-                {provider === "microsoft" ? "Sign in with Microsoft" : "Sign in with Google"}
-              </a>
-            </Button>
-          ))}
-        </div>
-      </div>
+      )}
 
-      <form onSubmit={add} className="space-y-4">
-        <p className="text-sm font-semibold">Or add one with an app password</p>
-        <p className="text-sm text-muted-foreground">
-          An <b>app password</b> is a separate password just for Venus, never your normal one. Gmail: Google Account,
-          Security, 2-Step Verification on, then App passwords. iCloud and Yahoo have the same in their account
-          security settings.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Tabs defaultValue="sign-in">
+        <TabsList>
+          <TabsTrigger value="sign-in">Microsoft or Google sign-in</TabsTrigger>
+          <TabsTrigger value="password">App password</TabsTrigger>
+        </TabsList>
+        <TabsContent value="sign-in" className="mt-3 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Uni Microsoft 365, Outlook.com, Gmail. Uses the app from Settings, Calendar.
+          </p>
           <label className={LABEL_CLASS}>
-            Email address
+            Your name (on mail you send)
             <Input
-              type="email"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="you@gmail.com"
-              autoComplete="off"
+              value={senderName}
+              onChange={(e) => setSenderName(e.target.value)}
+              maxLength={100}
+              placeholder="Umar Hakimi"
               className={FIELD_HOVER}
             />
           </label>
-          <label className={LABEL_CLASS}>
-            Your name (on mail you send)
-            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="Umar Hakimi" className={FIELD_HOVER} />
-          </label>
-        </div>
-        <label className={LABEL_CLASS}>
-          App password
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            className={FIELD_HOVER}
-          />
-          <span className="mt-1 block text-xs font-normal text-muted-foreground">
-            Venus checks it signs in before saving. Saved encrypted and never shown again.
-          </span>
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="size-4 accent-primary" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} />
-          Set the mail servers myself (only for providers Venus doesn&apos;t know)
-        </label>
-        {advanced && (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-wrap gap-2">
+            {(["microsoft", "google"] as const).map((provider) => (
+              <Button key={provider} variant="outline" asChild>
+                <a href={`/api/calendar/${provider}/connect?mail=true&name=${encodeURIComponent(senderName.trim())}`}>
+                  {provider === "microsoft" ? "Sign in with Microsoft" : "Sign in with Google"}
+                </a>
+              </Button>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="password" className="mt-3">
+          <form onSubmit={add} className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Gmail, iCloud, Yahoo and others. Make an app password in your account&apos;s security settings.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={LABEL_CLASS}>
+                Email address
+                <Input
+                  type="email"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="you@gmail.com"
+                  autoComplete="off"
+                  className={FIELD_HOVER}
+                />
+              </label>
+              <label className={LABEL_CLASS}>
+                Your name (on mail you send)
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={100}
+                  placeholder="Umar Hakimi"
+                  className={FIELD_HOVER}
+                />
+              </label>
+            </div>
             <label className={LABEL_CLASS}>
-              IMAP server (reading)
-              <Input value={imapHost} onChange={(e) => setImapHost(e.target.value)} placeholder="imap.example.com" className={FIELD_HOVER} />
-            </label>
-            <label className={LABEL_CLASS}>
-              IMAP port
-              <Input value={imapPort} onChange={(e) => setImapPort(e.target.value)} inputMode="numeric" className={FIELD_HOVER} />
-            </label>
-            <label className={LABEL_CLASS}>
-              SMTP server (sending)
-              <Input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.example.com" className={FIELD_HOVER} />
-            </label>
-            <label className={LABEL_CLASS}>
-              SMTP port
+              App password
               <Input
-                value={smtpPort}
-                onChange={(e) => {
-                  setSmtpPort(e.target.value);
-                  setSmtpSecurity(e.target.value.trim() === "587" ? "starttls" : "ssl");
-                }}
-                inputMode="numeric"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
                 className={FIELD_HOVER}
               />
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">465 = SSL, 587 = STARTTLS.</span>
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                Checked before saving, stored encrypted.
+              </span>
             </label>
-          </div>
-        )}
-        <div className="flex items-center gap-3">
-          <Button type="submit" disabled={busy || !address.trim() || !name.trim() || !password}>
-            {busy ? "Checking..." : "Add account"}
-          </Button>
-          <p aria-live="polite" className="text-sm">
-            {error && <span className="text-destructive">{error}</span>}
-            {notice && <span className="text-muted-foreground">{notice}</span>}
-          </p>
-        </div>
-      </form>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={advanced}
+                onChange={(e) => setAdvanced(e.target.checked)}
+              />
+              Set the mail servers myself
+            </label>
+            {advanced && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={LABEL_CLASS}>
+                  IMAP server (reading)
+                  <Input
+                    value={imapHost}
+                    onChange={(e) => setImapHost(e.target.value)}
+                    placeholder="imap.example.com"
+                    className={FIELD_HOVER}
+                  />
+                </label>
+                <label className={LABEL_CLASS}>
+                  IMAP port
+                  <Input
+                    value={imapPort}
+                    onChange={(e) => setImapPort(e.target.value)}
+                    inputMode="numeric"
+                    className={FIELD_HOVER}
+                  />
+                </label>
+                <label className={LABEL_CLASS}>
+                  SMTP server (sending)
+                  <Input
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    placeholder="smtp.example.com"
+                    className={FIELD_HOVER}
+                  />
+                </label>
+                <label className={LABEL_CLASS}>
+                  SMTP port
+                  <Input
+                    value={smtpPort}
+                    onChange={(e) => {
+                      setSmtpPort(e.target.value);
+                      setSmtpSecurity(e.target.value.trim() === "587" ? "starttls" : "ssl");
+                    }}
+                    inputMode="numeric"
+                    className={FIELD_HOVER}
+                  />
+                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                    465 = SSL, 587 = STARTTLS.
+                  </span>
+                </label>
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <Button type="submit" disabled={busy || !address.trim() || !name.trim() || !password}>
+                {busy ? "Checking..." : "Add account"}
+              </Button>
+              <p aria-live="polite" className="text-sm">
+                {error && <span className="text-destructive">{error}</span>}
+                {notice && <span className="text-muted-foreground">{notice}</span>}
+              </p>
+            </div>
+          </form>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

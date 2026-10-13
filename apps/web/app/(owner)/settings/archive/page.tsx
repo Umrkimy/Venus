@@ -5,7 +5,7 @@ export default function ArchiveSettingsPage() {
   return (
     <SettingsSection
       title="Archive"
-      description="Chats and projects you put away. Unarchive one to bring it back to the sidebar."
+      description="Archived chats and projects."
     >
       <ArchiveTabs />
     </SettingsSection>

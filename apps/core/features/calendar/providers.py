@@ -105,9 +105,7 @@ class Provider:
             response = await client.post(self.token_endpoint, data=form)
         body = response.json() if response.content else {}
         if response.status_code != 200:
-            # invalid_grant = the sign-in was revoked or expired: connect again.
-            reason = body.get("error_description") or body.get("error") or f"HTTP {response.status_code}"
-            raise CalendarError(f"{self.label} sign-in failed: {str(reason)[:200]}")
+            raise CalendarError(sign_in_problem(self.label, str(body.get("error") or ""), response.status_code))
         return body
 
     async def exchange(
@@ -176,6 +174,25 @@ class Provider:
 
     async def delete(self, access_token: str, event_id: str) -> None:
         raise NotImplementedError
+
+
+# What Google and Microsoft's error codes mean for you, and what to do.
+SIGN_IN_PROBLEMS = {
+    "access_denied": "{label} said no. If the app is still in Testing, publish it (or add yourself as a test user) and try again.",
+    "invalid_client": "{label} doesn't recognise the client ID or secret. Copy both again from your {label} app.",
+    "unauthorized_client": "{label} doesn't recognise the client ID or secret. Copy both again from your {label} app.",
+    "invalid_grant": "The {label} sign-in expired or was removed. Connect again.",
+    "redirect_uri_mismatch": "The redirect address isn't in your {label} app. Add the one shown here and try again.",
+    "consent_required": "Your {label} admin has to approve Venus first (common for uni accounts).",
+    "admin_consent_required": "Your {label} admin has to approve Venus first (common for uni accounts).",
+}
+
+
+def sign_in_problem(label: str, code: str, status: int | None = None) -> str:
+    text = SIGN_IN_PROBLEMS.get(code)
+    if text:
+        return text.format(label=label)
+    return f"{label} sign-in didn't work ({code or f'HTTP {status}'}). Try Connect again."
 
 
 def all_day_start(day: str) -> datetime:

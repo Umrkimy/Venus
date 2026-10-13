@@ -122,6 +122,7 @@ def message_json(message: MailMessage) -> dict:
         "subject": message.subject,
         "date": message.date.isoformat() if message.date else None,
         "body": message.body,
+        "html": message.html,
         "attachments": message.attachments,
     }
 
@@ -307,11 +308,13 @@ async def summarize_inbox(
     except MailError as exc:
         raise mail_problem(exc) from exc
     if not found:
-        return {"summary": "Your inbox is empty."}
+        return {"groups": []}
     text = await assistant.summarize_inbox(provider, found)
     if not text:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=NO_LUNA)
-    return {"summary": text}
+    groups = assistant.overview_groups(text, found)
+    # If Luna didn't answer in the expected shape, show her words as they are.
+    return {"groups": groups} if groups is not None else {"groups": [], "summary": text}
 
 
 @router.post("/accounts/{account_id}/messages/{uid}/draft")

@@ -41,17 +41,53 @@ async def summarize(provider: ChatProvider, message: MailMessage) -> str | None:
     return await provider.say(quoted(message), instructions)
 
 
+GROUPS = ("reply", "deadline", "update", "promo")
+
+
 async def summarize_inbox(provider: ChatProvider, summaries: list[MailSummary]) -> str | None:
     lines = [
-        f"- {'(unread) ' if item.unread else ''}{item.sender}: {item.subject}"
+        f"[{item.uid}] {'(unread) ' if item.unread else ''}{item.sender}: {item.subject}"
         for item in summaries[:30]
     ]
     instructions = (
-        "You give the owner a quick overview of their inbox from the senders and subjects below. "
-        "Group what matters (uni, deadlines, people waiting for an answer) first, then say what looks "
-        "like newsletters or promotions. At most 6 short bullet points. " + GUARD
+        "Sort the owner's inbox (sender and subject per line, id in brackets) into groups: "
+        "reply (someone waits for an answer), deadline (a date or due item), update (worth knowing), "
+        "promo (newsletters, sales, notifications). Answer with JSON only, no other text: "
+        '{"groups":[{"kind":"reply","items":[{"id":"<id>","note":"<6 words max why>"}]}]}. '
+        "Leave out empty groups. " + GUARD
     )
     return await provider.say("Inbox:\n" + "\n".join(lines), instructions)
+
+
+def overview_groups(text: str, summaries: list[MailSummary]) -> list[dict] | None:
+    """Luna's JSON as clean groups that only point at real messages; None if it isn't JSON."""
+    import json
+
+    raw = text.strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`").removeprefix("json").strip()
+    try:
+        data = json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
+    except ValueError:
+        return None
+    known = {item.uid: item for item in summaries}
+    groups = []
+    for group in data.get("groups", []) if isinstance(data, dict) else []:
+        kind = group.get("kind") if isinstance(group, dict) else None
+        if kind not in GROUPS:
+            continue
+        items = []
+        for entry in group.get("items", []):
+            uid = str(entry.get("id", "")) if isinstance(entry, dict) else ""
+            if uid in known:
+                mail = known[uid]
+                items.append({
+                    "uid": uid, "sender": mail.sender, "subject": mail.subject, "unread": mail.unread,
+                    "note": str(entry.get("note", ""))[:80],
+                })
+        if items:
+            groups.append({"kind": kind, "items": items})
+    return sorted(groups, key=lambda group: GROUPS.index(group["kind"]))
 
 
 async def draft_reply(

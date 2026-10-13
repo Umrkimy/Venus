@@ -87,15 +87,10 @@ export default function IcsCalendars() {
   }
 
   return (
-    <div className="mt-8 border-t border-border pt-5">
-      <p className="text-sm font-semibold">Timetables and other calendars (.ics)</p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        For a uni portal or anything that exports a calendar file. Paste its link if it has one (Venus re-reads it,
-        so changes show up by themselves), or upload the .ics file (upload it again when it changes).
-      </p>
+    <div>
 
       {calendars.isSuccess && calendars.data.length > 0 && (
-        <ul className="mt-4 space-y-2">
+        <ul className="mb-4 space-y-2">
           {calendars.data.map((calendar) => {
             const Icon = calendar.kind === "link" ? Link2 : CalendarDays;
             return (
@@ -107,7 +102,7 @@ export default function IcsCalendars() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{calendar.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {calendar.kind === "link" ? "Link, kept up to date" : "Uploaded file"}
+                    {calendar.kind === "link" ? "Link, updates itself" : "File, upload again when it changes"}
                   </p>
                 </div>
                 <Button
@@ -131,7 +126,7 @@ export default function IcsCalendars() {
         </p>
       )}
 
-      <form onSubmit={add} className="mt-4 space-y-4">
+      <form onSubmit={add} className="space-y-4">
         <label className={LABEL_CLASS}>
           Name
           <Input

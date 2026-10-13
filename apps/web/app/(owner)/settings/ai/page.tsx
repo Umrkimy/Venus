@@ -5,7 +5,7 @@ export default function AiSettingsPage() {
   return (
     <SettingsSection
       title="AI model"
-      description="The brain Venus uses for anything that isn't a direct command."
+      description="The model for chat and anything that isn't a direct command."
     >
       <LlmSettings />
     </SettingsSection>

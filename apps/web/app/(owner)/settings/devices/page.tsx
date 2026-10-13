@@ -7,13 +7,13 @@ export default function DevicesSettingsPage() {
     <div className="space-y-4">
       <SettingsSection
         title="PCs"
-        description="PCs that run Venus. Each has its own token, so you can cut one off without touching the others."
+        description="PCs running Venus, each with its own token."
       >
         <DeviceList />
       </SettingsSection>
       <SettingsSection
         title="Signed-in browsers"
-        description="Every phone, laptop or PC browser logged in to Venus. Logins end by themselves after 7 days."
+        description="Browsers signed in to Venus."
       >
         <SessionList />
       </SettingsSection>

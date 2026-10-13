@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FIELD_HOVER, LABEL_CLASS } from "@/features/settings/field-styles";
+import StatusBadge from "@/features/settings/status-badge";
 import { getJson } from "@/lib/get-json";
 
 type Assistant = { url: string | null; connected: boolean };
@@ -179,12 +180,9 @@ export default function HomeAssistant() {
   if (!connected || editing) {
     return (
       <form onSubmit={save} className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Have Home Assistant? Connect it and Venus can control everything it knows: lights, switches, TVs,
-          air-con and scenes, whatever the brand.
-        </p>
+        <StatusBadge tone="off">Not connected</StatusBadge>
         <label className={LABEL_CLASS}>
-          Home Assistant address
+          Address
           <Input
             value={url}
             onChange={(event) => setUrl(event.target.value)}
@@ -193,8 +191,7 @@ export default function HomeAssistant() {
             className={FIELD_HOVER}
           />
           <span className="mt-1 block text-xs font-normal text-muted-foreground">
-            The address you open Home Assistant at on your home Wi-Fi. If a name like homeassistant.local
-            doesn&apos;t work, use its IP address.
+            Use the IP address if homeassistant.local doesn&apos;t work.
           </span>
         </label>
         <label className={LABEL_CLASS}>
@@ -208,8 +205,7 @@ export default function HomeAssistant() {
             className={FIELD_HOVER}
           />
           <span className="mt-1 block text-xs font-normal text-muted-foreground">
-            In Home Assistant: your profile, Security, Long-lived access tokens, Create token. Saved encrypted and
-            never shown again.
+            Home Assistant: Profile, Security, Long-lived access tokens.
           </span>
         </label>
         <div className="flex items-center gap-3">
@@ -230,9 +226,8 @@ export default function HomeAssistant() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1 truncate text-sm">
-          Connected to <span className="font-medium">{assistant.data?.url}</span>
-        </p>
+        <StatusBadge tone="on">Connected</StatusBadge>
+        <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{assistant.data?.url}</p>
         <Button
           type="button"
           variant="outline"
@@ -249,10 +244,6 @@ export default function HomeAssistant() {
           Disconnect
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Disconnect also removes the devices you added from Home Assistant.
-      </p>
-
       <Button type="button" variant="outline" onClick={() => entities.refetch()} disabled={busy || entities.isFetching}>
         {entities.isFetching ? "Looking..." : entities.data ? "Look again" : "Find devices"}
       </Button>
@@ -262,9 +253,7 @@ export default function HomeAssistant() {
         </p>
       )}
       {entities.data && entities.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          Home Assistant has no lights, switches, TVs, air-con or scenes Venus can use.
-        </p>
+        <p className="text-sm text-muted-foreground">No supported devices found.</p>
       )}
       {entities.data && entities.data.length > 0 && (
         <>

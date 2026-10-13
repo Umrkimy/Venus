@@ -5,7 +5,7 @@ export default function PersonalitySettingsPage() {
   return (
     <SettingsSection
       title="Personality"
-      description="Who Venus is when she talks to you. Switching applies from the next message in every chat."
+      description="How Venus talks. Applies from the next message."
     >
       <PersonalityList />
     </SettingsSection>

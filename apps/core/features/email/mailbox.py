@@ -22,6 +22,8 @@ from html.parser import HTMLParser
 TIMEOUT = 20
 # The email body Luna reads at most (long newsletters cost money for nothing).
 MAX_BODY = 20_000
+# Bigger HTML than this is shown as text only (it's almost always a newsletter).
+MAX_HTML = 500_000
 
 
 class MailError(Exception):
@@ -67,6 +69,8 @@ class MailMessage:
     attachments: list[str] = field(default_factory=list)
     # Gmail's conversation id, so a reply stays in the same thread there.
     thread_id: str = ""
+    # The HTML version, for the page to show (cleaned there, images only on request).
+    html: str = ""
 
 
 @dataclass(frozen=True)
@@ -273,6 +277,8 @@ def parse_message(uid: str, raw: bytes, thread_id: str = "") -> MailMessage:
     if part is not None:
         content = part.get_content()
         body = html_to_text(content) if part.get_content_type() == "text/html" else content
+    html_part = message.get_body(preferencelist=("html",))
+    html = html_part.get_content() if html_part is not None else ""
     name, address = sender_of(message)
     return MailMessage(
         uid=uid,
@@ -287,6 +293,7 @@ def parse_message(uid: str, raw: bytes, thread_id: str = "") -> MailMessage:
         references=decoded(message.get("References")),
         attachments=[decoded(item.get_filename()) or "attachment" for item in message.iter_attachments()],
         thread_id=thread_id,
+        html=html if len(html) <= MAX_HTML else "",
     )
 
 

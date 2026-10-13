@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Inbox, Paperclip, PenLine, RefreshCw, Reply, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Inbox, Paperclip, PenLine, RefreshCw, Reply, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,11 +16,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import Composer, { type Draft } from "@/features/email/composer";
 import { useEmailAccounts } from "@/features/email/email-accounts";
+import InboxOverview, { type Overview } from "@/features/email/inbox-overview";
+import MailBody from "@/features/email/mail-body";
 import TonePicker, { SenderAvatar, type Tone } from "@/features/email/tone-picker";
 import { cn } from "@/lib/utils";
 
 type Summary = { uid: string; sender: string; sender_address: string; subject: string; date: string | null; unread: boolean };
-type Message = Summary & { to: string[]; cc: string[]; body: string; attachments: string[] };
+type Message = Summary & { to: string[]; cc: string[]; body: string; html: string; attachments: string[] };
 
 export function errorText(data: { detail?: unknown }, fallback: string) {
   const first = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
@@ -52,7 +54,7 @@ export default function EmailPage() {
   const account = accounts.data?.find((item) => item.id === accountId);
   const [open, setOpen] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [overview, setOverview] = useState<string | null>(null);
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +74,12 @@ export default function EmailPage() {
     enabled: accountId !== null && open !== null,
     retry: false,
   });
+
+  // Opening marks it read on the server: refresh the list once it has.
+  const openedUid = message.data?.uid;
+  useEffect(() => {
+    if (openedUid) queryClient.invalidateQueries({ queryKey: ["email-inbox", accountId] });
+  }, [openedUid, accountId, queryClient]);
 
   async function post<T>(path: string, body?: unknown): Promise<T> {
     const response = await fetch(path, {
@@ -176,8 +184,7 @@ export default function EmailPage() {
           disabled={busy !== null || accountId === null}
           onClick={() =>
             run("overview", async () => {
-              const data = await post<{ summary: string }>(`/api/email/accounts/${accountId}/summary`);
-              setOverview(data.summary);
+              setOverview(await post<Overview>(`/api/email/accounts/${accountId}/summary`));
             })
           }
         >
@@ -209,17 +216,7 @@ export default function EmailPage() {
           {notice}
         </p>
       )}
-      {overview && (
-        <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm">
-          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-primary">
-            <Sparkles className="size-3.5" aria-hidden="true" /> Luna&apos;s overview
-            <Button variant="ghost" size="icon-sm" className="ml-auto size-6" aria-label="Hide overview" onClick={() => setOverview(null)}>
-              <X />
-            </Button>
-          </div>
-          <p className="whitespace-pre-wrap leading-relaxed">{overview}</p>
-        </div>
-      )}
+      {overview && <InboxOverview overview={overview} onOpen={choose} onClose={() => setOverview(null)} />}
 
       <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(18rem,24rem)_1fr]">
         <section
@@ -347,9 +344,7 @@ export default function EmailPage() {
                         <p className="whitespace-pre-wrap leading-relaxed">{summary}</p>
                       </div>
                     )}
-                    <div className="max-w-prose whitespace-pre-wrap break-words text-[15px] leading-7">
-                      {message.data.body || <span className="text-muted-foreground">(no text)</span>}
-                    </div>
+                    <MailBody key={message.data.uid} html={message.data.html} text={message.data.body} />
                   </>
                 )}
               </div>
@@ -425,7 +420,7 @@ export default function EmailPage() {
         </section>
       </div>
       <p className="text-xs text-muted-foreground">
-        Sum up and Luna&apos;s replies send that email&apos;s text to your AI model. Venus never sends mail by itself.
+        Luna&apos;s summaries and replies use your AI model. Nothing is sent without you.
       </p>
     </div>
   );
