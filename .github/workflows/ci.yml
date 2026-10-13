@@ -161,6 +161,10 @@ jobs:
       - name: Build web
         run: npm run build
 
+      # The portfolio demo: same pages, pretend Core, plain files in out/.
+      - name: Build demo
+        run: npm run build:demo
+
   docker:
     runs-on: ubuntu-latest
 
