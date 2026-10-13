@@ -1,7 +1,7 @@
 "use client";
 
 import { Send, Sparkles, X } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import {
   AlertDialog,
@@ -14,11 +14,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { FIELD_HOVER, LABEL_CLASS } from "@/features/settings/field-styles";
+import TonePicker, { type Tone } from "@/features/email/tone-picker";
 
-export type Tone = "professional" | "friendly" | "short";
 export type Draft = { to: string[]; cc: string[]; subject: string; body: string; reply_to: string | null };
 
 const split = (text: string) =>
@@ -32,23 +30,40 @@ function errorText(data: { detail?: unknown }, fallback: string) {
   return typeof first === "string" ? first.replace(/^Value error, /, "") : fallback;
 }
 
+// One "To: ____" line, like a mail app: the label sits inside the row.
+function FieldRow({ label, children, id }: { label: string; children: React.ReactNode; id: string }) {
+  return (
+    <div className="flex items-center gap-3 border-b border-border px-4 focus-within:bg-muted/40">
+      <label htmlFor={id} className="w-16 shrink-0 text-sm text-muted-foreground">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const ROW_INPUT = "h-11 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/70";
+
 type Props = { accountId: string; draft: Draft; onClose: () => void; onSent: (to: string[]) => void };
 
 // Writing or replying. Luna can fill the text in; only the owner's Send button sends it.
 export default function Composer({ accountId, draft, onClose, onSent }: Props) {
+  const ids = useId();
   const [to, setTo] = useState(draft.to.join(", "));
   const [cc, setCc] = useState(draft.cc.join(", "));
+  const [showCc, setShowCc] = useState(draft.cc.length > 0);
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const [wish, setWish] = useState("");
   const [tone, setTone] = useState<Tone>("professional");
   const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"write" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reply = draft.reply_to !== null;
+  const byLuna = draft.body.length > 0;
 
   async function write() {
-    setBusy(true);
+    setBusy("write");
     setError(null);
     try {
       const response = await fetch(`/api/email/accounts/${accountId}/draft`, {
@@ -62,13 +77,13 @@ export default function Composer({ accountId, draft, onClose, onSent }: Props) {
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Luna couldn't write that.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   async function send() {
     setConfirming(false);
-    setBusy(true);
+    setBusy("send");
     setError(null);
     try {
       const response = await fetch(`/api/email/accounts/${accountId}/send`, {
@@ -82,77 +97,89 @@ export default function Composer({ accountId, draft, onClose, onSent }: Props) {
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Couldn't send it.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <h2 className="text-base font-semibold">{reply ? "Reply" : "New email"}</h2>
-        {draft.body && <span className="text-xs text-muted-foreground">Written by Luna: read it before sending.</span>}
+        {byLuna && (
+          <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            <Sparkles className="size-3" aria-hidden="true" /> Written by Luna, check it before sending
+          </span>
+        )}
         <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label="Close" onClick={onClose}>
           <X />
         </Button>
       </div>
-      <label className={LABEL_CLASS}>
-        To
-        <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@example.com" className={FIELD_HOVER} />
-      </label>
-      <label className={LABEL_CLASS}>
-        Cc
-        <Input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Optional" className={FIELD_HOVER} />
-      </label>
-      <label className={LABEL_CLASS}>
-        Subject
-        <Input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={300} className={FIELD_HOVER} />
-      </label>
+
+      <FieldRow label="To" id={`${ids}-to`}>
+        <input id={`${ids}-to`} value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@example.com" className={ROW_INPUT} />
+        {!showCc && (
+          <button type="button" className="text-xs font-medium text-muted-foreground hover:text-foreground" onClick={() => setShowCc(true)}>
+            Cc
+          </button>
+        )}
+      </FieldRow>
+      {showCc && (
+        <FieldRow label="Cc" id={`${ids}-cc`}>
+          <input id={`${ids}-cc`} value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Optional" className={ROW_INPUT} />
+        </FieldRow>
+      )}
+      <FieldRow label="Subject" id={`${ids}-subject`}>
+        <input id={`${ids}-subject`} value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={300} className={ROW_INPUT} />
+      </FieldRow>
+
       {!reply && (
-        <div className="flex flex-wrap items-end gap-2 rounded-lg bg-muted/50 p-2">
-          <label className="min-w-48 flex-1 text-sm font-medium">
-            Ask Luna to write it
-            <Input
+        <div className="space-y-2 border-b border-border bg-muted/30 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="mr-auto flex items-center gap-1.5 text-sm font-semibold">
+              <Sparkles className="size-4 text-primary" aria-hidden="true" /> Ask Luna to write it
+            </p>
+            <TonePicker value={tone} onChange={setTone} />
+          </div>
+          <div className="flex gap-2">
+            <input
               value={wish}
               onChange={(e) => setWish(e.target.value)}
               maxLength={2000}
               placeholder="e.g. ask Dr. Aina for a 2-day extension on Assignment 2"
-              className={FIELD_HOVER}
+              aria-label="What the email should say"
+              className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-          </label>
-          <select
-            value={tone}
-            onChange={(e) => setTone(e.target.value as Tone)}
-            aria-label="Tone"
-            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-          >
-            <option value="professional">Professional</option>
-            <option value="friendly">Friendly</option>
-            <option value="short">Short</option>
-          </select>
-          <Button type="button" variant="outline" disabled={busy || !wish.trim()} onClick={write}>
-            <Sparkles />
-            Write
-          </Button>
+            <Button type="button" variant="outline" disabled={busy !== null || !wish.trim()} onClick={write}>
+              {busy === "write" ? "Writing..." : "Write"}
+            </Button>
+          </div>
         </div>
       )}
-      <label className={LABEL_CLASS}>
-        Message
-        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={12} className="mt-1.5" />
-      </label>
+
+      <Textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={14}
+        aria-label="Message"
+        placeholder="Write your message..."
+        className="min-h-64 resize-y rounded-none border-0 px-4 py-3 text-[15px] leading-7 shadow-none focus-visible:ring-0"
+      />
+
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="mx-4 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       )}
-      <div className="flex items-center gap-2">
-        <Button disabled={busy || !split(to).length || !body.trim()} onClick={() => setConfirming(true)}>
+      <div className="flex items-center gap-2 border-t border-border px-4 py-3">
+        <Button disabled={busy !== null || !split(to).length || !body.trim()} onClick={() => setConfirming(true)}>
           <Send />
-          {busy ? "Sending..." : "Send"}
+          {busy === "send" ? "Sending..." : "Send"}
         </Button>
-        <Button variant="ghost" onClick={onClose} disabled={busy}>
+        <Button variant="ghost" onClick={onClose} disabled={busy !== null}>
           Discard
         </Button>
       </div>
+
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
           <AlertDialogHeader>
