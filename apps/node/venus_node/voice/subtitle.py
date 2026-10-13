@@ -10,11 +10,17 @@ BOX = (18, 14, 28, 210)  # Dark, mostly solid: readable over any window.
 TEXT = (245, 240, 250, 255)
 
 
+# Windows' own UI font first, then fonts most Linux desktops have.
+FONTS = ("segoeui.ttf", "NotoSans-Regular.ttf", "DejaVuSans.ttf", "Cantarell-Regular.otf")
+
+
 def load_font() -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    try:
-        return ImageFont.truetype("segoeui.ttf", FONT_SIZE)  # Windows' own UI font.
-    except OSError:
-        return ImageFont.load_default(FONT_SIZE)
+    for name in FONTS:
+        try:
+            return ImageFont.truetype(name, FONT_SIZE)
+        except OSError:
+            continue
+    return ImageFont.load_default(FONT_SIZE)
 
 
 def wrap(

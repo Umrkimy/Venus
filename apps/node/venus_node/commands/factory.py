@@ -1,16 +1,14 @@
 from pathlib import Path
 
 from venus_node.config import load_settings
+from venus_node.commands import pc
 from venus_node.commands.executor import NodeExecutor
 from venus_node.commands.launcher import (
     create_application_command_executor,
-    start_windows_target,
     create_command_router,
     create_url_command_executor,
     create_project_command_executor,
-    open_in_vscode,
 )
-from venus_node.commands.start_apps import read_start_apps, run_powershell
 from venus_node.storage.repositories.command_records import CommandRecordRepository
 
 
@@ -20,16 +18,17 @@ def create_node_executor(
 ) -> NodeExecutor:
     settings = load_settings(env_file)
     command_records = CommandRecordRepository(database_path)
+    # pc.* looked up at call time, so Windows and Linux pick their own way.
     command_executor = create_command_router(
         open_app=create_application_command_executor(
             settings=settings,
-            start_target=start_windows_target,
-            list_apps=lambda: read_start_apps(run_powershell),
+            launch_app=lambda app_id: pc.launch_app(app_id),
+            list_apps=lambda: pc.list_apps(),
         ),
-        open_url=create_url_command_executor(start_target=start_windows_target),
+        open_url=create_url_command_executor(start_target=lambda url: pc.open_link(url)),
         open_project=create_project_command_executor(
             projects_root=settings.projects_root,
-            open_folder=open_in_vscode,
+            open_folder=lambda folder: pc.open_folder(folder),
         ),
     )
 

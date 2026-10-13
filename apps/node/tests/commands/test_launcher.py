@@ -22,6 +22,7 @@ def test_start_windows_target_passes_target_to_os_startfile(monkeypatch):
         launcher.os,
         "startfile",
         called_targets.append,
+        raising=False,  # Linux has no os.startfile.
     )
 
     launcher.start_windows_target("spotify:")
@@ -37,6 +38,7 @@ def test_start_windows_target_windows_failure_is_not_hidden(monkeypatch):
         launcher.os,
         "startfile",
         failing_startfile,
+        raising=False,
     )
 
     with pytest.raises(OSError, match="Windows failure"):
@@ -64,28 +66,28 @@ def test_application_executor_launches_listed_app():
     started_targets: list[str] = []
     executor = launcher.create_application_command_executor(
         settings=make_settings(),
-        start_target=started_targets.append,
+        launch_app=started_targets.append,
         list_apps=lambda: [NOTEPAD],
     )
 
     result = executor(make_command(NOTEPAD.app_id))
 
     assert result.status == "succeeded"
-    assert started_targets == [f"shell:AppsFolder\\{NOTEPAD.app_id}"]
+    assert started_targets == [NOTEPAD.app_id]
 
 
 def test_application_executor_denies_unlisted_app():
     started_targets: list[str] = []
     executor = launcher.create_application_command_executor(
         settings=make_settings(),
-        start_target=started_targets.append,
+        launch_app=started_targets.append,
         list_apps=lambda: [NOTEPAD],
     )
 
     result = executor(make_command("steam://rungameid/1245620"))
 
     assert result.status == "denied"
-    assert result.detail == "Not in this PC's Start menu"
+    assert result.detail == "Not in this PC's app list"
     assert started_targets == []
 
 

@@ -31,7 +31,7 @@ def open_in_vscode(folder: Path) -> None:
 
 def create_application_command_executor(
     settings: NodeSettings,
-    start_target: Callable[[str], None],
+    launch_app: Callable[[str], None],
     list_apps: Callable[[], list[StartApp]],
 ) -> Callable[[OpenApplicationCommand], CommandResult]:
     def execute(command: OpenApplicationCommand) -> CommandResult:
@@ -41,10 +41,10 @@ def create_application_command_executor(
             return CommandResult(
                 command_id=command.command_id,
                 status="denied",
-                detail="Not in this PC's Start menu",
+                detail="Not in this PC's app list",
             )
 
-        start_target(f"shell:AppsFolder\\{command.application_id}")
+        launch_app(command.application_id)
         return CommandResult(
             command_id=command.command_id,
             status="succeeded",

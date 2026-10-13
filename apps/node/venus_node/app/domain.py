@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import Callable
@@ -10,14 +11,20 @@ from dotenv import dotenv_values
 
 # Your own domain (README "Your own domain"): Caddy answers https://<VENUS_DOMAIN>
 # on the PC's Tailscale address and passes requests to the web app.
-CREATE_NO_WINDOW = 0x08000000  # Caddy is a console program; no window popping up.
+IS_WINDOWS = sys.platform == "win32"
+# Caddy is a console program; no window popping up. Linux has no such flag (0 = none).
+CREATE_NO_WINDOW = 0x08000000 if IS_WINDOWS else 0
+CADDY_NAME = "caddy.exe" if IS_WINDOWS else "caddy"
 RETRY_SECONDS = 10
 
 
 def caddy_command(root: Path) -> list[str] | None:
     """How to start Caddy, or None when no domain is set or Caddy isn't downloaded."""
     env_file = root / ".env"
-    caddy = root / "tools" / "caddy" / "caddy.exe"
+    # scripts/domain-access downloads it here; on Linux a system caddy works too.
+    caddy = root / "tools" / "caddy" / CADDY_NAME
+    if not caddy.exists() and not IS_WINDOWS and shutil.which("caddy"):
+        caddy = Path(shutil.which("caddy"))
     if not dotenv_values(env_file).get("VENUS_DOMAIN") or not caddy.exists():
         return None
     caddyfile = root / "scripts" / "domain" / "Caddyfile"

@@ -37,7 +37,7 @@ def load_settings(env_file: Path) -> NodeSettings:
     wake_phrases = [p.strip() for p in raw_phrases.split(",") if p.strip()] or list(WAKE_PHRASES)
     # Where the tray's "Open Venus" goes.
     web_url = (values.get("VENUS_NODE_WEB_URL") or "").strip() or WEB_URL
-    # Part of the mic's name, e.g. "Realtek"; empty = the Windows default mic.
+    # Part of the mic's name, e.g. "Realtek"; empty = the default mic.
     mic = (values.get("VENUS_NODE_MIC") or "").strip()
     raw_voice = (values.get("VENUS_NODE_VOICE") or "true").strip().lower()
 

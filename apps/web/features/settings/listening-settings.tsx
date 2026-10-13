@@ -20,8 +20,8 @@ import { LABEL_CLASS, SELECT_TRIGGER_CLASS } from "./field-styles";
 
 // Saved this long after you stop dragging, not on every step.
 const SAVE_AFTER_MS = 400;
-// A Select item can't have "" as its value, so the Windows default gets a name.
-const WINDOWS_DEFAULT = "windows-default";
+// A Select item can't have "" as its value, so the default mic gets a name.
+const DEFAULT_MIC = "default-mic";
 
 async function saveListening(
   body: Partial<ListeningResponse>,
@@ -137,7 +137,7 @@ function MicPicker({ saved }: { saved: string }) {
 
   async function pick(value: string) {
     const result = await saveListening({
-      mic: value === WINDOWS_DEFAULT ? "" : value,
+      mic: value === DEFAULT_MIC ? "" : value,
     });
     if (typeof result === "string") {
       setError(result);
@@ -152,12 +152,12 @@ function MicPicker({ saved }: { saved: string }) {
       <label htmlFor={micId} className={LABEL_CLASS}>
         PC mic for &quot;Hey Venus&quot;
       </label>
-      <Select value={saved || WINDOWS_DEFAULT} onValueChange={pick}>
+      <Select value={saved || DEFAULT_MIC} onValueChange={pick}>
         <SelectTrigger id={micId} className={SELECT_TRIGGER_CLASS}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={WINDOWS_DEFAULT}>Windows default</SelectItem>
+          <SelectItem value={DEFAULT_MIC}>Default mic</SelectItem>
           {options.map((name) => (
             <SelectItem key={name} value={name}>
               {name}

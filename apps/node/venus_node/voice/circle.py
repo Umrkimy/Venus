@@ -5,14 +5,10 @@ from ctypes import wintypes
 
 import numpy as np
 
+from venus_node.voice.corner import MARGIN, TEXT_WIDTH, TICK_MS, WIDTH
 from venus_node.voice.orb import SIZE, Orb
 from venus_node.voice.status import IDLE, LISTENING, SPEAKING, Status
 from venus_node.voice.subtitle import subtitle_pixels
-
-TICK_MS = 33  # About 30 frames a second.
-MARGIN = 16  # Gap to the screen corner.
-WIDTH = 440  # Orb on the right, Luna's subtitle to its left.
-TEXT_WIDTH = WIDTH - SIZE - 8
 
 GWL_EXSTYLE = -20
 WS_EX_LAYERED = 0x80000  # Per-pixel see-through.

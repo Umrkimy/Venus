@@ -53,7 +53,7 @@ def mic_frames(stream) -> Iterator[np.ndarray]:
 
 def problem(exc: OSError) -> str:
     if isinstance(exc, HTTPError) and exc.code == 409:
-        return "Venus isn't connected to this PC. Run start-venus.cmd first."
+        return "Venus isn't connected to this PC. Start Venus first (start-venus)."
     if isinstance(exc, HTTPError) and exc.code == 422:
         # Core's own words, e.g. "I couldn't hear anything. Check your mic..."
         try:
@@ -176,7 +176,7 @@ def find_mic(name: str, devices: list[dict]) -> int | None:
     for index, device in enumerate(devices):
         if device["max_input_channels"] > 0 and name.lower() in device["name"].lower():
             return index
-    print(f'No mic named "{name}"; using the Windows default mic.')
+    print(f'No mic named "{name}"; using the default mic.')
     return None
 
 
@@ -275,7 +275,7 @@ def hear(
             return
         if status.wanted_mic(settings.mic) != status.mic_in_use:
             # Another mic picked in Settings: listen_loop opens it.
-            print(f"Switching mic to {status.wanted_mic(settings.mic) or 'the Windows default'}.")
+            print(f"Switching mic to {status.wanted_mic(settings.mic) or 'the default mic'}.")
             status.set(IDLE)
             return
         if web_in_front(status):
@@ -405,8 +405,9 @@ def start_listening(
 
 
 def run_listen(env_file: Path) -> None:
-    from venus_node.voice.circle import Circle
+    from venus_node.voice.window import orb_window
 
+    Circle = orb_window()
     settings = load_settings(env_file)
     listeners = wake_listeners(env_file, settings)
     if listeners is None:

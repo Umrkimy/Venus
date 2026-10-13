@@ -9,7 +9,7 @@ def make_root(tmp_path: Path, env: str, caddy: bool = True) -> Path:
     (tmp_path / ".env").write_text(env, encoding="utf-8")
     if caddy:
         (tmp_path / "tools" / "caddy").mkdir(parents=True)
-        (tmp_path / "tools" / "caddy" / "caddy.exe").write_bytes(b"")
+        (tmp_path / "tools" / "caddy" / domain.CADDY_NAME).write_bytes(b"")
     return tmp_path
 
 
@@ -19,7 +19,7 @@ def test_caddy_command_runs_the_caddyfile_with_the_root_env_file(tmp_path):
     command = domain.caddy_command(root)
 
     assert command == [
-        str(root / "tools" / "caddy" / "caddy.exe"),
+        str(root / "tools" / "caddy" / domain.CADDY_NAME),
         "run",
         "--config",
         str(root / "scripts" / "domain" / "Caddyfile"),

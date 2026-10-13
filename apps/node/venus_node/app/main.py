@@ -1,11 +1,12 @@
-import ctypes
+import shutil
+import subprocess
 import sys
 import threading
 import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-from venus_node.app.autostart import approve_missing, launch_command
+from venus_node.app.autostart import approve_missing, background_python, launch_command
 from venus_node.app.domain import start_domain
 from venus_node.app.single import (
     CONNECTION,
@@ -16,6 +17,7 @@ from venus_node.app.single import (
     wait_for_quit,
 )
 from venus_node.app.tray import Tray
+from venus_node.commands.pc import IS_WINDOWS
 from venus_node.cli.dev_connect import run_connect
 from venus_node.cli.listen import start_listening, wake_listeners
 from venus_node.config import load_settings
@@ -37,8 +39,17 @@ def log_to_file(path: Path) -> None:
 
 
 def show_message(text: str) -> None:
-    # pythonw has no console to print to, so a small Windows popup instead.
-    ctypes.WinDLL("user32").MessageBoxW(None, text, "Venus", MB_ICONINFORMATION)
+    # Started hidden there's no console to print to, so a small popup instead.
+    if IS_WINDOWS:
+        import ctypes
+
+        ctypes.WinDLL("user32").MessageBoxW(None, text, "Venus", MB_ICONINFORMATION)
+        return
+    notify_send = shutil.which("notify-send")
+    if notify_send:
+        subprocess.run([notify_send, "Venus", text], check=False, timeout=10)
+    else:
+        print(text, file=sys.stderr)
 
 
 def run_app(node_directory: Path) -> None:
@@ -60,10 +71,7 @@ def run_app(node_directory: Path) -> None:
     tray = Tray(
         muted,
         open_venus=lambda: webbrowser.open(settings.web_url),
-        autostart_command=launch_command(
-            Path(sys.executable).with_name("pythonw.exe"),
-            node_directory / "venus.pyw",
-        ),
+        autostart_command=launch_command(background_python(), node_directory / "venus.pyw"),
         quit=quit,
         stop_talking=status.request_stop,
     )
@@ -90,8 +98,9 @@ def run_app(node_directory: Path) -> None:
     # setup runs once the icon is up: a toast, or a new icon is easy to miss under "^".
     tray.icon.run_detached(setup=announce)
     try:
-        # Imported here: the orb window needs a real desktop.
-        from venus_node.voice.circle import Circle
+        from venus_node.voice.window import orb_window
+
+        Circle = orb_window()
 
         # The orb window owns the main thread until Quit (or a mic error).
         Circle(status).run()
@@ -104,11 +113,15 @@ def run_app(node_directory: Path) -> None:
 def announce(icon) -> None:
     icon.visible = True
     print("Tray icon shown.")
-    icon.notify("Venus is running. Right-click the dot by the clock for the menu.", "Venus")
+    try:
+        icon.notify("Venus is running. Right-click the dot by the clock for the menu.", "Venus")
+    except NotImplementedError:
+        pass  # Some Linux tray backends can't show toasts; the icon is enough.
 
 
 def main() -> None:
-    hidden = sys.stdout is None  # Started with pythonw.
+    # pythonw (Windows) has no stdout; Linux autostart and start-venus.sh pass --hidden.
+    hidden = sys.stdout is None or "--hidden" in sys.argv
     # Claim first: a second start must not wipe the running app's log.
     if not claim(CONNECTION) or not claim(LISTENER):
         message = already_running_message("Venus") + " Look for the dot by the clock."

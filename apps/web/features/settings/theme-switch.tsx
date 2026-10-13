@@ -50,7 +50,7 @@ export default function ThemeSwitch() {
         })}
       </div>
       <p className="mt-2 text-sm text-muted-foreground">
-        System follows your Windows setting. Only on this device.
+        System follows your device setting. Only on this device.
       </p>
     </div>
   );
