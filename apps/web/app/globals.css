@@ -122,3 +122,50 @@
     @apply font-sans;
   }
 }
+
+/* FullCalendar (Calendar page) in Venus's colours, light and dark. */
+.venus-calendar .fc {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--muted);
+  --fc-list-event-hover-bg-color: var(--muted);
+  --fc-today-bg-color: color-mix(in oklab, var(--primary) 10%, transparent);
+  --fc-now-indicator-color: var(--primary);
+  --fc-highlight-color: color-mix(in oklab, var(--primary) 18%, transparent);
+  --fc-button-bg-color: transparent;
+  --fc-button-border-color: var(--border);
+  --fc-button-text-color: var(--foreground);
+  --fc-button-hover-bg-color: var(--muted);
+  --fc-button-hover-border-color: var(--border);
+  --fc-button-active-bg-color: var(--accent);
+  --fc-button-active-border-color: var(--border);
+  --fc-event-bg-color: var(--primary);
+  --fc-event-border-color: var(--primary);
+  --fc-event-text-color: var(--primary-foreground);
+  font-size: 0.875rem;
+}
+.venus-calendar .fc .fc-toolbar-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.venus-calendar .fc .fc-button {
+  font-size: 0.8125rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: calc(var(--radius) - 2px);
+  box-shadow: none;
+}
+.venus-calendar .fc .fc-col-header-cell-cushion,
+.venus-calendar .fc .fc-daygrid-day-number {
+  color: var(--foreground);
+}
+.venus-calendar .fc .fc-list-day-cushion {
+  background: var(--muted);
+}
+.venus-calendar .venus-event-venus { --fc-event-bg-color: var(--primary); --fc-event-border-color: var(--primary); }
+.venus-calendar .venus-event-google { --fc-event-bg-color: #2563eb; --fc-event-border-color: #2563eb; --fc-event-text-color: #fff; }
+.venus-calendar .venus-event-outlook { --fc-event-bg-color: #0e7490; --fc-event-border-color: #0e7490; --fc-event-text-color: #fff; }
+.venus-calendar .venus-event-ics { --fc-event-bg-color: #6d28d9; --fc-event-border-color: #6d28d9; --fc-event-text-color: #fff; }
+.venus-calendar .fc-daygrid-dot-event .fc-daygrid-event-dot { border-color: var(--fc-event-bg-color); }
+@media (max-width: 640px) {
+  .venus-calendar .fc .fc-toolbar { flex-wrap: wrap; gap: 0.5rem; }
+}

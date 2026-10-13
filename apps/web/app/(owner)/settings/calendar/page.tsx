@@ -8,7 +8,7 @@ export default function CalendarSettingsPage() {
   return (
     <SettingsSection
       title="Calendar"
-      description="Connect Google, Outlook or a timetable file so Venus knows your classes and meetings. Read-only."
+      description="Connect Google, Outlook or a timetable file so Venus knows your classes and meetings. Add and change events on the Calendar page."
     >
       {/* It reads ?connected= or ?error= after signing in, which needs Suspense. */}
       <Suspense>

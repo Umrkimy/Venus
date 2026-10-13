@@ -46,6 +46,7 @@ const state = {
   shortcuts: new Map<string, Record<string, unknown>>(),
   devices: new Map<string, Record<string, unknown>>(),
   home: new Map<string, Record<string, unknown>>(),
+  events: new Map<string, Record<string, unknown>>(),
   sessions: new Map<string, Record<string, unknown>>(),
   commands: new Map<string, Command>(),
   settings: {
@@ -140,7 +141,7 @@ function seed() {
 
 // Kept per tab, so a full page load (a static host can't always do the
 // quick in-app switch) doesn't wipe your chats.
-const STORES = ["conversations", "projects", "memories", "personalities", "shortcuts", "devices", "home", "sessions", "commands"] as const;
+const STORES = ["conversations", "projects", "memories", "personalities", "shortcuts", "devices", "home", "events", "sessions", "commands"] as const;
 
 function save() {
   try {
@@ -458,7 +459,25 @@ async function route(method: string, path: string, query: URLSearchParams, body:
       }
       if (id === "upcoming") return json([]);
       if (id === "ics") return method === "GET" && !parts[2] ? json([]) : json({ detail: "Calendars can't be added in the demo" }, 403);
-      if (id === "events") return json({ events: [], errors: [] });
+      if (id === "writable") return json([{ id: "venus", label: "Venus" }]);
+      if (id === "events") {
+        // The Calendar page works for real, in memory: kept for this tab only.
+        const eventId = parts.slice(2).join("/");
+        if (method === "GET") return json({ events: [...state.events.values()], errors: [] });
+        if (method === "POST") {
+          const event = { ...body, id: `venus:${newId("event")}`, source: "Venus", editable: true, calendar: undefined };
+          state.events.set(String(event.id), event);
+          return json({ id: event.id }, 201);
+        }
+        const found = state.events.get(decodeURIComponent(eventId));
+        if (!found) return missing("That event isn't there anymore");
+        if (method === "DELETE") {
+          state.events.delete(String(found.id));
+          return empty();
+        }
+        Object.assign(found, body);
+        return json({ id: found.id });
+      }
       return json({ detail: "Calendars can't connect in the demo" }, 403);
 
     case "health":
