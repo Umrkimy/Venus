@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import type { Mood } from "./scene-mood";
+import { clipStandingStart } from "./standing-start";
 
 // When an uploaded move plays: idle loops, hello once when she appears, the rest with her mood.
 export type MoveUse = "idle" | "hello" | Exclude<Mood, "idle">;
@@ -37,6 +38,8 @@ export class UploadedMoves {
   // Until the files are in; then false if there is a hello move to play.
   private saidHello = true;
   private fading: THREE.AnimationAction[] = [];
+  // Where each move starts: past a crouch at its beginning (see standing-start.ts).
+  private starts = new Map<THREE.AnimationClip, number>();
 
   constructor(private vrm: VRM) {
     this.mixer = new THREE.AnimationMixer(vrm.scene);
@@ -53,16 +56,17 @@ export class UploadedMoves {
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
     const clips = new Map<MoveUse, THREE.AnimationClip[]>();
+    const starts = new Map<THREE.AnimationClip, number>();
+    const hips = this.vrm.humanoid.getNormalizedBoneNode("hips")?.name ?? "";
     for (const move of moves) {
       try {
         // Core says the file never changes under its id, so the browser keeps it.
         const gltf = await loader.loadAsync(`/api/character/animations/${move.id}`);
         const animation = (gltf.userData.vrmAnimations as VRMAnimation[] | undefined)?.[0];
         if (!animation) continue;
-        clips.set(move.use, [
-          ...(clips.get(move.use) ?? []),
-          createVRMAnimationClip(animation, this.vrm),
-        ]);
+        const clip = createVRMAnimationClip(animation, this.vrm);
+        clips.set(move.use, [...(clips.get(move.use) ?? []), clip]);
+        starts.set(clip, clipStandingStart(clip, hips));
       } catch (problem) {
         console.warn(`Venus animation ${move.name} didn't load:`, problem);
       }
@@ -73,6 +77,7 @@ export class UploadedMoves {
     this.use = null;
     this.fading = [];
     this.clips = clips;
+    this.starts = starts;
     this.saidHello = !this.has("hello");
   }
 
@@ -86,7 +91,8 @@ export class UploadedMoves {
     this.action = null;
     const clips = use ? this.clips.get(use) : undefined;
     if (!clips?.length) return;
-    const action = this.mixer.clipAction(pick(clips));
+    const clip = pick(clips);
+    const action = this.mixer.clipAction(clip);
     // The same idle picked again: start it over instead of fading it into itself.
     this.fading = this.fading.filter((other) => other !== action);
     // Each idle plays once, then another is picked, so she doesn't loop one move forever.
@@ -94,6 +100,7 @@ export class UploadedMoves {
     action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     action.clampWhenFinished = true;
     action.reset().fadeIn(FADE).play();
+    action.time = this.starts.get(clip) ?? 0;
     this.action = action;
   }
 
