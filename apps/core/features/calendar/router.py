@@ -11,7 +11,7 @@ from config import CoreSettings, get_settings
 from features.auth.dependencies import require_owner, require_owner_or_node
 from features.calendar.dependencies import get_calendar_repository, get_calendar_service, get_sign_ins
 from features.calendar.ics import MAX_BYTES, check_ics, fetch_ics, ics_events
-from features.calendar.providers import PROVIDERS, CalendarError, Event, EventDraft, pkce_pair
+from features.calendar.providers import PROVIDERS, CalendarError, Event, EventDraft, pkce_pair, sign_in_problem
 from features.calendar.repository import CalendarRepository, DuplicateNameError
 from features.calendar.service import CalendarService, SignIns, due_soon
 from features.email.dependencies import get_email_repository
@@ -128,6 +128,7 @@ def list_calendars(
             "configured": name in saved,
             "connected": bool(name in saved and saved[name].refresh_token_encrypted),
             "email": saved[name].account_email if name in saved else None,
+            "mail": bool(name in saved and saved[name].mail),
             "redirect_uri": redirect_uri(request, name),
         }
         for name, provider in PROVIDERS.items()
@@ -308,7 +309,9 @@ async def callback(
         # Not a sign-in this Venus started (or it took over 10 minutes).
         return back_to_settings(error="That sign-in expired or wasn't started here. Try Connect again.")
     if error or not code:
-        return back_to_settings(error=f"Sign-in was cancelled ({error or 'no code'}).")
+        label = PROVIDERS[provider].label
+        back = back_to_email if pending.mail else back_to_settings
+        return back(error=sign_in_problem(label, error) if error else f"{label} didn't send a sign-in code. Try again.")
     account = repository.get(provider)
     if account is None:
         return back_to_settings(error="Save the client id and secret first")

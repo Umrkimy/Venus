@@ -255,8 +255,36 @@ def test_summaries_of_one_message_and_the_inbox(luna: RecordingLuna):
     one = client.post(f"/email/accounts/{account}/messages/7/summary", headers=OWNER).json()
     inbox = client.post(f"/email/accounts/{account}/summary", headers=OWNER).json()
 
-    assert one == inbox == {"summary": luna.text}
-    assert "(unread) Shop: Sale" in luna.calls[1][0]
+    assert one == {"summary": luna.text}
+    # Not JSON: Luna's words are shown as they are.
+    assert inbox == {"groups": [], "summary": luna.text}
+    assert "[8] (unread) Shop: Sale" in luna.calls[1][0]
+
+
+def test_inbox_overview_groups_point_at_real_messages(luna: RecordingLuna):
+    account = add()
+    luna.text = (
+        '```json\n{"groups":[{"kind":"promo","items":[{"id":"8","note":"sale"}]},'
+        '{"kind":"reply","items":[{"id":"7","note":"confirm by Friday"},{"id":"999","note":"made up"}]},'
+        '{"kind":"spam","items":[{"id":"8"}]}]}\n```'
+    )
+
+    body = client.post(f"/email/accounts/{account}/summary", headers=OWNER).json()
+
+    assert body == {"groups": [
+        {"kind": "reply", "items": [{"uid": "7", "sender": "Dr. Aina", "subject": "Assignment 2 deadline", "unread": False, "note": "confirm by Friday"}]},
+        {"kind": "promo", "items": [{"uid": "8", "sender": "Shop", "subject": "Sale", "unread": True, "note": "sale"}]},
+    ]}
+
+
+def test_html_mail_comes_with_its_html_for_the_page():
+    account = add()
+
+    newsletter = client.get(f"/email/accounts/{account}/messages/8", headers=OWNER).json()
+    lecturer = client.get(f"/email/accounts/{account}/messages/7", headers=OWNER).json()
+
+    assert "<b>sale</b>" in newsletter["html"]
+    assert lecturer["html"] == ""
 
 
 def test_no_ai_model_says_where_to_add_one(luna: RecordingLuna):

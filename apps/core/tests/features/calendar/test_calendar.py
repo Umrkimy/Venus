@@ -133,7 +133,7 @@ def test_one_broken_calendar_doesnt_hide_the_other(repository, fake):
     events, errors = asyncio.run(service.events(NOW))
 
     assert [e.title for e in events] == ["Lecturer meeting"]
-    assert errors == ["Google sign-in failed: invalid_grant"]
+    assert errors == ["The Google sign-in expired or was removed. Connect again."]
 
 
 def test_events_are_cached_for_a_few_minutes(repository, fake):
@@ -319,3 +319,18 @@ def test_user_messages_since_counts_every_chat():
     assert conversations.user_messages_since(datetime.now(timezone.utc) - timedelta(minutes=1)) == 2
     assert conversations.user_messages_since(datetime.now(timezone.utc) + timedelta(minutes=1)) == 0
     engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("code", "says"),
+    [
+        ("access_denied", "publish it (or add yourself as a test user)"),
+        ("invalid_client", "client ID or secret"),
+        ("admin_consent_required", "admin has to approve"),
+        ("something_new", "(something_new)"),
+    ],
+)
+def test_sign_in_errors_say_what_to_do(code, says):
+    from features.calendar.providers import sign_in_problem
+
+    assert says in sign_in_problem("Google", code)
