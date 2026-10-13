@@ -114,3 +114,25 @@ def test_environment_variables_work_without_env_file(
 
     assert settings.dev_node_token == "env-node-token"
     assert settings.dev_owner_token == "env-owner-token"
+
+
+@pytest.mark.parametrize(
+    ("lines", "name"),
+    [
+        (
+            "VENUS_CORE_DEV_NODE_TOKEN=your-shared-development-node-token\n",
+            "VENUS_CORE_DEV_NODE_TOKEN",
+        ),
+        (
+            "VENUS_CORE_DEV_NODE_TOKEN=real-node-token\n"
+            "VENUS_CORE_DEV_OWNER_TOKEN=Your-Owner-Token\n",
+            "VENUS_CORE_DEV_OWNER_TOKEN",
+        ),
+    ],
+)
+def test_load_settings_rejects_example_tokens(tmp_path: Path, lines: str, name: str):
+    env_file = tmp_path / ".env"
+    env_file.write_text(lines + "VENUS_CORE_DATABASE_URL=sqlite+pysqlite:///:memory:\n")
+
+    with pytest.raises(ValueError, match=f"{name} still has the example value"):
+        load_settings(env_file)

@@ -1535,6 +1535,19 @@ def test_chat_rejects_unknown_conversation(conversations: ConversationRepository
     assert conversations.list_all() == []
 
 
+def test_chat_rejects_a_giant_message(conversations: ConversationRepository):
+    with connected_pc_umar():
+        response = client.post(
+            "/nodes/PC-Umar/chat",
+            json={"message": "x" * 4001},
+            headers={"Authorization": f"Bearer {TEST_OWNER_TOKEN}"},
+        )
+
+    # Refused before the paid model sees it, and nothing is saved.
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert conversations.list_all() == []
+
+
 def test_chat_starts_new_conversation_inside_project(
     conversations: ConversationRepository,
 ):
