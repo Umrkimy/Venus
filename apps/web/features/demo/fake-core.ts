@@ -436,6 +436,25 @@ async function route(method: string, path: string, query: URLSearchParams, body:
         local_key: undefined,
       }));
 
+    case "calendar":
+      // The demo has no calendar: show it as not set up.
+      if (!id) {
+        return json(
+          ["google", "microsoft"].map((provider) => ({
+            provider,
+            label: provider === "google" ? "Google" : "Outlook",
+            client_id: null,
+            configured: false,
+            connected: false,
+            email: null,
+            redirect_uri: `${window.location.origin}/api/calendar/${provider}/callback`,
+          })),
+        );
+      }
+      if (id === "upcoming") return json([]);
+      if (id === "events") return json({ events: [], errors: [] });
+      return json({ detail: "Calendars can't connect in the demo" }, 403);
+
     case "health":
       return json({ status: "ok" });
 
