@@ -11,7 +11,7 @@ from config import CoreSettings, get_settings
 from features.auth.dependencies import require_owner, require_owner_or_node
 from features.calendar.dependencies import get_calendar_repository, get_calendar_service, get_sign_ins
 from features.calendar.ics import MAX_BYTES, check_ics, fetch_ics, ics_events
-from features.calendar.providers import PROVIDERS, CalendarError, Event, pkce_pair
+from features.calendar.providers import PROVIDERS, CalendarError, Event, EventDraft, pkce_pair
 from features.calendar.repository import CalendarRepository, DuplicateNameError
 from features.calendar.service import CalendarService, SignIns, due_soon
 from features.settings.router import encrypt_key
@@ -62,7 +62,46 @@ def event_json(event: Event) -> dict:
         "all_day": event.all_day,
         "source": event.source,
         "location": event.location,
+        "notes": event.notes,
+        "editable": event.editable,
     }
+
+
+# A year and a bit: the widest view the Calendar page asks for, with room.
+MAX_RANGE = timedelta(days=400)
+
+
+class EventRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    start: datetime
+    end: datetime
+    all_day: bool = False
+    location: str = Field(default="", max_length=200)
+    notes: str = Field(default="", max_length=5000)
+
+    @model_validator(mode="after")
+    def sensible_times(self) -> "EventRequest":
+        if self.start.tzinfo is None or self.end.tzinfo is None:
+            raise ValueError("Times need a time zone")
+        if self.end < self.start:
+            raise ValueError("The event ends before it starts")
+        if self.end - self.start > MAX_RANGE:
+            raise ValueError("An event can't be longer than a year")
+        return self
+
+    def draft(self) -> EventDraft:
+        return EventDraft(self.title, self.start, self.end, self.all_day, self.location.strip(), self.notes)
+
+
+class NewEventRequest(EventRequest):
+    # venus, google or microsoft
+    calendar: str = Field(default="venus", pattern=r"^(venus|google|microsoft)$")
+
+
+def calendar_problem(exc: CalendarError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 def back_to_settings(**query: str) -> RedirectResponse:
@@ -91,9 +130,52 @@ def list_calendars(
 
 # Fixed paths first, so "events" and "upcoming" are never read as a provider name.
 @router.get("/events", dependencies=[Depends(require_owner)])
-async def events(service: Annotated[CalendarService, Depends(get_calendar_service)]):
-    found, errors = await service.events()
+async def events(
+    service: Annotated[CalendarService, Depends(get_calendar_service)],
+    start: datetime | None = None,
+    end: datetime | None = None,
+):
+    """The coming week (cached), or every event from start to end (the Calendar page)."""
+    if start is None or end is None:
+        found, errors = await service.events()
+    else:
+        if start.tzinfo is None or end.tzinfo is None or not start < end <= start + MAX_RANGE:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Pick a start and end with a time zone, at most 400 days apart")
+        found, errors = await service.between(start, end)
     return {"events": [event_json(event) for event in found], "errors": errors}
+
+
+@router.get("/writable", dependencies=[Depends(require_owner)])
+def writable(service: Annotated[CalendarService, Depends(get_calendar_service)]):
+    """Where a new event can go: Venus, then connected Google/Outlook."""
+    return service.writable()
+
+
+@router.post("/events", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_owner)])
+async def add_event(body: NewEventRequest, service: Annotated[CalendarService, Depends(get_calendar_service)]):
+    try:
+        return {"id": await service.create(body.calendar, body.draft())}
+    except CalendarError as exc:
+        raise calendar_problem(exc) from exc
+
+
+@router.patch("/events/{event_id:path}", dependencies=[Depends(require_owner)])
+async def change_event(
+    event_id: str, body: EventRequest, service: Annotated[CalendarService, Depends(get_calendar_service)],
+):
+    try:
+        await service.update(event_id, body.draft())
+    except CalendarError as exc:
+        raise calendar_problem(exc) from exc
+    return {"id": event_id}
+
+
+@router.delete("/events/{event_id:path}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_owner)])
+async def delete_event(event_id: str, service: Annotated[CalendarService, Depends(get_calendar_service)]):
+    try:
+        await service.delete(event_id)
+    except CalendarError as exc:
+        raise calendar_problem(exc) from exc
 
 
 @router.get("/upcoming", dependencies=[Depends(require_owner_or_node)])
