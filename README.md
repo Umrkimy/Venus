@@ -56,7 +56,7 @@ Type these in the chat, or say "Hey Venus" first and then say them.
 | `open project venus` | Opens that code project in VS Code |
 | `remember I have class at 9 on mondays` | Saves it and uses it later in chats |
 | `turn off the bedroom light` / `set the aircon to 24` | Lights, plugs, TV, air-con and scenes (Home Assistant or Tuya) |
-| `what's on today?` | Reads your Google and Outlook calendars, or a timetable (.ics) file or link |
+| `what's on today?` / `add gym tomorrow at 6` | Her own calendar page, plus Google, Outlook and timetable (.ics) calendars |
 | `what should I cook tonight?` | Normal chat with the AI |
 | `stop Venus` / `thank you Venus` | Cuts her off / ends the voice chat |
 
