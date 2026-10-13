@@ -1,10 +1,17 @@
 from datetime import datetime
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from features.calendar.models.calendar_account import CalendarAccount
+from features.calendar.models.ics_calendar import IcsCalendar
+
+
+class DuplicateNameError(Exception):
+    pass
 
 
 class CalendarRepository:
@@ -61,5 +68,30 @@ class CalendarRepository:
             if account is None:
                 return False
             session.delete(account)
+            session.commit()
+            return True
+
+    def list_ics(self) -> list[IcsCalendar]:
+        with Session(self.engine) as session:
+            return list(session.scalars(select(IcsCalendar).order_by(IcsCalendar.name)))
+
+    def add_ics(
+        self, name: str, now: datetime, url_encrypted: str | None = None, content: str | None = None,
+    ) -> IcsCalendar:
+        calendar = IcsCalendar(name.strip(), now, url_encrypted=url_encrypted, content=content)
+        with Session(self.engine, expire_on_commit=False) as session:
+            session.add(calendar)
+            try:
+                session.commit()
+            except IntegrityError as exc:
+                raise DuplicateNameError(calendar.name) from exc
+        return calendar
+
+    def delete_ics(self, calendar_id: UUID) -> bool:
+        with Session(self.engine) as session:
+            calendar = session.get(IcsCalendar, calendar_id)
+            if calendar is None:
+                return False
+            session.delete(calendar)
             session.commit()
             return True

@@ -45,4 +45,25 @@ The client secrets and sign-ins are stored encrypted. Remove in Settings,
 Calendar forgets them; you can also remove Venus's access in your Google
 or Microsoft account settings.
 
+## Timetables and other calendars (.ics)
+
+Many uni portals and apps can export a calendar as an **.ics** file (the
+standard calendar format), even when they don't sync to Outlook or Google.
+Venus reads those too, next to Google and Outlook.
+
+In Settings, Calendar, under "Timetables and other calendars", give it a
+name (like "Uni timetable") and either:
+
+- **a link**, if the portal has a "subscribe" or "calendar feed" link
+  (`https://...` or `webcal://...`). Venus downloads it again every few
+  minutes while you use it, so timetable changes show up by themselves. The
+  link is stored encrypted, because these links often contain a private key.
+- **the .ics file**, if the portal only lets you download one. Venus keeps a
+  copy. When the timetable changes, remove it and upload the new file.
+
+It tells you how many events it found in the next 4 weeks. Repeating
+classes ("every Monday 9:00") are understood. Times without a time zone in
+the file are taken as your time zone from Settings, General. You can add as
+many as you like (timetable, exams, a club).
+
 [Back to the README](../README.md)

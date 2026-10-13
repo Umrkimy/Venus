@@ -27,5 +27,5 @@ Rough order, not promises. Ideas welcome in the issues.
 - Backups and a restore script
 - Linux support
 - Home control: Tuya lights and plugs, TV volume, Wake-on-LAN, PC volume and lock
-- Google and Outlook calendars
+- Google and Outlook calendars, plus .ics links and files (uni timetables)
 - Home Assistant: lights, switches, TV power, air-con, scenes

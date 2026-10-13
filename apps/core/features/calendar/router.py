@@ -1,16 +1,18 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
+from uuid import UUID
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from config import CoreSettings, get_settings
 from features.auth.dependencies import require_owner, require_owner_or_node
 from features.calendar.dependencies import get_calendar_repository, get_calendar_service, get_sign_ins
+from features.calendar.ics import MAX_BYTES, check_ics, fetch_ics, ics_events
 from features.calendar.providers import PROVIDERS, CalendarError, Event, pkce_pair
-from features.calendar.repository import CalendarRepository
+from features.calendar.repository import CalendarRepository, DuplicateNameError
 from features.calendar.service import CalendarService, SignIns, due_soon
 from features.settings.router import encrypt_key
 from features.settings.secrets import decrypt_text, encrypt_text
@@ -27,6 +29,21 @@ class CalendarClientRequest(BaseModel):
     client_id: str = Field(min_length=1, max_length=200)
     # Empty keeps the saved one.
     client_secret: str | None = Field(default=None, max_length=500)
+
+
+class IcsCalendarRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+    # A link Venus re-reads, or the text of an uploaded .ics file.
+    url: str | None = Field(default=None, max_length=2000)
+    content: str | None = Field(default=None, max_length=MAX_BYTES)
+
+    @model_validator(mode="after")
+    def link_or_file(self) -> "IcsCalendarRequest":
+        if bool(self.url) == bool(self.content):
+            raise ValueError("Give a link or a file, not both")
+        return self
 
 
 def redirect_uri(request: Request, provider: str) -> str:
@@ -87,6 +104,62 @@ async def upcoming(
     """For the PC's reminder pop-ups: timed events starting in the next few minutes."""
     found, _ = await service.events()
     return [event_json(event) for event in due_soon(found, datetime.now(timezone.utc), minutes)]
+
+
+@router.get("/ics", dependencies=[Depends(require_owner)])
+def list_ics(repository: Annotated[CalendarRepository, Depends(get_calendar_repository)]):
+    # The link stays in Core (it can hold a private key): only whether it's a link or a file.
+    return [
+        {"id": str(calendar.id), "name": calendar.name, "kind": "link" if calendar.url_encrypted else "file"}
+        for calendar in repository.list_ics()
+    ]
+
+
+@router.post("/ics", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_owner)])
+async def add_ics(
+    body: IcsCalendarRequest,
+    repository: Annotated[CalendarRepository, Depends(get_calendar_repository)],
+    settings: Annotated[CoreSettings, Depends(get_settings)],
+    service: Annotated[CalendarService, Depends(get_calendar_service)],
+):
+    """Check it reads, save it, and say how many events the next 4 weeks have."""
+    try:
+        text = await fetch_ics(body.url, service.transport) if body.url else check_ics(body.content)
+        now = datetime.now(timezone.utc)
+        coming = ics_events(text, now, now + timedelta(days=28), body.name, service.zone)
+    except CalendarError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="That calendar file couldn't be read.",
+        ) from exc
+    try:
+        calendar = repository.add_ics(
+            body.name,
+            datetime.now(timezone.utc),
+            url_encrypted=encrypt_key(body.url.strip(), settings) if body.url else None,
+            content=None if body.url else text,
+        )
+    except DuplicateNameError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You already have a calendar with that name") from exc
+    service.forget()
+    return {
+        "id": str(calendar.id),
+        "name": calendar.name,
+        "kind": "link" if body.url else "file",
+        "events_next_4_weeks": len(coming),
+    }
+
+
+@router.delete("/ics/{calendar_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_owner)])
+def delete_ics(
+    calendar_id: UUID,
+    repository: Annotated[CalendarRepository, Depends(get_calendar_repository)],
+    service: Annotated[CalendarService, Depends(get_calendar_service)],
+):
+    if not repository.delete_ics(calendar_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such calendar")
+    service.forget()
 
 
 @router.put("/{provider}", dependencies=[Depends(require_owner)])

@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import httpx2
 
+from features.calendar.ics import fetch_ics, ics_events
 from features.calendar.providers import PROVIDERS, STATE_LIFETIME, CalendarError, Event, Provider
 from features.calendar.repository import CalendarRepository
 from features.settings.secrets import decrypt_text, encrypt_text
@@ -66,17 +67,22 @@ class CalendarService:
         secret_key: str,
         transport: httpx2.AsyncBaseTransport | None = None,
         cache: Cached | None = None,
+        zone: ZoneInfo | None = None,
     ) -> None:
         self.repository = repository
         self.secret_key = secret_key
         self.transport = transport
         self.cache = cache if cache is not None else Cached()
+        # .ics times without a zone (common in timetables) are the owner's time.
+        self.zone = zone or ZoneInfo("UTC")
 
     def provider(self, name: str) -> Provider:
         return PROVIDERS[name](self.transport)
 
     def connected(self) -> bool:
-        return any(account.refresh_token_encrypted for account in self.repository.list_all())
+        return bool(self.repository.list_ics()) or any(
+            account.refresh_token_encrypted for account in self.repository.list_all()
+        )
 
     async def events(self, now: datetime | None = None) -> tuple[list[Event], list[str]]:
         """The next week's events from every connected calendar, sorted, plus what failed."""
@@ -104,6 +110,16 @@ class CalendarService:
             except (CalendarError, httpx2.HTTPError, KeyError, ValueError) as exc:
                 logger.warning("Calendar %s failed: %s", account.provider, exc)
                 errors.append(str(exc) if isinstance(exc, CalendarError) else f"{provider.label} calendar didn't answer")
+        for calendar in self.repository.list_ics():
+            try:
+                if calendar.url_encrypted:
+                    text = await fetch_ics(decrypt_text(calendar.url_encrypted, self.secret_key), self.transport)
+                else:
+                    text = calendar.content or ""
+                events.extend(ics_events(text, start, end, calendar.name, self.zone))
+            except (CalendarError, httpx2.HTTPError, ValueError) as exc:
+                logger.warning("Calendar %s failed: %s", calendar.name, exc)
+                errors.append(f"{calendar.name}: {exc}" if isinstance(exc, CalendarError) else f"{calendar.name} couldn't be read")
         events.sort(key=lambda event: event.start)
         self.cache.at, self.cache.events, self.cache.errors = time.monotonic(), events, errors
         return events, errors
