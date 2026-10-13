@@ -34,7 +34,7 @@ def test_claim_lets_only_the_first_holder_run():
 def test_lock_file_has_no_backslash_name(tmp_path):
     single_linux.claim("Local\\VenusThing")
 
-    assert (tmp_path / "VenusThing.lock").exists()
+    assert (single_linux.runtime_dir() / "VenusThing.lock").exists()
 
 
 def test_ask_to_quit_reaches_the_running_app():
