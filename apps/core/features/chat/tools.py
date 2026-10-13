@@ -107,6 +107,30 @@ TOOLS: list[dict] = [
     },
     {
         "type": "function",
+        "name": "add_calendar_event",
+        "description": (
+            "Add an event to the owner's Venus calendar when they ask you to put "
+            "something in their calendar or schedule (\"add gym tomorrow at 6\")."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short title, e.g. Gym"},
+                "start": {
+                    "type": "string",
+                    "description": "Start in the owner's local time, YYYY-MM-DDTHH:MM, or YYYY-MM-DD for all day",
+                },
+                "end": {
+                    "type": "string",
+                    "description": "End in the same format; leave out for one hour (or one day if all day)",
+                },
+                "location": {"type": "string", "description": "Where, if they said"},
+            },
+            "required": ["title", "start"],
+        },
+    },
+    {
+        "type": "function",
         "name": "save_memory",
         "description": (
             "Remember a fact about the owner for future chats, when they "

@@ -34,6 +34,7 @@ from features.chat.schemas import ChatRequest
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
 from features.calendar.dependencies import get_calendar_service
+from features.calendar.providers import CalendarError, EventDraft
 from features.calendar.service import CalendarService, calendar_lines, first_today_line
 from features.home.commands import home_command, intent_from_payload, intent_payload, without_secrets
 from features.home.dependencies import get_home_device_repository
@@ -625,6 +626,7 @@ async def chat(
     to_open: list[ParsedCommand | HomeIntent] = []  # commands to propose, in order
     facts: list[str] = []  # facts saved during this message
     failures: list[str] = []  # why a command Luna chose can't run
+    added_events: list[str] = []  # events Luna put on the Venus calendar
     brain_line = None  # Luna's line written with her tool call
     fact = memory_from_message(request.message)
     if fact is not None:
@@ -642,6 +644,11 @@ async def chat(
         except NotUnderstoodError:
             brain = await provider.reply(request.message, history, instructions())
             facts = [memories.create(fact).text for fact in brain.memories]
+            for wanted in brain.events:
+                try:
+                    added_events.append(await add_chat_event(calendar, wanted, owner_zone(settings_repository)))
+                except (CalendarError, KeyError, ValueError):
+                    failures.append("I couldn't add that to your calendar.")
             if brain.commands:
                 brain_line = brain.text
             # Luna picked tools: run each choice through the same parser.
@@ -651,11 +658,11 @@ async def chat(
                 except CommandTextError as exc:
                     failures.append(str(exc))
             if not to_open and not failures:
-                if not facts:
+                if not facts and not added_events:
                     answer = {"type": "reply", "reply": brain.text, "actions": []}
                 elif brain.text:
-                    # Her own answer stays; the facts are actions.
-                    answer = memory_answer(facts, brain.text)
+                    # Her own answer stays; the facts and events are actions.
+                    answer = memory_answer(facts, brain.text, added_events)
             elif not to_open and not facts:
                 # "No app called ..." is an answer in a chat.
                 answer = {"type": "reply", "reply": " ".join(failures), "actions": []}
@@ -694,7 +701,9 @@ async def chat(
             # A home action reads as it is ("Bedroom light: off"), not "Open ...".
             | ({"title": proposal["label"]} if proposal.get("home") else {})
             for proposal in proposals
-        ] + [{"kind": "memory", "text": fact} for fact in facts]
+        ] + [{"kind": "memory", "text": fact} for fact in facts] + [
+            {"kind": "event", "text": text} for text in added_events
+        ]
         if proposals:
             # The web waits on the newest command before unlocking the input.
             answer = {"type": "command", **proposals[-1], "reply": line, "actions": actions}
@@ -774,13 +783,47 @@ def local_now(settings_repository: SettingsRepository) -> str:
     )
 
 
-def memory_answer(facts: list[str], reply: str) -> dict:
+def memory_answer(facts: list[str], reply: str, events: list[str] | None = None) -> dict:
     # Kept by Core itself: no PC command, nothing to approve.
     return {
         "type": "reply",
         "reply": reply,
-        "actions": [{"kind": "memory", "text": fact} for fact in facts],
+        "actions": [{"kind": "memory", "text": fact} for fact in facts]
+        + [{"kind": "event", "text": text} for text in events or []],
     }
+
+
+def chat_time(value: str, zone: ZoneInfo) -> tuple[datetime, bool]:
+    """Luna's "2026-10-15T18:00" (owner's time) or "2026-10-15" (all day)."""
+    value = value.strip()
+    if len(value) == 10:
+        day = datetime.fromisoformat(value)
+        return day.replace(tzinfo=timezone.utc), True
+    moment = datetime.fromisoformat(value)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=zone)
+    return moment.astimezone(timezone.utc), False
+
+
+async def add_chat_event(calendar: CalendarService, wanted: dict, zone: ZoneInfo) -> str:
+    """Adds what Luna asked for to the Venus calendar; the line for the chat card."""
+    title = str(wanted["title"]).strip()[:200]
+    if not title:
+        raise ValueError("no title")
+    start, all_day = chat_time(str(wanted["start"]), zone)
+    if wanted.get("end"):
+        end, _ = chat_time(str(wanted["end"]), zone)
+    else:
+        end = start + (timedelta(days=1) if all_day else timedelta(hours=1))
+    if end <= start:
+        end = start + (timedelta(days=1) if all_day else timedelta(hours=1))
+    location = str(wanted.get("location") or "").strip()[:200]
+    await calendar.create("venus", EventDraft(title, start, end, all_day, location))
+    if all_day:
+        when = start.strftime("%a %d %b")
+    else:
+        when = start.astimezone(zone).strftime("%a %d %b, %H:%M")
+    return f"{title}, {when}" + (f" @ {location}" if location else "")
 
 
 def and_list(items: list[str]) -> str:

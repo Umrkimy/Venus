@@ -40,6 +40,7 @@ class OpenAIProvider:
         calls = [item for item in response.output if item.type == "function_call"]
         commands: list[str] = []
         memories: list[str] = []
+        events: list[dict] = []
         # What each call did, sent back if Luna gets to answer in words.
         outputs: list[tuple[str, str]] = []
         for item in calls:
@@ -49,24 +50,29 @@ class OpenAIProvider:
                     # Saved by Core itself; nothing goes to the PC.
                     memories.append(arguments["fact"])
                     outputs.append((item.call_id, "Saved."))
+                elif item.name == "add_calendar_event":
+                    # Also Core's own job: added to the Venus calendar.
+                    events.append({key: arguments[key] for key in ("title", "start", "end", "location") if key in arguments})
+                    outputs.append((item.call_id, "Added to the calendar."))
                 else:
                     commands.append(tool_to_command(item.name, arguments))
             except (ValueError, KeyError):
                 # Luna invented a tool or forgot an argument: skip that one.
                 outputs.append((item.call_id, "Couldn't do that."))
 
-        if calls and not commands and not memories:
+        if calls and not commands and not memories and not events:
             return BrainReply(text="Sorry, I couldn't do that.")
-        if memories and not commands:
-            # Only facts: let Luna answer the message itself.
+        if (memories or events) and not commands:
+            # Only facts or events: let Luna answer the message itself.
             text = await self._answer_after_save(response.id, outputs)
-            return BrainReply(text=text, memories=memories)
+            return BrainReply(text=text, memories=memories, events=events)
         if calls:
             # Her line comes with the tool call: one call to the model, not two.
             return BrainReply(
                 text=plain_punctuation(final_text(response)) or None,
                 commands=commands,
                 memories=memories,
+                events=events,
             )
 
         return BrainReply(

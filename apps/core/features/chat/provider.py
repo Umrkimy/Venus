@@ -11,6 +11,8 @@ class BrainReply:
     commands: list[str] = field(default_factory=list)
     # Facts about the owner Luna wants to remember.
     memories: list[str] = field(default_factory=list)
+    # Events Luna wants on the owner's Venus calendar (add_calendar_event arguments).
+    events: list[dict] = field(default_factory=list)
 
 
 class ChatProvider(Protocol):
