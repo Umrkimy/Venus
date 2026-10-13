@@ -17,10 +17,17 @@ import { getJson } from "@/lib/get-json";
 
 // What Venus did for one reply, as Core sends it.
 export type ChatAction =
-  | { kind: "command"; command_id: string; label: string }
+  // title: home actions read as they are ("Bedroom light: off"), not "Open ...".
+  | { kind: "command"; command_id: string; label: string; title?: string }
   | { kind: "memory"; text: string };
 
 type CommandStatus = { command_id: string; status: string; detail?: string };
+
+// Home actions: "Done" instead of "Opened".
+const HOME_STATUS_TEXT: Record<string, string> = {
+  succeeded: "Done",
+  failed: "Didn't work",
+};
 
 // Once a command reaches one of these, it never changes again.
 const FINAL_STATUSES = ["succeeded", "failed", "denied", "expired", "unknown"];
@@ -84,6 +91,7 @@ export default function ActionCard({ actions, startOpen }: ActionCardProps) {
               <CommandRow
                 commandId={action.command_id}
                 label={action.label}
+                title={action.title}
                 // Old chats only ask Core once you look inside.
                 watch={open}
               />
@@ -100,10 +108,12 @@ export default function ActionCard({ actions, startOpen }: ActionCardProps) {
 function CommandRow({
   commandId,
   label,
+  title,
   watch,
 }: {
   commandId: string;
   label: string;
+  title?: string;
   watch: boolean;
 }) {
   const command = useCommandStatus(commandId, watch);
@@ -133,9 +143,9 @@ function CommandRow({
     <div className="space-y-2 text-sm">
       <div className="flex items-center gap-2">
         <StatusIcon status={status} />
-        <span className="min-w-0 flex-1 break-all">Open {label}</span>
+        <span className="min-w-0 flex-1 break-all">{title ?? `Open ${label}`}</span>
         <span aria-live="polite" className="text-xs text-muted-foreground">
-          {status ? (STATUS_TEXT[status] ?? status) : "Checking…"}
+          {status ? (title ? HOME_STATUS_TEXT[status] : undefined) ?? STATUS_TEXT[status] ?? status : "Checking…"}
         </span>
       </div>
 

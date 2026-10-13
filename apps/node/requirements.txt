@@ -9,3 +9,7 @@ sounddevice==0.5.6
 vosk==0.3.45
 pystray==0.19.5
 Pillow==12.3.0
+# Home control (imported only when used): Tuya lights, Cast TV, Windows volume.
+tinytuya==1.20.0
+pychromecast==14.0.10
+pycaw==20260927; sys_platform == "win32"

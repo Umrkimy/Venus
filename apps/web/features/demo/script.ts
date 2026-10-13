@@ -19,6 +19,7 @@ export const DEMO_PROJECTS = ["venus", "portfolio", "uni-assignments"];
 
 export const DEMO_SUGGESTIONS = [
   "open spotify",
+  "turn off the bedroom light",
   "youtube lofi beats",
   "remember I like ramen",
   "how do you work?",
@@ -44,7 +45,36 @@ const SITES: Record<string, { label: string; home: string; search: string }> = {
 };
 
 // A command Venus would send to the PC: an app (pretend) or a real link.
-export type DemoCommand = { label: string; url?: string };
+// title: a home action, shown as it is instead of "Open ...".
+export type DemoCommand = { label: string; url?: string; title?: string };
+
+// The pretend home: one light and a TV, like Settings, Home would have.
+function home(text: string): DemoAnswer | null {
+  const lowered = text.toLowerCase();
+  const light = lowered.match(/^(?:turn|switch) (on|off) (?:the )?(?:bedroom )?lights?$/) ??
+    lowered.match(/^(?:turn|switch) (?:the )?(?:bedroom )?lights? (on|off)$/);
+  if (light) {
+    const title = `Bedroom light: ${light[1]}`;
+    return { kind: "command", command: { label: title, title }, reply: `turning the bedroom light ${light[1]}` };
+  }
+  const dim = lowered.match(/^(?:set |dim )?(?:the )?(?:bedroom )?light (?:to )?(\d{1,3}) ?%$/);
+  if (dim) {
+    const title = `Bedroom light: ${dim[1]}%`;
+    return { kind: "command", command: { label: title, title }, reply: `setting the bedroom light to ${dim[1]}%` };
+  }
+  const volume = lowered.match(/^(?:set )?(?:the )?(tv )?volume (?:to )?(up|down|\d{1,3})$/);
+  if (volume) {
+    const who = volume[1] ? "TV" : "This PC";
+    const title = `${who}: volume ${volume[2]}`;
+    return { kind: "command", command: { label: title, title }, reply: `${who === "TV" ? "tv" : "pc"} volume ${volume[2]}` };
+  }
+  const mute = lowered.match(/^(mute|unmute) (?:the )?tv$/);
+  if (mute) {
+    const title = `TV: ${mute[1]}`;
+    return { kind: "command", command: { label: title, title }, reply: `${mute[1]}d the tv` };
+  }
+  return null;
+}
 
 export type DemoAnswer =
   | { kind: "reply"; reply: string }
@@ -96,7 +126,7 @@ const REPLIES: { match: RegExp; reply: () => string }[] = [
   {
     match: /what can you do|help|what do you do/,
     reply: () =>
-      "on the real pc I open apps, links and code projects, search youtube or google, remember stuff about you, and talk out loud when you say hey venus. here everything's pretend except the links, those really open",
+      "on the real pc I open apps, links and code projects, turn lights on and off, change the tv volume, search youtube or google, remember stuff about you, and talk out loud when you say hey venus. here everything's pretend except the links, those really open",
   },
   {
     match: /who (made|built|created) you|your (creator|maker)/,
@@ -138,7 +168,7 @@ export function answer(message: string): DemoAnswer {
   const text = message.trim().replace(/[.!?,;:]+$/, "");
   const fact = text.match(/^(?:remember(?:\s+that)?|save\s+this)\s*[:,-]?\s*(.+)$/i);
   if (fact) return { kind: "memory", fact: fact[1], reply: "got it, I'll remember that" };
-  const asCommand = command(text);
+  const asCommand = home(text) ?? command(text);
   if (asCommand) return asCommand;
   const lowered = text.toLowerCase();
   const scripted = REPLIES.find((each) => each.match.test(lowered));

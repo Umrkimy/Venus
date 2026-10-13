@@ -34,6 +34,7 @@ def build_instructions(
     memories: list[str] | None = None,
     approve_first: bool = False,
     now: str | None = None,
+    home: list[str] | None = None,
 ) -> str:
     """Base rules, what's on the PC and the owner, who Venus is, the project, then the time."""
     parts = [
@@ -41,6 +42,7 @@ def build_instructions(
         APPROVE_FIRST if approve_first else None,
         sites_line(sites or []),
         folders_line(folders or []),
+        home_line(home or []),
         memories_line(memories or []),
         personality,
         project,
@@ -49,6 +51,17 @@ def build_instructions(
         now,
     ]
     return "\n\n".join(part.strip() for part in parts if part and part.strip())
+
+
+def home_line(devices: list[str]) -> str:
+    """The owner's lights, plugs, TV and PCs, so control_home uses their real names."""
+    if not devices:
+        return ""
+    return (
+        "Home devices you can control with control_home: "
+        + ", ".join(devices)
+        + ". This PC's own volume and lock work too (device \"pc\")."
+    )
 
 
 def now_line(now_utc: datetime, time_zone: str | None, country: str = "") -> str:

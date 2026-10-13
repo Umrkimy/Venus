@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from pydantic import ValidationError
 from venus_protocol.schemas.commands import (
     CommandResult,
+    HomeCommand,
     NodeCommand,
     OpenProjectCommand,
     OpenUrlCommand,
@@ -21,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 def execute_fake(command: NodeCommand) -> CommandResult:
-    if isinstance(command, OpenUrlCommand):
+    if isinstance(command, HomeCommand):
+        target = f"{command.device} {command.action}"
+    elif isinstance(command, OpenUrlCommand):
         target = command.url
     elif isinstance(command, OpenProjectCommand):
         target = command.project_name
