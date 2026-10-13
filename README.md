@@ -57,6 +57,7 @@ Type these in the chat, or say "Hey Venus" first and then say them.
 | `remember I have class at 9 on mondays` | Saves it and uses it later in chats |
 | `turn off the bedroom light` / `set the aircon to 24` | Lights, plugs, TV, air-con and scenes (Home Assistant or Tuya) |
 | `what's on today?` / `add gym tomorrow at 6` | Her own calendar page, plus Google, Outlook and timetable (.ics) calendars |
+| Email page | Your inbox, summed up by Luna, replies she drafts for you to check and send |
 | `what should I cook tonight?` | Normal chat with the AI |
 | `stop Venus` / `thank you Venus` | Cuts her off / ends the voice chat |
 
@@ -92,7 +93,8 @@ After that, start Venus with `start-venus-use.cmd`. The
 
 - [Install and settings](guide/install.md): step by step, what each `.env` file is
 - [Home control](guide/home-control.md): lights, plugs, TV, waking a PC
-- [Calendar](guide/calendar.md): connect Google and Outlook
+- [Calendar](guide/calendar.md): the Calendar page, Google, Outlook and timetables
+- [Email](guide/email.md): inbox, summaries and replies
 - [Phone, own domain and other PCs](guide/remote-access.md)
 - [Backups and troubleshooting](guide/backups-and-troubleshooting.md)
 - [Developing](guide/developing.md): run from source, tests

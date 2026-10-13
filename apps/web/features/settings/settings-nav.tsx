@@ -10,6 +10,7 @@ import {
   Heart,
   House,
   Link2,
+  Mail,
   MonitorSmartphone,
   SlidersHorizontal,
   Sparkles,
@@ -30,6 +31,7 @@ const PAGES = [
   { href: "/settings/shortcuts", label: "Shortcuts", icon: Link2 },
   { href: "/settings/home", label: "Home", icon: House },
   { href: "/settings/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/settings/email", label: "Email", icon: Mail },
   { href: "/settings/devices", label: "Devices", icon: MonitorSmartphone },
   { href: "/settings/archive", label: "Archive", icon: Archive },
 ];

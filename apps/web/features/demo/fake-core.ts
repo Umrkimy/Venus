@@ -480,6 +480,11 @@ async function route(method: string, path: string, query: URLSearchParams, body:
       }
       return json({ detail: "Calendars can't connect in the demo" }, 403);
 
+    case "email":
+      // No mailbox in the demo: the Email page shows how to add one.
+      if (id === "accounts" && method === "GET" && !parts[2]) return json([]);
+      return json({ detail: "Email isn't in the demo" }, 403);
+
     case "health":
       return json({ status: "ok" });
 
