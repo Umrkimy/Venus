@@ -24,6 +24,7 @@ from features.usage.models.llm_usage import LlmUsage
 from features.character.models.character_animation import CharacterAnimation
 from features.character.models.character_model import CharacterModel
 from features.home.models.home_device import HomeDevice
+from features.calendar.models.calendar_account import CalendarAccount
 from storage.base import Base
 
 # this is the Alembic Config object, which provides

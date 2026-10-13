@@ -12,6 +12,8 @@ from starlette.websockets import WebSocketDisconnect
 from config import CoreSettings, get_settings
 from main import app
 
+from features.calendar.dependencies import get_calendar_repository
+from features.calendar.repository import CalendarRepository
 from features.home.dependencies import get_home_device_repository
 from features.home.repository import HomeDeviceRepository
 from features.commands.result_registry import (
@@ -160,6 +162,8 @@ def command_records():
     app.dependency_overrides[get_memory_repository] = lambda: memory_repository
     home_repository = HomeDeviceRepository(engine)
     app.dependency_overrides[get_home_device_repository] = lambda: home_repository
+    calendar_repository = CalendarRepository(engine)
+    app.dependency_overrides[get_calendar_repository] = lambda: calendar_repository
     yield CommandRecordRepository(engine)
     engine.dispose()
 

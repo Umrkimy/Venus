@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from json import JSONDecodeError
+from zoneinfo import ZoneInfo
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -32,6 +33,8 @@ from features.chat.provider import ChatProvider
 from features.chat.schemas import ChatRequest
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
+from features.calendar.dependencies import get_calendar_service
+from features.calendar.service import CalendarService, calendar_lines, first_today_line
 from features.home.commands import home_command, intent_from_payload, intent_payload, without_secrets
 from features.home.dependencies import get_home_device_repository
 from features.home.repository import HomeDeviceRepository
@@ -563,6 +566,7 @@ async def chat(
     live: Annotated[LiveVoice, Depends(get_live_voice)],
     home_devices: Annotated[HomeDeviceRepository, Depends(get_home_device_repository)],
     settings: Annotated[CoreSettings, Depends(get_settings)],
+    calendar: Annotated[CalendarService, Depends(get_calendar_service)],
 ):
     if request.conversation_id is not None and not conversations.exists(
         request.conversation_id,
@@ -601,6 +605,7 @@ async def chat(
     full_mode = settings_repository.get_mode() == "full"
 
     home = home_devices.list_all()
+    calendar_text = await calendar_context(calendar, settings_repository, conversations)
 
     def instructions() -> str:
         return chat_instructions(
@@ -611,6 +616,7 @@ async def chat(
             full_mode,
             local_now(settings_repository),
             [f"{device.name} ({device.kind})" for device in home],
+            calendar_text,
         )
 
     # Rules answer first; the brain only gets what they don't understand.
@@ -711,6 +717,7 @@ def chat_instructions(
     full_mode: bool = True,
     now: str | None = None,
     home: list[str] | None = None,
+    calendar: str | None = None,
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -728,7 +735,32 @@ def chat_instructions(
         approve_first=not full_mode,
         now=now,
         home=home,
+        calendar=calendar,
     )
+
+
+def owner_zone(settings_repository: SettingsRepository) -> ZoneInfo:
+    saved = settings_repository.get_time()
+    return ZoneInfo(saved.time_zone) if saved is not None and saved.time_zone else ZoneInfo("UTC")
+
+
+async def calendar_context(
+    calendar: CalendarService,
+    settings_repository: SettingsRepository,
+    conversations: ConversationRepository,
+) -> str | None:
+    """The coming week for Luna, and a good-morning summary on the day's first message."""
+    if not calendar.connected():
+        return None
+    now = datetime.now(timezone.utc)
+    zone = owner_zone(settings_repository)
+    found, errors = await calendar.events(now)
+    text = calendar_lines(found, now, zone, errors)
+    midnight = now.astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0)
+    # This message is already saved, so 1 means it's the first one today.
+    if conversations.user_messages_since(midnight.astimezone(timezone.utc)) <= 1:
+        text += "\n" + first_today_line(found, now, zone)
+    return text
 
 
 def local_now(settings_repository: SettingsRepository) -> str:

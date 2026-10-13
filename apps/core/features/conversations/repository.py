@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -58,6 +58,15 @@ class ConversationRepository:
             conversation = session.get(Conversation, conversation_id)
             conversation.updated_at = now
             session.commit()
+
+    def user_messages_since(self, moment: datetime) -> int:
+        """How many lines the owner sent since then, in every chat (for "first message today")."""
+        with Session(self.engine) as session:
+            return session.scalar(
+                select(func.count()).select_from(Message).where(
+                    Message.role == "user", Message.created_at >= moment,
+                )
+            ) or 0
 
     def recent_turns(self, conversation_id: UUID, limit: int = 10) -> list[ChatTurn]:
         with Session(self.engine) as session:

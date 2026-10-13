@@ -5,6 +5,7 @@ import {
   AudioLines,
   Box,
   Brain,
+  CalendarDays,
   ChartColumn,
   Heart,
   House,
@@ -28,6 +29,7 @@ const PAGES = [
   { href: "/settings/voice", label: "Voice", icon: AudioLines },
   { href: "/settings/shortcuts", label: "Shortcuts", icon: Link2 },
   { href: "/settings/home", label: "Home", icon: House },
+  { href: "/settings/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/settings/devices", label: "Devices", icon: MonitorSmartphone },
   { href: "/settings/archive", label: "Archive", icon: Archive },
 ];
