@@ -6,6 +6,8 @@ from dotenv import dotenv_values
 
 # Free Fish Audio model to start with; VENUS_CORE_FISH_MODEL=s2.1-pro is the paid one.
 FISH_MODEL = "s2.1-pro-free"
+# Every made-up value in .env.example starts with this.
+PLACEHOLDER_PREFIX = "your-"
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,15 @@ def load_settings(env_file: Path) -> CoreSettings:
 
     if not node_token or not node_token.strip():
         raise ValueError("VENUS_CORE_DEV_NODE_TOKEN is required")
+
+    # .env.example fills these with "your-..." text. Left as is, everyone who
+    # read the example would know the token, so refuse to start instead.
+    for name, token in (
+        ("VENUS_CORE_DEV_NODE_TOKEN", node_token),
+        ("VENUS_CORE_DEV_OWNER_TOKEN", owner_token),
+    ):
+        if token.strip().lower().startswith(PLACEHOLDER_PREFIX):
+            raise ValueError(f"{name} still has the example value; run setup-venus or pick your own")
 
     if not database_url or not database_url.strip():
         raise ValueError("VENUS_CORE_DATABASE_URL is required")

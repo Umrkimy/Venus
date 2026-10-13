@@ -3,6 +3,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
 
+from api.body_limit import read_body
 from features.auth.dependencies import require_owner
 from features.character.dependencies import get_animation_repository, get_character_repository
 from features.character.repository import (
@@ -94,12 +95,7 @@ async def post_model(
     name: Annotated[str, Query(min_length=1, max_length=200)],
 ):
     # The browser sends the file itself as the body.
-    data = await request.body()
-    if len(data) > MAX_MODEL_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="Model is over 100 MB",
-        )
+    data = await read_body(request, MAX_MODEL_BYTES, "Model is over 100 MB")
     if not is_vrm(data):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -177,12 +173,7 @@ async def post_animation(
     use: AnimationUse = "idle",
 ):
     # The browser sends the file itself as the body.
-    data = await request.body()
-    if len(data) > MAX_ANIMATION_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="Animation is over 20 MB",
-        )
+    data = await read_body(request, MAX_ANIMATION_BYTES, "Animation is over 20 MB")
     if not is_vrma(data):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

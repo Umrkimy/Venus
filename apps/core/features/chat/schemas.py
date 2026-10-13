@@ -14,7 +14,8 @@ class ChatTurn(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    message: str
+    # Same cap as one history turn: a giant paste never reaches the paid model.
+    message: str = Field(max_length=4000)
     # None starts a new conversation; Core sends back the id it made.
     conversation_id: UUID | None = None
     # Only used when a new conversation starts: it is created in this project.

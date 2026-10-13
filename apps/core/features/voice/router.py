@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from openai import OpenAIError
 from pydantic import BaseModel, Field
 
+from api.body_limit import read_body
 from features.auth.dependencies import require_owner_or_node
 from features.settings.dependencies import get_settings_repository
 from features.settings.repository import SettingsRepository
@@ -35,16 +36,11 @@ async def transcribe(
     shortcuts: Annotated[ShortcutRepository, Depends(get_shortcut_repository)],
 ):
     # The browser sends the recording itself as the body, e.g. audio/webm.
-    audio = await request.body()
+    audio = await read_body(request, MAX_AUDIO_BYTES, "Recording is too long")
     if not audio:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="No audio",
-        )
-    if len(audio) > MAX_AUDIO_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="Recording is too long",
         )
 
     content_type = request.headers.get("content-type", "audio/webm")
