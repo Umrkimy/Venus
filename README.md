@@ -28,6 +28,7 @@ Type these in the chat, or say "Hey Venus" first and then say them.
 | `tv volume 20` / `mute the tv` | Your Google / Android TV's volume |
 | `volume up` / `lock my pc` | This PC's own volume and lock |
 | `wake the laptop` | Wakes another PC with Wake-on-LAN |
+| `what's on today?` / `when's my next class?` | Reads your Google and Outlook calendars |
 | `what should I cook tonight?` | Normal chat with the AI (Luna) |
 | `stop Venus` | Cuts her off mid-sentence |
 | `go to sleep` | Stops the conversation, back to waiting for "Hey Venus" |
@@ -211,6 +212,53 @@ Use a Wake-on-LAN app on your phone (on home Wi-Fi) for that.
 **This PC** needs nothing added: `volume up`, `volume 40`, `mute my pc`,
 `lock my pc`.
 
+## Calendar
+
+Venus can read your Google Calendar and Outlook (Microsoft 365) calendars.
+She knows your next 7 days, so you can ask "what's on tomorrow" or "do I
+have anything Friday", the first chat of the day starts with a short
+summary, and the PC part pops up a reminder about 10 minutes before each
+event. It's read-only: Venus can't add or change events.
+
+Because Venus is self-hosted, you sign in through **your own** small app
+at Google and Microsoft (free, a few minutes each). Do this on the PC with
+Venus open at `http://localhost:3000`, because that's the address the sign-in
+sends you back to. Settings, Calendar shows the exact redirect address
+to paste.
+
+**Google**
+
+1. [Google Cloud Console](https://console.cloud.google.com/): make a project,
+   then APIs & Services, Library, enable **Google Calendar API**.
+2. OAuth consent screen: External, fill in the app name and your email,
+   add yourself as a test user, then **Publish app** ("In production").
+   While it's in "Testing", Google signs you out of it every 7 days.
+   You'll see an "unverified app" warning when you connect; that's fine
+   for your own app (Advanced, continue).
+3. Credentials, Create credentials, OAuth client ID, type **Web
+   application**, and add the redirect address from Settings, Calendar.
+4. Copy the client ID and secret into Settings, Calendar, Save, then
+   **Connect Google**.
+
+**Outlook / Microsoft 365**
+
+1. [Entra admin center](https://entra.microsoft.com/), App registrations,
+   New registration. Account types: "Accounts in any organizational
+   directory and personal Microsoft accounts". Redirect URI: platform
+   **Web**, the address from Settings, Calendar.
+2. Certificates & secrets, New client secret: copy the **Value** (it's
+   only shown once).
+3. Paste the Application (client) ID and the secret in Settings,
+   Calendar, Save, **Connect Outlook**.
+
+A school or work Microsoft account might say it needs admin approval.
+That's your uni blocking outside apps, and only their IT can allow it. A
+personal Outlook.com account always works.
+
+The client secrets and sign-ins are stored encrypted. Remove in Settings,
+Calendar forgets them; you can also remove Venus's access in your Google
+or Microsoft account settings.
+
 ## Use Venus on your phone
 
 [Tailscale](https://tailscale.com) is a free private network between your
@@ -350,8 +398,10 @@ Venus can open things on your PC, so I tried to lock it down:
 - Core refuses changes sent by another website's page (it checks the
   browser's `Sec-Fetch-Site` header), so a random site can't press buttons
   in your Venus for you.
-- API keys you save in Settings are encrypted (`VENUS_CORE_SECRET_KEY`) and
-  never sent back to the page.
+- API keys, Tuya keys and calendar sign-ins you save in Settings are
+  encrypted (`VENUS_CORE_SECRET_KEY`) and never sent back to the page.
+  Calendar access is read-only and uses PKCE plus a one-time state, so a
+  sign-in can't be started by another site.
 - Every PC has its own token, stored only as a hash, and can be revoked.
 - The Node checks every command again on its own: only apps from your menu,
   only `http`/`https` links, only folders inside your projects folder. No
