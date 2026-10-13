@@ -80,6 +80,34 @@ jobs:
       - name: Lint shell scripts
         run: shellcheck -x -S warning setup-venus.sh start-venus.sh scripts/*.sh scripts/backup/*.sh
 
+  # The PC app on a Mac: the same tests, with the Mac's own Python, Tk and
+  # tray (pystray uses pyobjc there). Not a required check yet.
+  node-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install Node dependencies
+        working-directory: apps/node
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-dev.txt
+
+      - name: Test Node on macOS
+        working-directory: apps/node
+        run: python -m pytest
+
+      - name: Mac app list and tray import
+        working-directory: apps/node
+        run: |
+          python -c "from venus_node.commands.pc import IS_MAC, list_apps; assert IS_MAC; apps = list_apps(); print(len(apps), 'apps'); assert any(a.name == 'Safari' for a in apps)"
+          python -c "import pystray, tkinter, sounddevice, vosk; print('imports ok')"
+
   # Same Postgres as server mode. The Windows job above uses SQLite (fast);
   # this one catches what only real Postgres does (time zones, types,
   # migrations). Service containers need a Linux runner.
