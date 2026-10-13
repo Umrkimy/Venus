@@ -213,11 +213,16 @@ class Google(Provider):
         shown = [c for c in await self.calendars(access_token) if c.get("selected") or c.get("primary")]
         events: list[Event] = []
         for calendar in shown[: self.MAX_CALENDARS]:
-            body = await self._get(
-                f"{self.api}/calendars/{calendar['id']}/events",
-                access_token,
-                {"timeMin": iso(start), "timeMax": iso(end), "singleEvents": "true", "orderBy": "startTime", "maxResults": "50"},
-            )
+            # Ids like "en.malaysia#holiday@group.v.calendar.google.com": a bare # would cut the address short.
+            try:
+                body = await self._get(
+                    f"{self.api}/calendars/{quote(calendar['id'], safe='@')}/events",
+                    access_token,
+                    {"timeMin": iso(start), "timeMax": iso(end), "singleEvents": "true", "orderBy": "startTime", "maxResults": "50"},
+                )
+            except CalendarError:
+                # One calendar Google won't list (a removed subscription) shouldn't hide the others.
+                continue
             for item in body.get("items", []):
                 if item.get("status") == "cancelled":
                     continue

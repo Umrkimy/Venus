@@ -293,3 +293,35 @@ def test_a_link_saved_with_another_secret_key_is_an_error_not_a_crash(repository
 
     assert [e["title"] for e in body["events"]] == ["Gym"]
     assert body["errors"] == ["Uni: the saved link can't be read. Remove it and add it again."]
+
+
+def test_google_calendar_ids_with_a_hash_are_encoded_and_one_bad_calendar_is_skipped(repository: CalendarRepository, fake: FakeProviders):
+    import httpx2 as h
+
+    seen = []
+    original = fake.__call__
+
+    def google(request: h.Request) -> h.Response:
+        url = str(request.url)
+        seen.append(url)
+        if "calendarList" in url:
+            return h.Response(200, json={"items": [
+                {"id": "me@gmail.com", "primary": True, "accessRole": "owner"},
+                {"id": "en.malaysia#holiday@group.v.calendar.google.com", "selected": True, "accessRole": "reader"},
+                {"id": "gone@group.calendar.google.com", "selected": True, "accessRole": "reader"},
+            ]})
+        if "en.malaysia%23holiday@group" in url:
+            return h.Response(200, json={"items": [{"id": "dv", "summary": "Deepavali",
+                "start": {"date": "2026-10-20"}, "end": {"date": "2026-10-21"}}]})
+        if "gone@group" in url:
+            return h.Response(404)
+        return original(request)
+
+    app.dependency_overrides[get_calendar_service] = lambda: CalendarService(repository, SECRET, httpx2.MockTransport(google), Cached())
+    connect(repository, "google")
+
+    body = month()
+
+    assert {e["title"] for e in body["events"]} == {"Dinner", "Deepavali"}
+    assert body["errors"] == []
+    assert any("en.malaysia%23holiday@group.v.calendar.google.com/events" in url for url in seen)
