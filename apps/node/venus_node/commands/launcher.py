@@ -9,6 +9,7 @@ from venus_node.commands.start_apps import StartApp
 from venus_node.config import NodeSettings
 from venus_protocol.schemas.commands import (
     CommandResult,
+    HomeCommand,
     NodeCommand,
     OpenApplicationCommand,
     OpenProjectCommand,
@@ -103,8 +104,13 @@ def create_command_router(
     open_app: Callable[[OpenApplicationCommand], CommandResult],
     open_url: Callable[[OpenUrlCommand], CommandResult],
     open_project: Callable[[OpenProjectCommand], CommandResult],
+    home: Callable[[HomeCommand], CommandResult] | None = None,
 ) -> Callable[[NodeCommand], CommandResult]:
     def execute(command: NodeCommand) -> CommandResult:
+        if isinstance(command, HomeCommand):
+            if home is None:
+                return CommandResult(command_id=command.command_id, status="denied", detail="Home control is off on this PC")
+            return home(command)
         if isinstance(command, OpenUrlCommand):
             return open_url(command)
         if isinstance(command, OpenProjectCommand):

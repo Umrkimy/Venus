@@ -3,6 +3,7 @@ from pathlib import Path
 from venus_node.config import load_settings
 from venus_node.commands import pc
 from venus_node.commands.executor import NodeExecutor
+from venus_node.commands.home import create_home_executor
 from venus_node.commands.launcher import (
     create_application_command_executor,
     create_command_router,
@@ -30,6 +31,7 @@ def create_node_executor(
             projects_root=settings.projects_root,
             open_folder=lambda folder: pc.open_folder(folder),
         ),
+        home=create_home_executor(),
     )
 
     return NodeExecutor(
