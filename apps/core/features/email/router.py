@@ -12,7 +12,11 @@ from config import CoreSettings, get_settings
 from features.auth.dependencies import require_owner
 from features.chat.dependencies import get_chat_provider
 from features.chat.provider import ChatProvider
+from features.calendar.dependencies import get_calendar_service
+from features.calendar.providers import CalendarError
+from features.calendar.service import CalendarService
 from features.email import assistant, mailbox
+from features.email.backends import GmailBackend, GraphBackend, ImapBackend
 from features.email.dependencies import get_email_repository, get_mail_connectors
 from features.email.mailbox import MailError, MailMessage, MailSettings, MailSummary, Outgoing
 from features.email.models.email_account import EmailAccount
@@ -34,7 +38,8 @@ PRESETS = {
 NO_LUNA = "Luna needs an AI model to do that. Add one in Settings, AI model."
 HostName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255, pattern=r"^[A-Za-z0-9.-]+$")]
 LOOPBACK = {"localhost", "127.0.0.1", "::1"}
-MessageUid = Annotated[str, Path(pattern=r"^\d{1,12}$")]
+# IMAP numbers, Gmail hex ids, Graph's long base64 ids: letters, digits, - _ =.
+MessageUid = Annotated[str, Path(pattern=r"^[A-Za-z0-9_=-]{1,400}$")]
 
 
 class AccountRequest(BaseModel):
@@ -68,7 +73,7 @@ class SendRequest(BaseModel):
     subject: str = Field(default="", max_length=300)
     body: str = Field(min_length=1, max_length=100_000)
     # Replying to this message in the inbox (keeps the thread).
-    reply_to: str | None = Field(default=None, pattern=r"^\d+$")
+    reply_to: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_=-]{1,400}$")
 
 
 class DraftRequest(BaseModel):
@@ -91,8 +96,8 @@ def account_json(account: EmailAccount) -> dict:
         "address": account.address,
         "display_name": account.display_name,
         "kind": account.kind,
-        "imap_host": account.imap_host,
-        "smtp_host": account.smtp_host,
+        "imap_host": account.imap_host or "",
+        "smtp_host": account.smtp_host or "",
     }
 
 
@@ -141,6 +146,22 @@ def settings_for(account: EmailAccount, secret_key: str) -> MailSettings:
         username=account.username,
         password=password,
     )
+
+
+def backend_for(account: EmailAccount, secret_key: str, connectors: tuple, calendar: CalendarService):
+    if account.kind == "imap":
+        return ImapBackend(settings_for(account, secret_key), connectors[0], connectors[1])
+    # Signed in with Google or Microsoft: only the address and name matter for sending.
+    sender = MailSettings(account.address, account.display_name, "", 0, "ssl", "", 0, "ssl", "", "")
+
+    async def token() -> str:
+        try:
+            return await calendar.access_token(account.kind)
+        except CalendarError as exc:
+            raise MailError(str(exc)) from exc
+
+    kind = GmailBackend if account.kind == "google" else GraphBackend
+    return kind(sender, token, calendar.transport)
 
 
 def account_or_404(repository: EmailRepository, account_id: UUID) -> EmailAccount:
@@ -223,19 +244,20 @@ async def list_messages(
     repository: Annotated[EmailRepository, Depends(get_email_repository)],
     settings: Annotated[CoreSettings, Depends(get_settings)],
     connectors: Annotated[tuple, Depends(get_mail_connectors)],
+    calendar: Annotated[CalendarService, Depends(get_calendar_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
 ):
-    mail = settings_for(account_or_404(repository, account_id), settings.secret_key)
+    backend = backend_for(account_or_404(repository, account_id), settings.secret_key, connectors, calendar)
     try:
-        found = await asyncio.to_thread(mailbox.inbox, mail, limit, connectors[0])
+        found = await backend.inbox(limit)
     except MailError as exc:
         raise mail_problem(exc) from exc
     return [summary_json(item) for item in found]
 
 
-async def fetch(account: EmailAccount, uid: str, secret_key: str, connectors: tuple) -> MailMessage:
+async def fetch(backend, uid: str) -> MailMessage:
     try:
-        return await asyncio.to_thread(mailbox.read, settings_for(account, secret_key), uid, connectors[0])
+        return await backend.read(uid)
     except MailError as exc:
         raise mail_problem(exc) from exc
 
@@ -247,8 +269,10 @@ async def open_message(
     repository: Annotated[EmailRepository, Depends(get_email_repository)],
     settings: Annotated[CoreSettings, Depends(get_settings)],
     connectors: Annotated[tuple, Depends(get_mail_connectors)],
+    calendar: Annotated[CalendarService, Depends(get_calendar_service)],
 ):
-    return message_json(await fetch(account_or_404(repository, account_id), uid, settings.secret_key, connectors))
+    backend = backend_for(account_or_404(repository, account_id), settings.secret_key, connectors, calendar)
+    return message_json(await fetch(backend, uid))
 
 
 @router.post("/accounts/{account_id}/messages/{uid}/summary")
@@ -259,9 +283,10 @@ async def summarize_message(
     settings: Annotated[CoreSettings, Depends(get_settings)],
     connectors: Annotated[tuple, Depends(get_mail_connectors)],
     provider: Annotated[ChatProvider, Depends(get_chat_provider)],
+    calendar: Annotated[CalendarService, Depends(get_calendar_service)],
 ):
-    message = await fetch(account_or_404(repository, account_id), uid, settings.secret_key, connectors)
-    text = await assistant.summarize(provider, message)
+    backend = backend_for(account_or_404(repository, account_id), settings.secret_key, connectors, calendar)
+    text = await assistant.summarize(provider, await fetch(backend, uid))
     if not text:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=NO_LUNA)
     return {"summary": text}
@@ -274,10 +299,11 @@ async def summarize_inbox(
     settings: Annotated[CoreSettings, Depends(get_settings)],
     connectors: Annotated[tuple, Depends(get_mail_connectors)],
     provider: Annotated[ChatProvider, Depends(get_chat_provider)],
+    calendar: Annotated[CalendarService, Depends(get_calendar_service)],
 ):
-    mail = settings_for(account_or_404(repository, account_id), settings.secret_key)
+    backend = backend_for(account_or_404(repository, account_id), settings.secret_key, connectors, calendar)
     try:
-        found = await asyncio.to_thread(mailbox.inbox, mail, 30, connectors[0])
+        found = await backend.inbox(30)
     except MailError as exc:
         raise mail_problem(exc) from exc
     if not found:
@@ -297,10 +323,11 @@ async def draft_reply(
     settings: Annotated[CoreSettings, Depends(get_settings)],
     connectors: Annotated[tuple, Depends(get_mail_connectors)],
     provider: Annotated[ChatProvider, Depends(get_chat_provider)],
+    calendar: Annotated[CalendarService, Depends(get_calendar_service)],
 ):
     """Luna's reply, for the owner to read and change. Nothing is sent."""
     account = account_or_404(repository, account_id)
-    message = await fetch(account, uid, settings.secret_key, connectors)
+    message = await fetch(backend_for(account, settings.secret_key, connectors, calendar), uid)
     text = await assistant.draft_reply(provider, message, account.display_name, body.tone, body.wish)
     if not text:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=NO_LUNA)
@@ -329,17 +356,17 @@ async def send_mail(
     repository: Annotated[EmailRepository, Depends(get_email_repository)],
     settings: Annotated[CoreSettings, Depends(get_settings)],
     connectors: Annotated[tuple, Depends(get_mail_connectors)],
+    calendar: Annotated[CalendarService, Depends(get_calendar_service)],
 ):
     """Only ever called by the owner's own Send button: Luna has no way to send."""
-    account = account_or_404(repository, account_id)
-    mail = settings_for(account, settings.secret_key)
-    in_reply_to = references = ""
+    backend = backend_for(account_or_404(repository, account_id), settings.secret_key, connectors, calendar)
+    in_reply_to = references = thread_id = ""
     if body.reply_to:
-        original = await fetch(account, body.reply_to, settings.secret_key, connectors)
-        in_reply_to, references = original.message_id, original.references
-    outgoing = Outgoing(body.to, body.cc, body.subject, body.body, in_reply_to, references)
+        original = await fetch(backend, body.reply_to)
+        in_reply_to, references, thread_id = original.message_id, original.references, original.thread_id
+    outgoing = Outgoing(body.to, body.cc, body.subject, body.body, in_reply_to, references, thread_id)
     try:
-        await asyncio.to_thread(mailbox.send, mail, outgoing, connectors[1])
+        await backend.send(outgoing)
     except MailError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     return {"sent": True}

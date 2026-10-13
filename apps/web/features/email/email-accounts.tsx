@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, Trash2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,10 @@ export function useEmailAccounts() {
 export default function EmailAccounts() {
   const queryClient = useQueryClient();
   const accounts = useEmailAccounts();
+  const params = useSearchParams();
+  const signedIn = params.get("connected");
+  const signInError = params.get("error");
+  const [senderName, setSenderName] = useState("");
   const [address, setAddress] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -114,7 +119,8 @@ export default function EmailAccounts() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{account.address}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  Sends as {account.display_name} · {account.imap_host}
+                  Sends as {account.display_name} ·{" "}
+                  {account.kind === "imap" ? account.imap_host : `signed in with ${account.kind === "google" ? "Google" : "Microsoft"}`}
                 </p>
               </div>
               <Button
@@ -132,12 +138,50 @@ export default function EmailAccounts() {
         </ul>
       )}
 
-      <form onSubmit={add} className="space-y-4">
-        <p className="text-sm font-semibold">Add an account</p>
+      {signedIn && (
+        <p role="status" className="mb-4 text-sm text-muted-foreground">
+          Signed in with {signedIn === "google" ? "Google" : "Microsoft"}. Open Email in the sidebar.
+        </p>
+      )}
+      {signInError && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {signInError}
+        </p>
+      )}
+
+      <div className="mb-6 space-y-3 rounded-lg border border-border p-4">
+        <p className="text-sm font-semibold">Sign in with Microsoft or Google</p>
         <p className="text-sm text-muted-foreground">
-          Venus signs in with an <b>app password</b>, a separate password just for Venus, never your normal one.
-          Gmail: Google Account, Security, 2-Step Verification on, then App passwords. iCloud and Yahoo have the same
-          in their account security settings. Uni Microsoft 365 and Outlook.com need the Microsoft sign-in (coming next).
+          For uni Microsoft 365, Outlook.com and Gmail. It uses the same app you made in Settings, Calendar (make that
+          first) and asks Microsoft or Google to also allow mail. Your uni might need to approve Venus.
+        </p>
+        <label className={LABEL_CLASS}>
+          Your name (on mail you send)
+          <Input
+            value={senderName}
+            onChange={(e) => setSenderName(e.target.value)}
+            maxLength={100}
+            placeholder="Umar Hakimi"
+            className={FIELD_HOVER}
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {(["microsoft", "google"] as const).map((provider) => (
+            <Button key={provider} variant="outline" asChild>
+              <a href={`/api/calendar/${provider}/connect?mail=true&name=${encodeURIComponent(senderName.trim())}`}>
+                {provider === "microsoft" ? "Sign in with Microsoft" : "Sign in with Google"}
+              </a>
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <form onSubmit={add} className="space-y-4">
+        <p className="text-sm font-semibold">Or add one with an app password</p>
+        <p className="text-sm text-muted-foreground">
+          An <b>app password</b> is a separate password just for Venus, never your normal one. Gmail: Google Account,
+          Security, 2-Step Verification on, then App passwords. iCloud and Yahoo have the same in their account
+          security settings.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className={LABEL_CLASS}>

@@ -15,6 +15,8 @@ from features.auth.repository import AuthRepository
 from features.calendar.dependencies import get_calendar_repository, get_calendar_service, get_sign_ins
 from features.calendar.providers import Event, Google, Microsoft
 from features.calendar.repository import CalendarRepository
+from features.email.dependencies import get_email_repository
+from features.email.repository import EmailRepository
 from features.calendar.service import (
     Cached,
     CalendarService,
@@ -206,6 +208,7 @@ def client(repository, fake):
         repository, SECRET, httpx2.MockTransport(fake), Cached(),
     )
     app.dependency_overrides[get_sign_ins] = lambda: sign_ins
+    app.dependency_overrides[get_email_repository] = lambda: EmailRepository(engine)
     yield TestClient(app)
     app.dependency_overrides.clear()
 

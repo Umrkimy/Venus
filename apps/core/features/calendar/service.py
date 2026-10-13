@@ -29,6 +29,9 @@ class PendingSignIn:
     verifier: str
     redirect_uri: str
     expires: float
+    # Started from Settings, Email: also ask for mail, and the name to send as.
+    mail: bool = False
+    name: str = ""
 
 
 class SignIns:
@@ -42,11 +45,13 @@ class SignIns:
     def __init__(self) -> None:
         self._pending: dict[str, PendingSignIn] = {}
 
-    def start(self, provider: str, verifier: str, redirect_uri: str) -> str:
+    def start(self, provider: str, verifier: str, redirect_uri: str, mail: bool = False, name: str = "") -> str:
         now = time.monotonic()
         self._pending = {key: value for key, value in self._pending.items() if value.expires > now}
         state = secrets.token_urlsafe(24)
-        self._pending[state] = PendingSignIn(provider, verifier, redirect_uri, now + STATE_LIFETIME.total_seconds())
+        self._pending[state] = PendingSignIn(
+            provider, verifier, redirect_uri, now + STATE_LIFETIME.total_seconds(), mail, name,
+        )
         return state
 
     def finish(self, state: str, provider: str) -> PendingSignIn | None:
@@ -108,7 +113,9 @@ class CalendarService:
         except InvalidToken as exc:
             label = PROVIDERS[provider_name].label
             raise CalendarError(f"{label}: the saved sign-in can't be read. Connect it again in Settings, Calendar.") from exc
-        tokens = await self.provider(provider_name).refresh(refresh_token, account.client_id, client_secret)
+        tokens = await self.provider(provider_name).refresh(
+            refresh_token, account.client_id, client_secret, mail=bool(account.mail),
+        )
         if tokens.refresh_token:
             self.repository.save_refresh_token(provider_name, encrypt_text(tokens.refresh_token, self.secret_key))
         return tokens.access_token

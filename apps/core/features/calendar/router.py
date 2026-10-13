@@ -14,6 +14,8 @@ from features.calendar.ics import MAX_BYTES, check_ics, fetch_ics, ics_events
 from features.calendar.providers import PROVIDERS, CalendarError, Event, EventDraft, pkce_pair
 from features.calendar.repository import CalendarRepository, DuplicateNameError
 from features.calendar.service import CalendarService, SignIns, due_soon
+from features.email.dependencies import get_email_repository
+from features.email.repository import DuplicateAccountError, EmailRepository
 from features.settings.router import encrypt_key
 from features.settings.secrets import decrypt_text, encrypt_text
 
@@ -106,6 +108,10 @@ def calendar_problem(exc: CalendarError) -> HTTPException:
 
 def back_to_settings(**query: str) -> RedirectResponse:
     return RedirectResponse(f"{SETTINGS_PAGE}?{urlencode(query)}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+def back_to_email(**query: str) -> RedirectResponse:
+    return RedirectResponse(f"/settings/email?{urlencode(query)}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("", dependencies=[Depends(require_owner)])
@@ -267,14 +273,21 @@ def connect(
     repository: Annotated[CalendarRepository, Depends(get_calendar_repository)],
     sign_ins: Annotated[SignIns, Depends(get_sign_ins)],
     service: Annotated[CalendarService, Depends(get_calendar_service)],
+    mail: bool = False,
+    name: Annotated[str, Query(max_length=100)] = "",
 ):
+    """Off to Google or Microsoft. mail=true (from Settings, Email) also asks for mail."""
     account = repository.get(provider)
     if account is None:
+        if mail:
+            return back_to_email(error="First save the Google or Microsoft app in Settings, Calendar (the same app does both).")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Save the client id and secret first")
     verifier, challenge = pkce_pair()
     uri = redirect_uri(request, provider)
-    state = sign_ins.start(provider, verifier, uri)
-    url = service.provider(provider).auth_url(account.client_id, uri, state, challenge)
+    # Reconnecting the calendar never takes mail away again.
+    with_mail = mail or bool(account.mail)
+    state = sign_ins.start(provider, verifier, uri, mail=with_mail, name=" ".join(name.split()))
+    url = service.provider(provider).auth_url(account.client_id, uri, state, challenge, mail=with_mail)
     return RedirectResponse(url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
@@ -285,6 +298,7 @@ async def callback(
     sign_ins: Annotated[SignIns, Depends(get_sign_ins)],
     service: Annotated[CalendarService, Depends(get_calendar_service)],
     settings: Annotated[CoreSettings, Depends(get_settings)],
+    emails: Annotated[EmailRepository, Depends(get_email_repository)],
     state: Annotated[str, Query(max_length=200)] = "",
     code: Annotated[str, Query(max_length=4000)] = "",
     error: Annotated[str, Query(max_length=200)] = "",
@@ -298,6 +312,7 @@ async def callback(
     account = repository.get(provider)
     if account is None:
         return back_to_settings(error="Save the client id and secret first")
+    back = back_to_email if pending.mail and not account.mail else back_to_settings
     try:
         tokens = await service.provider(provider).exchange(
             code,
@@ -305,21 +320,26 @@ async def callback(
             account.client_id,
             decrypt_text(account.client_secret_encrypted, settings.secret_key),
             pending.redirect_uri,
+            mail=pending.mail,
         )
     except CalendarError as exc:
-        return back_to_settings(error=str(exc))
+        return back(error=str(exc))
     if not tokens.refresh_token:
-        return back_to_settings(
-            error="No refresh token came back. Remove Venus's access in your account and connect again."
-        )
+        return back(error="No refresh token came back. Remove Venus's access in your account and connect again.")
     repository.connect(
         provider,
         encrypt_text(tokens.refresh_token, settings.secret_key),
         tokens.email,
         datetime.now(timezone.utc),
+        mail=pending.mail,
     )
     service.forget()
-    return back_to_settings(connected=provider)
+    if pending.mail and tokens.email:
+        try:
+            emails.add_signed_in(provider, tokens.email, pending.name or tokens.email.split("@")[0], datetime.now(timezone.utc))
+        except DuplicateAccountError:
+            return back(error=f"{tokens.email} is already added with an app password. Remove that one first.")
+    return back(connected=provider)
 
 
 @router.delete("/{provider}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_owner)])
@@ -327,7 +347,10 @@ def disconnect(
     provider: ProviderName,
     repository: Annotated[CalendarRepository, Depends(get_calendar_repository)],
     service: Annotated[CalendarService, Depends(get_calendar_service)],
+    emails: Annotated[EmailRepository, Depends(get_email_repository)],
 ):
     if not repository.disconnect(provider):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not set up")
+    # Its mail went through the same sign-in.
+    emails.delete_signed_in(provider)
     service.forget()

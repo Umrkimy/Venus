@@ -43,3 +43,24 @@ class EmailRepository:
             session.delete(account)
             session.commit()
             return True
+
+    def add_signed_in(self, kind: str, address: str, display_name: str, now: datetime) -> EmailAccount:
+        """A mailbox reached through the Google or Microsoft sign-in (no password here)."""
+        with Session(self.engine, expire_on_commit=False) as session:
+            found = session.scalars(select(EmailAccount).where(EmailAccount.address == address)).first()
+            if found is not None:
+                if found.kind != kind:
+                    raise DuplicateAccountError(address)
+                found.display_name = display_name
+                session.commit()
+                return found
+            account = EmailAccount(address=address, display_name=display_name, kind=kind, created_at=now)
+            session.add(account)
+            session.commit()
+            return account
+
+    def delete_signed_in(self, kind: str) -> None:
+        with Session(self.engine) as session:
+            for account in session.scalars(select(EmailAccount).where(EmailAccount.kind == kind)):
+                session.delete(account)
+            session.commit()

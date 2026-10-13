@@ -20,12 +20,30 @@ app password any time without changing your real one.
 - **Others** (Fastmail, your own domain...): use their app password, and tick
   "Set the mail servers myself" for the IMAP (reading) and SMTP (sending)
   servers from their help pages.
-- **Uni Microsoft 365 and Outlook.com**: Microsoft switched off app
-  passwords for mail, so these need the Microsoft sign-in, which is the next
-  update.
 
 Venus signs in once to check the password before saving it. It's stored
 encrypted and never shown again.
+
+## Sign in with Microsoft or Google (uni Microsoft 365, Outlook.com, Gmail)
+
+Microsoft switched off app passwords for mail, so uni Microsoft 365 and
+Outlook.com mailboxes connect through a Microsoft sign-in. Gmail can use
+either way.
+
+1. Make the Google or Microsoft app first, as in the
+   [calendar guide](calendar.md#connecting-google-and-outlook). The same app
+   does calendar and mail.
+2. **Gmail only**: in Google Cloud Console, APIs & Services, Library,
+   enable the **Gmail API** too.
+3. Settings, Email: type your name, then **Sign in with Microsoft** or
+   **Sign in with Google**, and say yes to the extra mail permission.
+
+The mailbox shows up in the list and on the Email page. It's the same sign-in
+as your calendar, so Disconnect in Settings, Calendar removes both.
+
+A uni account may say it **needs admin approval**: your uni decides which
+apps may read student mail, and only their IT can allow Venus. Until then,
+uni mail can't be read by any app you make yourself.
 
 ## The Email page
 

@@ -78,12 +78,18 @@ class Provider:
     def client(self) -> httpx2.AsyncClient:
         return httpx2.AsyncClient(transport=self._transport, timeout=15)
 
-    def auth_url(self, client_id: str, redirect_uri: str, state: str, challenge: str) -> str:
+    # Extra permission for Settings, Email (read, mark read, send).
+    mail_scope = ""
+
+    def scopes(self, mail: bool = False) -> str:
+        return f"{self.scope} {self.mail_scope}" if mail else self.scope
+
+    def auth_url(self, client_id: str, redirect_uri: str, state: str, challenge: str, mail: bool = False) -> str:
         params = {
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
-            "scope": self.scope,
+            "scope": self.scopes(mail),
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
@@ -104,7 +110,9 @@ class Provider:
             raise CalendarError(f"{self.label} sign-in failed: {str(reason)[:200]}")
         return body
 
-    async def exchange(self, code: str, verifier: str, client_id: str, client_secret: str, redirect_uri: str) -> Tokens:
+    async def exchange(
+        self, code: str, verifier: str, client_id: str, client_secret: str, redirect_uri: str, mail: bool = False,
+    ) -> Tokens:
         body = await self._token({
             "grant_type": "authorization_code",
             "code": code,
@@ -112,22 +120,22 @@ class Provider:
             "client_id": client_id,
             "client_secret": client_secret,
             "redirect_uri": redirect_uri,
-            **self.extra_token_params(),
+            **self.extra_token_params(mail),
         })
         tokens = Tokens(body["access_token"], body.get("refresh_token"))
         return Tokens(tokens.access_token, tokens.refresh_token, await self.email(tokens.access_token))
 
-    async def refresh(self, refresh_token: str, client_id: str, client_secret: str) -> Tokens:
+    async def refresh(self, refresh_token: str, client_id: str, client_secret: str, mail: bool = False) -> Tokens:
         body = await self._token({
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
             "client_id": client_id,
             "client_secret": client_secret,
-            **self.extra_token_params(),
+            **self.extra_token_params(mail),
         })
         return Tokens(body["access_token"], body.get("refresh_token"))
 
-    def extra_token_params(self) -> dict:
+    def extra_token_params(self, mail: bool = False) -> dict:
         return {}
 
     async def _get(self, url: str, token: str, params: dict | None = None, headers: dict | None = None) -> dict:
@@ -184,9 +192,13 @@ class Google(Provider):
     api = "https://www.googleapis.com/calendar/v3"
     MAX_CALENDARS = 10
 
+    # Read, mark read and send Gmail (not delete forever, not settings).
+    mail_scope = "https://www.googleapis.com/auth/gmail.modify"
+
     def extra_auth_params(self) -> dict:
-        # offline = give a refresh token; consent = give it again on reconnect.
-        return {"access_type": "offline", "prompt": "consent"}
+        # offline = give a refresh token; consent = give it again on reconnect;
+        # include_granted_scopes = adding mail keeps the calendar permission.
+        return {"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true"}
 
     async def calendars(self, access_token: str) -> list[dict]:
         body = await self._get(f"{self.api}/users/me/calendarList", access_token, {"minAccessRole": "reader"})
@@ -277,8 +289,10 @@ class Microsoft(Provider):
     def extra_auth_params(self) -> dict:
         return {"response_mode": "query"}
 
-    def extra_token_params(self) -> dict:
-        return {"scope": self.scope}
+    mail_scope = "Mail.ReadWrite Mail.Send"
+
+    def extra_token_params(self, mail: bool = False) -> dict:
+        return {"scope": self.scopes(mail)}
 
     async def email(self, access_token: str) -> str | None:
         me = await self._get(f"{self.api}/me", access_token, {"$select": "mail,userPrincipalName"})
