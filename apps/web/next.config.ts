@@ -4,6 +4,9 @@ import { parseEnv } from "node:util";
 import type { NextConfig } from "next";
 
 const coreUrl = process.env.CORE_URL ?? "http://127.0.0.1:8000";
+// The portfolio demo (npm run build:demo) is plain files: no server, so no
+// /api forwarding, redirects or headers (the host sets those).
+const demo = process.env.NEXT_PUBLIC_VENUS_DEMO === "1";
 
 // Your own domain (README "Your own domain") is set in the repository
 // root .env. Only VENUS_DOMAIN is read, not the other values there.
@@ -14,18 +17,8 @@ function ownDomain(): string[] {
   return domain ? [domain] : [];
 }
 
-const nextConfig: NextConfig = {
-  // The Docker image (server mode) runs a small standalone server. Local
-  // `next build` + `next start` stay as they are.
-  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
-  // Dev mode only: let the phone open it through Tailscale
-  // (scripts/phone-access.ps1) or your own domain (scripts/domain-access.ps1).
-  allowedDevOrigins: ["*.ts.net", ...ownDomain()],
-  experimental: {
-    // /api passes requests on to Core but cuts bodies at 10 MB by default.
-    // 3D models (Settings upload) are bigger; Core itself refuses over 100 MB.
-    proxyClientMaxBodySize: "110mb",
-  },
+// Headers, redirects and /api forwarding need the Next server.
+const serverOnly: Partial<NextConfig> = {
   // Same headers on every page and /api answer. The CSP only blocks framing,
   // plugins and odd form or base targets, so Next's own scripts still run.
   async headers() {
@@ -67,6 +60,24 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+};
+
+const nextConfig: NextConfig = {
+  // The Docker image (server mode) runs a small standalone server. Local
+  // `next build` + `next start` stay as they are.
+  output: demo ? "export" : process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
+  // Demo pages as <page>/index.html, which every static host serves as is.
+  trailingSlash: demo,
+  // Dev mode only: let the phone open it through Tailscale
+  // (scripts/phone-access.ps1) or your own domain (scripts/domain-access.ps1).
+  allowedDevOrigins: ["*.ts.net", ...ownDomain()],
+  experimental: {
+    // /api passes requests on to Core but cuts bodies at 10 MB by default.
+    // 3D models (Settings upload) are bigger; Core itself refuses over 100 MB.
+    proxyClientMaxBodySize: "110mb",
+  },
+  // Only when a server runs (not the demo's plain files).
+  ...(demo ? {} : serverOnly),
 };
 
 export default nextConfig;
