@@ -26,6 +26,29 @@ const nextConfig: NextConfig = {
     // 3D models (Settings upload) are bigger; Core itself refuses over 100 MB.
     proxyClientMaxBodySize: "110mb",
   },
+  // Same headers on every page and /api answer. The CSP only blocks framing,
+  // plugins and odd form or base targets, so Next's own scripts still run.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
+          },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "same-origin" },
+          // The mic is for talking to Venus; nothing else needs the camera or location.
+          { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=(self)" },
+          // Browsers ignore this over plain http (localhost), so only HTTPS visits
+          // (phone over Tailscale, your own domain) are told to stay on HTTPS.
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+        ],
+      },
+    ];
+  },
   // /settings has no page of its own; open the first page in its menu.
   async redirects() {
     return [

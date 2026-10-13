@@ -328,6 +328,8 @@ export default function ChatBox({
             id="chat-input"
             rows={1}
             value={text}
+            // Venus refuses longer messages, so stop typing there.
+            maxLength={4000}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
               // Enter sends, Shift+Enter makes a new line.
