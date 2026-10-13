@@ -1,5 +1,5 @@
 # Venus at your own domain, reachable only inside your Tailscale network.
-# The Venus tray app runs this (README "Your own domain"). Settings come
+# The Venus tray app runs this (guide/remote-access.md). Settings come
 # from the .env in the repository root:
 #   VENUS_DOMAIN          for example venus.example.com, with a DNS A record
 #                         pointing to the PC's Tailscale address (100.x.y.z)

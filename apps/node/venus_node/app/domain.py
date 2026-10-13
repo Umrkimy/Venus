@@ -9,7 +9,7 @@ from typing import Callable
 
 from dotenv import dotenv_values
 
-# Your own domain (README "Your own domain"): Caddy answers https://<VENUS_DOMAIN>
+# Your own domain (guide/remote-access.md): Caddy answers https://<VENUS_DOMAIN>
 # on the PC's Tailscale address and passes requests to the web app.
 IS_WINDOWS = sys.platform == "win32"
 # Caddy is a console program; no window popping up. Linux has no such flag (0 = none).

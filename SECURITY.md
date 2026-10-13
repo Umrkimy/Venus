@@ -27,4 +27,23 @@ that's on your setup, not a bug in Venus.
 
 ## How it's protected
 
-See the "Security" part of the [README](README.md#security).
+- Core, the web page and Postgres only listen on `127.0.0.1`. Other devices
+  only get in through Tailscale.
+- Passwords are hashed (Argon2). Login tries are rate limited.
+- Session cookies are `HttpOnly` and `SameSite=Lax`, and `Secure` over HTTPS.
+- Core refuses changes sent by another website's page (it checks the
+  browser's `Sec-Fetch-Site` header), so a random site can't press buttons
+  in your Venus for you.
+- API keys, Tuya keys and calendar sign-ins you save in Settings are
+  encrypted (`VENUS_CORE_SECRET_KEY`) and never sent back to the page.
+  Calendar access is read-only and uses PKCE plus a one-time state, so a
+  sign-in can't be started by another site.
+- Every PC has its own token, stored only as a hash, and can be revoked.
+- The Node checks every command again on its own: only apps from your menu,
+  only `http`/`https` links, only folders inside your projects folder. No
+  shell commands, ever.
+- Core refuses to start with the example tokens from `.env.example`.
+- The web page sends security headers (no framing, no sniffing, mic only for
+  this site).
+
+More on tokens and signed-in browsers: [guide/remote-access.md](guide/remote-access.md#devices-and-logins).

@@ -1,4 +1,4 @@
-// The portfolio demo (docs: README "Portfolio demo"): the real pages with a
+// The portfolio demo (docs: guide/developing.md "Portfolio demo build"): the real pages with a
 // pretend Core in the browser. Set at build time by `npm run build:demo`.
 export const DEMO = process.env.NEXT_PUBLIC_VENUS_DEMO === "1";
 

@@ -157,6 +157,17 @@ if ($NodeOnly) {
 
     # The Node proves itself to Core with the same token.
     $nodeToken = Get-EnvValue $coreEnv "VENUS_CORE_DEV_NODE_TOKEN"
+    # The one personal value; asked here so nobody has to edit .env by hand.
+    $projects = ""
+    if (-not (Test-Path $nodeEnv)) {
+        Write-Host "Venus can open your code projects in VS Code ('open project venus')."
+        $projects = (Read-Host "Folder with your code projects (press Enter to skip)").Trim().Trim('"')
+    }
+    if ($projects -and -not (Test-Path -LiteralPath $projects -PathType Container)) {
+        Write-Host "That folder doesn't exist, skipped. You can set VENUS_NODE_PROJECTS_ROOT in apps\node\.env later."
+        $projects = ""
+    }
+    $projects = $projects -replace '\\', '/'
     New-EnvFile $nodeEnv @(
         "# Made by setup-venus.ps1. See apps/node/.env.example.",
         "VENUS_NODE_DEVICE_ID=$deviceId",
@@ -164,7 +175,7 @@ if ($NodeOnly) {
         "VENUS_NODE_CORE_URL=ws://127.0.0.1:9000/nodes/connect",
         "VENUS_NODE_REAL_ACTIONS=true",
         "# Folder with your code projects, for 'open project X' (optional).",
-        "VENUS_NODE_PROJECTS_ROOT=",
+        "VENUS_NODE_PROJECTS_ROOT=$projects",
         "VENUS_NODE_WAKE_PHRASES=hey venus,venus"
     ) | Out-Null
 }
