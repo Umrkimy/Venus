@@ -35,6 +35,7 @@ def build_instructions(
     approve_first: bool = False,
     now: str | None = None,
     home: list[str] | None = None,
+    calendar: str | None = None,
 ) -> str:
     """Base rules, what's on the PC and the owner, who Venus is, the project, then the time."""
     parts = [
@@ -46,6 +47,8 @@ def build_instructions(
         memories_line(memories or []),
         personality,
         project,
+        # Changes every few minutes at most, so it sits after the steady parts.
+        calendar,
         # Last: it changes every minute, and everything before it stays the
         # same, so OpenAI can reuse (cache) that start of the prompt.
         now,
