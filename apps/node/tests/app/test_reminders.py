@@ -57,6 +57,7 @@ def test_core_offline_is_quiet():
 def test_linux_uses_notify_send(monkeypatch):
     calls = []
     monkeypatch.setattr(reminders, "IS_WINDOWS", False)
+    monkeypatch.setattr(reminders, "IS_MAC", False)
     monkeypatch.setattr(reminders.shutil, "which", lambda name: "/usr/bin/notify-send")
     monkeypatch.setattr(reminders.subprocess, "run", lambda command, **options: calls.append(command))
 
@@ -72,3 +73,16 @@ def test_windows_uses_the_tray_toast(monkeypatch):
     reminders.desktop_notifier(lambda text, title: calls.append((text, title)))("Class in 5 min")
 
     assert calls == [("Class in 5 min", "Venus reminder")]
+
+
+def test_mac_uses_notification_center(monkeypatch):
+    calls = []
+    monkeypatch.setattr(reminders, "IS_WINDOWS", False)
+    monkeypatch.setattr(reminders, "IS_MAC", True)
+    from venus_node.commands import mac_apps
+
+    monkeypatch.setattr(mac_apps, "notify_mac", lambda title, text: calls.append((title, text)))
+
+    reminders.desktop_notifier(lambda text, title: calls.append("tray"))("Class in 5 min")
+
+    assert calls == [("Venus reminder", "Class in 5 min")]

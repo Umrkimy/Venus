@@ -1,3 +1,4 @@
+import sys
 import time
 import tkinter as tk
 
@@ -25,8 +26,20 @@ def to_rgb(pixels: np.ndarray) -> np.ndarray:
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
+def hide_dock_icon() -> None:
+    """On a Mac, Venus lives in the menu bar: no Dock icon for the orb window."""
+    if sys.platform != "darwin":
+        return
+    try:
+        import AppKit  # From pyobjc, which the Mac tray icon (pystray) needs anyway.
+
+        AppKit.NSApplication.sharedApplication().setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
+    except Exception:
+        pass  # Only cosmetic.
+
+
 class Circle:
-    """The orb and subtitles in the bottom-right corner, Linux version.
+    """The orb and subtitles in the bottom-right corner, Linux and Mac version.
 
     Same look and timing as the Windows one (voice/circle.py). It hides
     completely when idle or while a Venus tab is in front, so the dark
@@ -41,9 +54,13 @@ class Circle:
         self.root.attributes("-topmost", True)
         try:
             self.root.attributes("-type", "splash")  # No taskbar button on X11.
+        except tk.TclError:
+            pass  # Only X11 knows this one (not Wayland-only or a Mac).
+        try:
             self.root.attributes("-alpha", OPACITY)
         except tk.TclError:
-            pass  # Not every window system knows these.
+            pass
+        hide_dock_icon()
         x = self.root.winfo_screenwidth() - WIDTH - MARGIN
         y = self.root.winfo_screenheight() - SIZE - MARGIN - PANEL
         self.root.geometry(f"{WIDTH}x{SIZE}+{x}+{y}")

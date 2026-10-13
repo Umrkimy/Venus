@@ -18,7 +18,7 @@ from venus_node.app.single import (
     wait_for_quit,
 )
 from venus_node.app.tray import Tray
-from venus_node.commands.pc import IS_WINDOWS
+from venus_node.commands.pc import IS_MAC, IS_WINDOWS
 from venus_node.cli.dev_connect import run_connect
 from venus_node.cli.listen import start_listening, wake_listeners
 from venus_node.config import load_settings
@@ -45,6 +45,11 @@ def show_message(text: str) -> None:
         import ctypes
 
         ctypes.WinDLL("user32").MessageBoxW(None, text, "Venus", MB_ICONINFORMATION)
+        return
+    if IS_MAC:
+        from venus_node.commands.mac_apps import notify_mac
+
+        notify_mac("Venus", text)
         return
     notify_send = shutil.which("notify-send")
     if notify_send:
