@@ -1,6 +1,7 @@
 import fcntl
 import os
 import socket
+import sys
 import tempfile
 from pathlib import Path
 
@@ -15,11 +16,13 @@ _held: list = []
 
 
 def runtime_dir() -> Path:
-    """Per-user folder for locks: /run/user/<id> on systemd PCs, else a private temp folder."""
+    """Per-user folder for locks: /run/user/<id> on systemd PCs, else a private temp folder (/tmp on a Mac)."""
     base = os.environ.get("XDG_RUNTIME_DIR")
     if base and Path(base).is_dir():
         return Path(base)
-    folder = Path(tempfile.gettempdir()) / f"venus-{os.getuid()}"
+    # A Mac's temp folder (/var/folders/...) is too long for a socket path (104 bytes max).
+    temp = Path("/tmp") if sys.platform == "darwin" else Path(tempfile.gettempdir())
+    folder = temp / f"venus-{os.getuid()}"
     folder.mkdir(mode=0o700, exist_ok=True)
     return folder
 
