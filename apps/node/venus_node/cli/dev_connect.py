@@ -8,7 +8,8 @@ from venus_node.commands.factory import (
     create_node_executor,
 )
 from venus_node.commands.projects import list_projects
-from venus_node.commands.start_apps import StartApp, read_start_apps, run_powershell
+from venus_node.commands import pc
+from venus_node.commands.start_apps import StartApp
 from venus_node.connection.client import keep_connected
 from venus_protocol.schemas.connections import NodeHello
 
@@ -48,7 +49,7 @@ def print_retry() -> None:
 
 
 def list_reported_apps() -> list[StartApp]:
-    return read_start_apps(run_powershell)
+    return pc.list_apps()
 
 
 def list_reported_projects(settings: NodeSettings) -> list[str]:

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-import venus_node.commands.factory as runtime
+from venus_node.commands import pc
 
 from venus_node.commands.factory import (
     create_fake_node_executor,
@@ -11,7 +11,7 @@ from venus_node.commands.factory import (
 from venus_node.commands.start_apps import StartApp
 
 
-def test_create_node_executor_uses_private_settings_and_windows_launcher(
+def test_create_node_executor_uses_private_settings_and_pc_launcher(
     tmp_path,
     monkeypatch,
 ):
@@ -22,17 +22,13 @@ def test_create_node_executor_uses_private_settings_and_windows_launcher(
         "VENUS_NODE_CORE_URL=ws://core.test/nodes/connect\n"
     )
     database_path = tmp_path / "node.db"
-    started_targets: list[str] = []
+    launched: list[str] = []
 
+    monkeypatch.setattr(pc, "launch_app", launched.append)
     monkeypatch.setattr(
-        runtime,
-        "start_windows_target",
-        started_targets.append,
-    )
-    monkeypatch.setattr(
-        runtime,
-        "read_start_apps",
-        lambda run_powershell: [StartApp(name="Notepad", app_id="notepad-id")],
+        pc,
+        "list_apps",
+        lambda: [StartApp(name="Notepad", app_id="notepad-id")],
     )
 
     executor = create_node_executor(
@@ -52,10 +48,10 @@ def test_create_node_executor_uses_private_settings_and_windows_launcher(
 
     assert result is not None
     assert result.status == "succeeded"
-    assert started_targets == ["shell:AppsFolder\\notepad-id"]
+    assert launched == ["notepad-id"]
 
 
-def test_create_fake_node_executor_does_not_launch_windows_target(
+def test_create_fake_node_executor_does_not_launch_anything(
     tmp_path,
     monkeypatch,
 ):
@@ -67,14 +63,10 @@ def test_create_fake_node_executor_does_not_launch_windows_target(
     )
     database_path = tmp_path / "node.db"
 
-    def unexpected_windows_launch(target: str) -> None:
-        raise AssertionError("Fake executor must not launch Windows")
+    def unexpected_launch(target: str) -> None:
+        raise AssertionError("Fake executor must not launch anything")
 
-    monkeypatch.setattr(
-        runtime,
-        "start_windows_target",
-        unexpected_windows_launch,
-    )
+    monkeypatch.setattr(pc, "launch_app", unexpected_launch)
 
     executor = create_fake_node_executor(
         env_file=env_file,

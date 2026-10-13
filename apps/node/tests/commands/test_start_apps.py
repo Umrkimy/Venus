@@ -39,6 +39,8 @@ def test_run_powershell_opens_no_window(monkeypatch):
         return subprocess.CompletedProcess(args, 0, stdout="[]")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    # Windows-only flag; set here so the test also runs on Linux.
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
 
     assert run_powershell("Get-StartApps") == "[]"
     assert calls[0]["creationflags"] == subprocess.CREATE_NO_WINDOW
