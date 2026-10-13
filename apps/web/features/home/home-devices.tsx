@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Lightbulb, Monitor, Plug, Trash2, Tv } from "lucide-react";
+import { AirVent, Clapperboard, Lightbulb, Monitor, Plug, Trash2, Tv } from "lucide-react";
 import { useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -17,16 +17,19 @@ import { FIELD_HOVER, LABEL_CLASS, SELECT_TRIGGER_CLASS } from "@/features/setti
 import { getJson } from "@/lib/get-json";
 
 type Kind = "light" | "plug" | "tv" | "pc";
+// Air-con and scenes only come from Home Assistant.
+type DeviceKind = Kind | "aircon" | "scene";
 
 type HomeDevice = {
   id: string;
   name: string;
-  kind: Kind;
+  kind: DeviceKind;
   address: string | null;
   mac: string | null;
   tuya_id: string | null;
   tuya_version: number;
   has_key: boolean;
+  ha_entity_id: string | null;
 };
 
 const KINDS: { value: Kind; label: string; examples: (name: string) => string }[] = [
@@ -40,9 +43,10 @@ const KINDS: { value: Kind; label: string; examples: (name: string) => string }[
   { value: "pc", label: "Another PC to wake", examples: (name) => `wake the ${name}` },
 ];
 
-const ICONS = { light: Lightbulb, plug: Plug, tv: Tv, pc: Monitor };
+const ICONS = { light: Lightbulb, plug: Plug, tv: Tv, pc: Monitor, aircon: AirVent, scene: Clapperboard };
 
 function describe(device: HomeDevice) {
+  if (device.ha_entity_id) return `Home Assistant · ${device.ha_entity_id}`;
   if (device.kind === "pc") return device.mac;
   if (device.kind === "tv") return device.address;
   return `${device.address} · Tuya ${device.tuya_version}${device.has_key ? "" : " · no key"}`;
@@ -173,7 +177,7 @@ export default function HomeDevices() {
       )}
 
       <form onSubmit={add} className="mt-5 space-y-4 border-t border-border pt-5">
-        <p className="text-sm font-semibold">Add a device</p>
+        <p className="text-sm font-semibold">Add a device by hand</p>
         <div>
           <label htmlFor={`${ids}-kind`} className={LABEL_CLASS}>
             Type

@@ -60,3 +60,57 @@ def test_only_home_network_addresses(address):
     # A Venus that can be pointed at internet hosts would be a tool for attacks.
     with pytest.raises(ValidationError):
         home(device="tv", action="mute", address=address)
+
+
+HA = {"ha_url": "http://192.168.1.60:8123", "ha_token": "eyJhbGciOi.long.token"}
+
+
+def test_home_assistant_devices():
+    assert home(device="light", action="on", ha_entity_id="light.bedroom", **HA).ha_entity_id == "light.bedroom"
+    assert home(device="plug", action="off", ha_entity_id="switch.kettle", **HA).action == "off"
+    assert home(device="tv", action="on", ha_entity_id="media_player.living_tv", **HA).action == "on"
+    assert home(device="aircon", action="temperature", value=24, ha_entity_id="climate.bedroom_ac", **HA).value == 24
+    assert home(device="aircon", action="mode", mode="cool", ha_entity_id="climate.bedroom_ac", **HA).mode == "cool"
+    assert home(device="scene", action="activate", ha_entity_id="script.movie_time", **HA).action == "activate"
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"device": "light", "action": "on", "ha_entity_id": "light.bedroom"},  # no address or token
+        {"device": "light", "action": "on", "ha_entity_id": "switch.kettle", **HA},  # wrong entity type
+        {"device": "light", "action": "on", "ha_entity_id": "lock.front_door", **HA},  # not allowed at all
+        {"device": "aircon", "action": "temperature", "value": 60, "ha_entity_id": "climate.ac", **HA},  # too hot
+        {"device": "aircon", "action": "mode", "ha_entity_id": "climate.ac", **HA},  # no mode
+        {"device": "aircon", "action": "off"},  # air-con only through Home Assistant
+        {"device": "scene", "action": "activate"},
+        {"device": "tv", "action": "on", "address": "192.168.1.50"},  # Cast can't power on
+    ],
+)
+def test_home_assistant_commands_that_dont_fit_are_refused(fields):
+    with pytest.raises(ValidationError):
+        home(**fields)
+
+
+@pytest.mark.parametrize(
+    ("url", "saved"),
+    [
+        ("http://192.168.1.60:8123/", "http://192.168.1.60:8123"),
+        ("http://homeassistant.local:8123", "http://homeassistant.local:8123"),
+        ("http://homeassistant:8123", "http://homeassistant:8123"),
+        ("https://127.0.0.1:8123", "https://127.0.0.1:8123"),
+    ],
+)
+def test_home_assistant_address_on_the_home_network(url, saved):
+    assert home(device="scene", action="activate", ha_entity_id="scene.x", ha_url=url, ha_token="t").ha_url == saved
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://8.8.8.8:8123", "https://myhome.ui.nabu.casa", "ftp://192.168.1.60", "http://192.168.1.60:8123/api",
+     "http://user:pw@192.168.1.60:8123", "192.168.1.60:8123", "http://192.168.1.60:x"],
+)
+def test_home_assistant_address_elsewhere_is_refused(url):
+    # The token goes wherever this points, so only home addresses.
+    with pytest.raises(ValidationError):
+        home(device="scene", action="activate", ha_entity_id="scene.x", ha_url=url, ha_token="t")

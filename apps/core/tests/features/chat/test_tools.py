@@ -36,6 +36,9 @@ def test_save_memory_is_offered_to_luna():
         ({"device": "tv", "action": "mute"}, "mute tv"),
         ({"device": "laptop", "action": "wake"}, "wake laptop"),
         ({"device": "pc", "action": "lock"}, "lock pc"),
+        ({"device": "bedroom aircon", "action": "temperature", "value": 24}, "set bedroom aircon to 24 degrees"),
+        ({"device": "bedroom aircon", "action": "mode", "mode": "cool"}, "set bedroom aircon to cool mode"),
+        ({"device": "movie time", "action": "activate"}, "activate movie time"),
     ],
 )
 def test_control_home_becomes_a_sentence_the_home_rules_understand(arguments, expected):
@@ -52,6 +55,8 @@ def test_control_home_becomes_a_sentence_the_home_rules_understand(arguments, ex
         HomeDevice("bedroom light", "light", now, address="192.168.1.40", tuya_id="a", local_key_encrypted="x"),
         HomeDevice("tv", "tv", now, address="192.168.1.50"),
         HomeDevice("laptop", "pc", now, mac="AA:BB:CC:DD:EE:FF"),
+        HomeDevice("bedroom aircon", "aircon", now, ha_entity_id="climate.bedroom"),
+        HomeDevice("movie time", "scene", now, ha_entity_id="scene.movie_time"),
     ]
     intents = parse_home_text(sentence, devices)
     assert intents is not None and intents[0].action == arguments["action"]

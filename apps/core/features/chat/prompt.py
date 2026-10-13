@@ -57,7 +57,7 @@ def build_instructions(
 
 
 def home_line(devices: list[str]) -> str:
-    """The owner's lights, plugs, TV and PCs, so control_home uses their real names."""
+    """The owner's lights, plugs, TV, air-con, scenes and PCs, so control_home uses their real names."""
     if not devices:
         return ""
     return (

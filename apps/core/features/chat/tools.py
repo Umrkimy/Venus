@@ -67,8 +67,8 @@ TOOLS: list[dict] = [
         "type": "function",
         "name": "control_home",
         "description": (
-            "Control the owner's home: lights, plugs, the TV's volume, waking "
-            "another PC, or this PC's volume and lock."
+            "Control the owner's home: lights, plugs, the TV, the air-con, "
+            "scenes, waking another PC, or this PC's volume and lock."
         ),
         "parameters": {
             "type": "object",
@@ -82,11 +82,20 @@ TOOLS: list[dict] = [
                     "enum": [
                         "on", "off", "brightness", "color", "volume_up", "volume_down",
                         "volume_set", "mute", "unmute", "wake", "lock",
+                        "temperature", "mode", "activate",
                     ],
                 },
                 "value": {
                     "type": "integer",
-                    "description": "Brightness or volume from 0 to 100, only for brightness and volume_set",
+                    "description": (
+                        "Brightness or volume from 0 to 100 (brightness, volume_set), "
+                        "or the air-con's temperature in °C (temperature)"
+                    ),
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["cool", "heat", "fan", "dry", "auto"],
+                    "description": "Only for mode: the air-con's mode",
                 },
                 "color": {
                     "type": "string",
@@ -150,6 +159,12 @@ def home_sentence(arguments: dict) -> str:
         return f"set {device} volume to {value}"
     if action == "wake":
         return f"wake {device}"
+    if action == "temperature":
+        return f"set {device} to {value} degrees"
+    if action == "mode":
+        return f"set {device} to {arguments.get('mode', '')} mode"
+    if action == "activate":
+        return f"activate {device}"
     if action == "lock":
         return "lock pc"
     return f"{action} {device}"

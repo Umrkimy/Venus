@@ -25,6 +25,8 @@ from features.usage.models.llm_usage import LlmUsage  # noqa: F401
 from features.character.models.character_animation import CharacterAnimation  # noqa: F401
 from features.character.models.character_model import CharacterModel  # noqa: F401
 from features.home.models.home_device import HomeDevice  # noqa: F401
+from features.home.models.home_assistant import HomeAssistantSetting  # noqa: F401
+from features.settings.models.listening import ListeningSetting  # noqa: F401
 from features.calendar.models.calendar_account import CalendarAccount  # noqa: F401
 from storage.base import Base
 

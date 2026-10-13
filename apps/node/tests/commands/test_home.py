@@ -167,3 +167,99 @@ def test_router_sends_home_commands_to_home_and_refuses_without_it():
 
     assert with_home(pc_lock) == "ok"
     assert without(pc_lock).status == "denied"
+
+
+HA = {"ha_url": "http://192.168.1.60:8123", "ha_token": "secret-token"}
+
+
+def http_error(code: int):
+    import io
+
+    return home.urllib.error.HTTPError("http://ha", code, "no", {}, io.BytesIO())
+
+
+@pytest.mark.parametrize(
+    ("fields", "url", "body", "detail"),
+    [
+        ({"device": "light", "action": "brightness", "value": 40, "ha_entity_id": "light.bed"},
+         "light/turn_on", {"brightness_pct": 40}, "Brightness 40%"),
+        ({"device": "light", "action": "color", "color": "#ff8000", "ha_entity_id": "light.bed"},
+         "light/turn_on", {"rgb_color": [255, 128, 0]}, "Color #ff8000"),
+        ({"device": "plug", "action": "off", "ha_entity_id": "switch.kettle"}, "switch/turn_off", {}, "Off"),
+        ({"device": "tv", "action": "on", "ha_entity_id": "media_player.tv"}, "media_player/turn_on", {}, "On"),
+        ({"device": "tv", "action": "volume_set", "value": 25, "ha_entity_id": "media_player.tv"},
+         "media_player/volume_set", {"volume_level": 0.25}, "Volume 25"),
+        ({"device": "tv", "action": "mute", "ha_entity_id": "media_player.tv"},
+         "media_player/volume_mute", {"is_volume_muted": True}, "Muted"),
+        ({"device": "aircon", "action": "temperature", "value": 24, "ha_entity_id": "climate.ac"},
+         "climate/set_temperature", {"temperature": 24}, "24°C"),
+        ({"device": "aircon", "action": "mode", "mode": "fan_only", "ha_entity_id": "climate.ac"},
+         "climate/set_hvac_mode", {"hvac_mode": "fan_only"}, "Mode fan only"),
+        ({"device": "scene", "action": "activate", "ha_entity_id": "script.movie_time"},
+         "script/turn_on", {}, "Started"),
+    ],
+)
+def test_home_assistant_calls_the_right_service(fields, url, body, detail):
+    sent = []
+    run = home.create_home_executor(
+        home_assistant=lambda c: home.run_home_assistant(c, post=lambda *args: sent.append(args)),
+    )
+
+    result = run(command(**fields, **HA))
+
+    assert result.status == "succeeded" and result.detail == detail
+    assert sent == [(f"http://192.168.1.60:8123/api/services/{url}", "secret-token",
+                     {"entity_id": fields["ha_entity_id"], **body})]
+
+
+@pytest.mark.parametrize(
+    ("error", "says"),
+    [
+        (lambda: http_error(401), "didn't accept the token"),
+        (lambda: http_error(400), "said no (400)"),
+        (lambda: home.urllib.error.URLError("refused"), "Couldn't reach Home Assistant"),
+        (TimeoutError, "Couldn't reach Home Assistant"),
+    ],
+)
+def test_home_assistant_errors_become_clear_failures(error, says):
+    def post(*_):
+        raise error()
+
+    run = home.create_home_executor(home_assistant=lambda c: home.run_home_assistant(c, post=post))
+    result = run(command(device="plug", action="on", ha_entity_id="switch.kettle", **HA))
+
+    assert result.status == "failed" and says in result.detail
+
+
+def test_home_assistant_really_posts_json_with_the_token():
+    # A tiny local server stands in for Home Assistant.
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    seen = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen["path"] = self.path
+            seen["auth"] = self.headers["Authorization"]
+            seen["body"] = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"[]")
+
+        def log_message(self, *_):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.handle_request, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}"
+        detail = home.run_home_assistant(
+            command(device="light", action="off", ha_entity_id="light.bed", ha_url=url, ha_token="tok")
+        )
+    finally:
+        server.server_close()
+
+    assert detail == "Off"
+    assert seen == {"path": "/api/services/light/turn_off", "auth": "Bearer tok", "body": {"entity_id": "light.bed"}}
