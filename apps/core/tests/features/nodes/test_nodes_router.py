@@ -12,6 +12,8 @@ from starlette.websockets import WebSocketDisconnect
 from config import CoreSettings, get_settings
 from main import app
 
+from features.home.dependencies import get_home_device_repository
+from features.home.repository import HomeDeviceRepository
 from features.commands.result_registry import (
     CommandResultRegistry,
     get_command_result_registry,
@@ -156,6 +158,8 @@ def command_records():
     )
     memory_repository = MemoryRepository(engine)
     app.dependency_overrides[get_memory_repository] = lambda: memory_repository
+    home_repository = HomeDeviceRepository(engine)
+    app.dependency_overrides[get_home_device_repository] = lambda: home_repository
     yield CommandRecordRepository(engine)
     engine.dispose()
 

@@ -10,6 +10,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from venus_protocol.schemas.commands import (
     CommandResult,
+    HomeCommand,
     NodeCommand,
     OpenApplicationCommand,
     OpenProjectCommand,
@@ -31,6 +32,10 @@ from features.chat.provider import ChatProvider
 from features.chat.schemas import ChatRequest
 from features.conversations.dependencies import get_conversation_repository
 from features.conversations.repository import ConversationRepository
+from features.home.commands import home_command, intent_from_payload, intent_payload, without_secrets
+from features.home.dependencies import get_home_device_repository
+from features.home.repository import HomeDeviceRepository
+from features.home.rules import HomeIntent, HomeTextError, parse_home_text
 from features.memories.dependencies import get_memory_repository
 from features.memories.repository import MemoryRepository
 from features.memories.rule import memory_from_message
@@ -262,7 +267,8 @@ async def approve_and_dispatch(
     result_registry.expect(command, websocket)
     await websocket.send_json(command.model_dump(mode="json"))
 
-    return command.model_dump(mode="json")
+    # Back to the browser: a home command's Tuya key stays between Core and the Node.
+    return without_secrets(command.model_dump(mode="json"))
 
 
 async def propose(
@@ -271,15 +277,35 @@ async def propose(
     result_registry: CommandResultRegistry,
     command_records: CommandRecordRepository,
     settings_repository: SettingsRepository,
+    payload: str | None = None,
 ) -> dict:
-    command_records.create(record_from_command(command))
+    command_records.create(record_from_command(command, payload))
 
     # Full mode (D-34): apps, links and project folders are all low-risk.
     if settings_repository.get_mode() == "full":
         return await approve_and_dispatch(
             command, registry, result_registry, command_records,
         )
-    return command.model_dump(mode="json")
+    return without_secrets(command.model_dump(mode="json"))
+
+
+async def propose_home(
+    intent: HomeIntent,
+    home_devices: HomeDeviceRepository,
+    node_id: str,
+    settings: CoreSettings,
+    registry: NodeConnectionRegistry,
+    result_registry: CommandResultRegistry,
+    command_records: CommandRecordRepository,
+    settings_repository: SettingsRepository,
+) -> dict:
+    device = home_devices.get(intent.home_device_id) if intent.home_device_id else None
+    command = home_command(intent, device, node_id, settings.secret_key)
+    response = await propose(
+        command, registry, result_registry, command_records, settings_repository,
+        payload=intent_payload(intent),
+    )
+    return {**response, "label": intent.label, "home": True}
 
 
 @router.post("/nodes/{device_id}/commands", dependencies=[Depends(require_owner)])
@@ -535,6 +561,8 @@ async def chat(
     ],
     memories: Annotated[MemoryRepository, Depends(get_memory_repository)],
     live: Annotated[LiveVoice, Depends(get_live_voice)],
+    home_devices: Annotated[HomeDeviceRepository, Depends(get_home_device_repository)],
+    settings: Annotated[CoreSettings, Depends(get_settings)],
 ):
     if request.conversation_id is not None and not conversations.exists(
         request.conversation_id,
@@ -572,6 +600,8 @@ async def chat(
 
     full_mode = settings_repository.get_mode() == "full"
 
+    home = home_devices.list_all()
+
     def instructions() -> str:
         return chat_instructions(
             request, conversations, projects, personalities,
@@ -580,11 +610,12 @@ async def chat(
             memories,
             full_mode,
             local_now(settings_repository),
+            [f"{device.name} ({device.kind})" for device in home],
         )
 
     # Rules answer first; the brain only gets what they don't understand.
     answer = None
-    to_open: list[ParsedCommand] = []  # commands to propose, in order
+    to_open: list[ParsedCommand | HomeIntent] = []  # commands to propose, in order
     facts: list[str] = []  # facts saved during this message
     failures: list[str] = []  # why a command Luna chose can't run
     brain_line = None  # Luna's line written with her tool call
@@ -592,10 +623,15 @@ async def chat(
     if fact is not None:
         facts.append(memories.create(fact).text)
     else:
+        def understood(text: str) -> list[ParsedCommand | HomeIntent]:
+            # Home phrases first ("turn off the light"), then apps and sites.
+            intents = parse_home_text(text, home)
+            if intents is not None:
+                return list(intents)
+            return [parse_command_text(text, apps, folders, search_sites(shortcuts.list_all()))]
+
         try:
-            to_open.append(parse_command_text(
-                request.message, apps, folders, search_sites(shortcuts.list_all()),
-            ))
+            to_open.extend(understood(request.message))
         except NotUnderstoodError:
             brain = await provider.reply(request.message, history, instructions())
             facts = [memories.create(fact).text for fact in brain.memories]
@@ -604,9 +640,7 @@ async def chat(
             # Luna picked tools: run each choice through the same parser.
             for text in brain.commands:
                 try:
-                    to_open.append(parse_command_text(
-                        text, apps, folders, search_sites(shortcuts.list_all()),
-                    ))
+                    to_open.extend(understood(text))
                 except CommandTextError as exc:
                     failures.append(str(exc))
             if not to_open and not failures:
@@ -624,15 +658,24 @@ async def chat(
 
     if answer is None:
         # Each command is its own record with its own Approve.
-        proposals = [
-            await propose_parsed(
-                parsed, device_id, registry, result_registry, command_records,
-                settings_repository,
-            )
-            for parsed in to_open
-        ]
-        labels = [proposal["label"] for proposal in proposals]
-        done, fallback = action_summary(labels, facts, failures, full_mode)
+        proposals = []
+        for item in to_open:
+            if isinstance(item, HomeIntent):
+                try:
+                    proposals.append(await propose_home(
+                        item, home_devices, device_id, settings, registry, result_registry,
+                        command_records, settings_repository,
+                    ))
+                except HomeTextError as exc:
+                    failures.append(str(exc))
+            else:
+                proposals.append(await propose_parsed(
+                    item, device_id, registry, result_registry, command_records,
+                    settings_repository,
+                ))
+        labels = [proposal["label"] for proposal in proposals if not proposal.get("home")]
+        home_labels = [proposal["label"] for proposal in proposals if proposal.get("home")]
+        done, fallback = action_summary(labels, facts, failures, full_mode, home_labels)
         if brain_line and proposals and not facts and not failures:
             # She already said it with the tool call; saves a second model call.
             line = brain_line
@@ -641,6 +684,8 @@ async def chat(
             line = await luna_line(provider, request.message, instructions(), done, fallback)
         actions = [
             {"kind": "command", "command_id": proposal["command_id"], "label": proposal["label"]}
+            # A home action reads as it is ("Bedroom light: off"), not "Open ...".
+            | ({"title": proposal["label"]} if proposal.get("home") else {})
             for proposal in proposals
         ] + [{"kind": "memory", "text": fact} for fact in facts]
         if proposals:
@@ -665,6 +710,7 @@ def chat_instructions(
     memories: MemoryRepository,
     full_mode: bool = True,
     now: str | None = None,
+    home: list[str] | None = None,
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -681,6 +727,7 @@ def chat_instructions(
         [memory.text for memory in memories.newest(50)],
         approve_first=not full_mode,
         now=now,
+        home=home,
     )
 
 
@@ -712,10 +759,20 @@ def and_list(items: list[str]) -> str:
 
 def action_summary(
     labels: list[str], facts: list[str], failures: list[str], full_mode: bool,
+    home_labels: list[str] | None = None,
 ) -> tuple[str, str]:
     # What Luna is told she did, and the plain line if she can't answer.
     done: list[str] = []
     fallback: list[str] = []
+    if home_labels:
+        if full_mode:
+            done.append(f"You are doing this at the owner's home right now: {and_list(home_labels)}.")
+        else:
+            done.append(
+                f"You want to do this at the owner's home: {and_list(home_labels)}, and are "
+                "waiting for them to press Approve below."
+            )
+        fallback.append(f"On it: {', '.join(home_labels)}")
     if labels:
         if full_mode:
             done.append(f"You are opening {and_list(labels)} on the owner's PC right now.")
@@ -750,8 +807,18 @@ async def luna_line(
     return line or fallback
 
 
-def record_from_command(command: NodeCommand) -> CommandRecord:
+def record_from_command(command: NodeCommand, payload: str | None = None) -> CommandRecord:
     # Mirror of command_from_record: each kind saves its own target column.
+    if isinstance(command, HomeCommand):
+        # Only what to do; the address and Tuya key are looked up again on Approve.
+        return CommandRecord(
+            command_id=command.command_id,
+            device_id=command.device_id,
+            application_id=None,
+            expires_at=command.expires_at,
+            kind="home",
+            payload=payload,
+        )
     if isinstance(command, OpenUrlCommand):
         return CommandRecord(
             command_id=command.command_id,
@@ -778,8 +845,24 @@ def record_from_command(command: NodeCommand) -> CommandRecord:
     )
 
 
-def command_from_record(record: CommandRecord, expires_at: datetime) -> NodeCommand:
+def command_from_record(
+    record: CommandRecord,
+    expires_at: datetime,
+    home_devices: HomeDeviceRepository | None = None,
+    secret_key: str = "",
+) -> NodeCommand:
     # The record remembers the kind so approval rebuilds the same command.
+    if record.kind == "home":
+        intent = intent_from_payload(record.payload or "{}")
+        device = None
+        if intent.home_device_id is not None:
+            device = home_devices.get(intent.home_device_id) if home_devices else None
+            if device is None:
+                raise HomeTextError("That device was removed from Settings, Home")
+        return home_command(
+            intent, device, record.device_id, secret_key,
+            command_id=record.command_id, expires_at=expires_at,
+        )
     if record.kind == "open_url":
         return OpenUrlCommand(
             command_id=record.command_id,
@@ -855,6 +938,8 @@ async def decide_command_approval(
         CommandRecordRepository,
         Depends(get_command_record_repository),
     ],
+    home_devices: Annotated[HomeDeviceRepository, Depends(get_home_device_repository)],
+    settings: Annotated[CoreSettings, Depends(get_settings)],
 ):
     record = command_records.get(command_id)
 
@@ -902,7 +987,10 @@ async def decide_command_approval(
 
         return {"command_id": str(command_id), "status": "denied"}
 
-    command = command_from_record(record, expires_at)
+    try:
+        command = command_from_record(record, expires_at, home_devices, settings.secret_key)
+    except HomeTextError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return await approve_and_dispatch(
         command, registry, result_registry, command_records,
     )

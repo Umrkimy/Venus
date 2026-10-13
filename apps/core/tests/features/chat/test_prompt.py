@@ -112,3 +112,13 @@ def test_build_instructions_puts_the_time_last():
     # Last, so the unchanging start of the prompt can be cached.
     assert instructions.endswith("Right now it is noon.")
 
+
+
+def test_build_instructions_names_home_devices_for_control_home():
+    text = build_instructions(None, None, home=["bedroom light (light)", "tv (tv)"])
+
+    assert "Home devices you can control with control_home: bedroom light (light), tv (tv)" in text
+
+
+def test_no_home_devices_no_home_line():
+    assert "control_home" not in build_instructions(None, None)

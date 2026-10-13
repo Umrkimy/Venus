@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, Uuid
+from sqlalchemy import DateTime, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from storage.base import Base
@@ -24,6 +24,8 @@ class CommandRecord(Base):
     url: Mapped[str | None] = mapped_column(String(2083), nullable=True)
     # 255 matches the protocol's ProjectName max; raise both together.
     project_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Home commands: what to do as JSON (device id, action, value), never the Tuya key.
+    payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     state: Mapped[str] = mapped_column(String(20))
     detail: Mapped[str | None] = mapped_column(
@@ -45,6 +47,7 @@ class CommandRecord(Base):
         kind: str = "open_application",
         url: str | None = None,
         project_name: str | None = None,
+        payload: str | None = None,
     ) -> None:
         self.command_id = command_id
         self.device_id = device_id
@@ -54,5 +57,6 @@ class CommandRecord(Base):
         self.kind = kind
         self.url = url
         self.project_name = project_name
+        self.payload = payload
         self.detail = None
         self.completed_at = None
