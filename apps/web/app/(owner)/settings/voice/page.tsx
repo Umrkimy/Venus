@@ -14,7 +14,7 @@ export default function VoiceSettingsPage() {
       </SettingsSection>
       <SettingsSection
         title="Listening"
-        description="When Venus sends what you said (web and PC) and which mic the PC hears you with."
+        description="When Venus sends what you said, and which mic the PC uses."
       >
         <ListeningSettings />
       </SettingsSection>

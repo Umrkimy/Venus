@@ -7,7 +7,7 @@ export default function EmailSettingsPage() {
   return (
     <SettingsSection
       title="Email"
-      description="Mailboxes Venus can read, sum up and reply from. She writes drafts; only you press Send."
+      description="Mailboxes Venus reads. Luna drafts, you send."
     >
       {/* It reads ?connected= or ?error= after signing in, which needs Suspense. */}
       <Suspense>

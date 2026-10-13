@@ -4,15 +4,13 @@ import SettingsSection from "@/features/settings/settings-section";
 
 export default function HomeSettingsPage() {
   return (
-    <SettingsSection
-      title="Home"
-      description="Lights, plugs, your TV, air-con and other PCs Venus can control from the chat or by voice."
-    >
-      <HomeDevices />
-      <div className="mt-8 border-t border-border pt-5">
-        <p className="mb-4 text-sm font-semibold">Home Assistant</p>
+    <>
+      <SettingsSection title="Home Assistant" description="Lights, switches, TVs, air-con and scenes from your Home Assistant.">
         <HomeAssistant />
-      </div>
-    </SettingsSection>
+      </SettingsSection>
+      <SettingsSection title="Devices" description="What Venus can control by chat or voice.">
+        <HomeDevices />
+      </SettingsSection>
+    </>
   );
 }

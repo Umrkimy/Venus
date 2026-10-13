@@ -7,7 +7,7 @@ import listPlugin from "@fullcalendar/list";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Settings2, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -17,6 +17,13 @@ import { getJson } from "@/lib/get-json";
 
 type EventsResponse = { events: CalendarEvent[]; errors: string[] };
 type Range = { start: string; end: string };
+
+const DOT: Record<string, string> = {
+  Venus: "bg-primary",
+  Google: "bg-blue-600",
+  Outlook: "bg-cyan-700",
+  ics: "bg-violet-700",
+};
 
 // One colour per kind of calendar; .ics timetables share one.
 const SOURCE_CLASS: Record<string, string> = {
@@ -148,17 +155,26 @@ export default function CalendarPage() {
   }
 
   const problems = [...(events.data?.errors ?? []), ...(notice ? [notice] : [])];
+  const sources = ["Venus", ...new Set((events.data?.events ?? []).map((event) => (SOURCE_CLASS[event.source] ? event.source : "Timetables")))]
+    .filter((source, index, all) => all.indexOf(source) === index);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-semibold tracking-tight">Calendar</h1>
-        <p className="hidden text-sm text-muted-foreground sm:block">
-          Click a day or drag over times to add. Timetables (.ics) are read-only.
-        </p>
+        <ul className="hidden items-center gap-3 text-xs text-muted-foreground sm:flex" aria-label="Colours">
+          {sources.map((source) => (
+            <li key={source} className="flex items-center gap-1.5">
+              <span className={`size-2 rounded-full ${DOT[source] ?? DOT.ics}`} aria-hidden="true" />
+              {source}
+            </li>
+          ))}
+        </ul>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/settings/calendar">Connect calendars</Link>
+          <Button variant="ghost" size="icon-sm" asChild>
+            <Link href="/settings/calendar" aria-label="Calendar settings" title="Calendar settings">
+              <Settings2 />
+            </Link>
           </Button>
           <Button
             size="sm"
@@ -174,15 +190,19 @@ export default function CalendarPage() {
           </Button>
         </div>
       </div>
-      {problems.length > 0 && (
-        <p role="alert" className="text-sm text-destructive">
-          {problems.join(" · ")}
-        </p>
-      )}
-      {events.isError && (
-        <p role="alert" className="text-sm text-destructive">
-          Can&apos;t load your calendar.
-        </p>
+      {(problems.length > 0 || events.isError) && (
+        <div role="alert" className="flex flex-wrap items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <ul className="min-w-0 flex-1 space-y-0.5">
+            {events.isError && <li>Can&apos;t load your calendar.</li>}
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+          <Link href="/settings/calendar" className="shrink-0 font-medium underline underline-offset-2">
+            Fix in settings
+          </Link>
+        </div>
       )}
       <div className="venus-calendar min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-card p-2 sm:p-3">
         <FullCalendar

@@ -6,15 +6,16 @@ import SettingsSection from "@/features/settings/settings-section";
 
 export default function CalendarSettingsPage() {
   return (
-    <SettingsSection
-      title="Calendar"
-      description="Connect Google, Outlook or a timetable file so Venus knows your classes and meetings. Add and change events on the Calendar page."
-    >
-      {/* It reads ?connected= or ?error= after signing in, which needs Suspense. */}
-      <Suspense>
-        <CalendarSettings />
-      </Suspense>
-      <IcsCalendars />
-    </SettingsSection>
+    <>
+      <SettingsSection title="Google and Outlook" description="Read, add and change events.">
+        {/* Reads ?connected= or ?error= after signing in, which needs Suspense. */}
+        <Suspense>
+          <CalendarSettings />
+        </Suspense>
+      </SettingsSection>
+      <SettingsSection title="Timetables (.ics)" description="Read-only calendars from a link or a file, like a uni portal.">
+        <IcsCalendars />
+      </SettingsSection>
+    </>
   );
 }

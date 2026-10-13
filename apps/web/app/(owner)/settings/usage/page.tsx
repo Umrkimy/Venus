@@ -5,7 +5,7 @@ export default function UsageSettingsPage() {
   return (
     <SettingsSection
       title="Usage"
-      description="What chat and voice-to-text used on OpenAI. Days follow your time zone."
+      description="OpenAI cost for chat and voice-to-text, per day."
     >
       <UsageSummary />
     </SettingsSection>
