@@ -44,3 +44,12 @@ export function useCharacterModels() {
     retry: false,
   });
 }
+
+// Your uploaded .glb places; none in use = the built-in temple.
+export function useCharacterPlaces() {
+  return useQuery({
+    queryKey: ["character", "places"],
+    queryFn: () => getJson<CharacterModelInfo[]>("/api/character/places"),
+    retry: false,
+  });
+}

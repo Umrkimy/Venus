@@ -16,7 +16,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { type CharacterModelInfo, useCharacterModels } from "@/features/scene/use-character-info";
+import {
+  type CharacterModelInfo,
+  useCharacterModels,
+  useCharacterPlaces,
+} from "@/features/scene/use-character-info";
 
 function megabytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -50,8 +54,7 @@ function ModelRow({
           Use this
         </Button>
       )}
-      {/* The one in use can't be deleted, so its button isn't offered. */}
-      {onDelete && !active && (
+      {onDelete && (
         <Button
           type="button"
           variant="ghost"
@@ -68,10 +71,55 @@ function ModelRow({
   );
 }
 
+// What differs between the model list and the place list.
+type Kind = {
+  useList: typeof useCharacterModels;
+  // Core's list of uploads; a POST adds one, /{id} deletes one.
+  listUrl: string;
+  activeUrl: string;
+  builtIn: { name: string; detail: string };
+  accept: string;
+  hint: string;
+  // A model in use can't go (Venus would lose her look); a place can (back to the temple).
+  deleteInUse: boolean;
+  noun: string;
+};
+
+const MODEL: Kind = {
+  useList: useCharacterModels,
+  listUrl: "/api/character/models",
+  activeUrl: "/api/character/active",
+  builtIn: { name: "AvatarSample_A", detail: "template" },
+  accept: ".vrm",
+  hint: "Get models from VRoid Hub. Check each creator's terms before using one.",
+  deleteInUse: false,
+  noun: "model",
+};
+
+const PLACE: Kind = {
+  useList: useCharacterPlaces,
+  listUrl: "/api/character/places",
+  activeUrl: "/api/character/place/active",
+  builtIn: { name: "Sky temple", detail: "built in" },
+  accept: ".glb",
+  hint: "Any .glb scene works, from Sketchfab or Blender. Her feet stand at its middle, at floor height.",
+  deleteInUse: true,
+  noun: "place",
+};
+
 // Your own .vrm models: every device shows the one in use. Switching keeps the others.
 export default function CharacterModel() {
+  return <KeptFiles kind={MODEL} />;
+}
+
+// Your own .glb places she stands in; none in use = the built-in temple.
+export function CharacterPlace() {
+  return <KeptFiles kind={PLACE} />;
+}
+
+function KeptFiles({ kind }: { kind: Kind }) {
   const queryClient = useQueryClient();
-  const models = useCharacterModels();
+  const models = kind.useList();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,24 +147,24 @@ export default function CharacterModel() {
   function upload(file: File) {
     void change(
       () =>
-        fetch(`/api/character/models?name=${encodeURIComponent(file.name)}`, {
+        fetch(`${kind.listUrl}?name=${encodeURIComponent(file.name)}`, {
           method: "POST",
           headers: { "Content-Type": "application/octet-stream" },
           body: file,
         }),
-      "Couldn't upload that model.",
+      `Couldn't upload that ${kind.noun}.`,
     );
   }
 
   function use(id: number | null) {
     void change(
       () =>
-        fetch("/api/character/active", {
+        fetch(kind.activeUrl, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id }),
         }),
-      "Couldn't switch models.",
+      `Couldn't switch ${kind.noun}s.`,
     );
   }
 
@@ -125,8 +173,8 @@ export default function CharacterModel() {
     setDeleting(null);
     if (model) {
       void change(
-        () => fetch(`/api/character/models/${model.id}`, { method: "DELETE" }),
-        "Couldn't delete that model.",
+        () => fetch(`${kind.listUrl}/${model.id}`, { method: "DELETE" }),
+        `Couldn't delete that ${kind.noun}.`,
       );
     }
   }
@@ -137,12 +185,12 @@ export default function CharacterModel() {
   return (
     <div>
       {models.isPending ? (
-        <p className="text-sm text-muted-foreground">Checking your models...</p>
+        <p className="text-sm text-muted-foreground">Checking your {kind.noun}s...</p>
       ) : (
         <ul className="space-y-2">
           <ModelRow
-            name="AvatarSample_A"
-            detail="template"
+            name={kind.builtIn.name}
+            detail={kind.builtIn.detail}
             active={templateInUse}
             busy={busy}
             onUse={() => use(null)}
@@ -155,7 +203,8 @@ export default function CharacterModel() {
               active={model.active}
               busy={busy}
               onUse={() => use(model.id)}
-              onDelete={() => setDeleting(model)}
+              // The one in use is offered only where it may go.
+              onDelete={model.active && !kind.deleteInUse ? undefined : () => setDeleting(model)}
             />
           ))}
         </ul>
@@ -163,7 +212,7 @@ export default function CharacterModel() {
       <input
         ref={fileRef}
         type="file"
-        accept=".vrm"
+        accept={kind.accept}
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
@@ -180,11 +229,9 @@ export default function CharacterModel() {
         onClick={() => fileRef.current?.click()}
       >
         <Upload />
-        {busy ? "Saving..." : "Upload .vrm"}
+        {busy ? "Saving..." : `Upload ${kind.accept}`}
       </Button>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Get models from VRoid Hub. Check each creator&apos;s terms before using one.
-      </p>
+      <p className="mt-2 text-sm text-muted-foreground">{kind.hint}</p>
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">
           {error}
