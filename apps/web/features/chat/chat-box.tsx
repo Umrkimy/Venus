@@ -163,6 +163,16 @@ function DialogBox({ children }: { children: ReactNode }) {
   );
 }
 
+// The camera listens for drags on the whole stage and grabs the pointer on
+// press, which swallowed clicks on the buttons there now and then. Its listener
+// is a plain DOM one, so React's onPointerDown would come too late: stop it here.
+function keepFromCamera(element: HTMLElement | null) {
+  if (!element) return;
+  const stop = (event: PointerEvent) => event.stopPropagation();
+  element.addEventListener("pointerdown", stop);
+  return () => element.removeEventListener("pointerdown", stop);
+}
+
 export default function ChatBox({
   disabled,
   placeholder,
@@ -230,18 +240,21 @@ export default function ChatBox({
         ref={stageRef}
         className={`relative flex min-h-0 flex-1 flex-col ${resetView && !listOnStage ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
-        <div className="pointer-events-none absolute top-0 right-4 z-10 flex gap-2">
+        <div
+          ref={keepFromCamera}
+          className="pointer-events-none absolute top-0 right-4 z-10 flex gap-2"
+        >
           {resetView && !listOnStage && (
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="sm"
               onClick={resetView}
-              aria-label="Reset view"
               title="Reset view (or double-click)"
-              className="pointer-events-auto rounded-full bg-background/40 backdrop-blur-md"
+              className="pointer-events-auto rounded-full bg-background/50 backdrop-blur-md"
             >
               <Focus />
+              Reset view
             </Button>
           )}
           <ChatLog messages={messages} speaker={speaker} />

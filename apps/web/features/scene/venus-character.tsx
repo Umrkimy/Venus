@@ -10,16 +10,20 @@ import { voiceLevel, wantVoiceLevel } from "@/features/chat/use-speaker";
 import { type Body, createBody, moveBody } from "./body-motion";
 import { getMood } from "./scene-mood";
 import { setResetView, useStage } from "./stage-store";
+import { createTemple, disposePlace, type Place, templeFog } from "./temple";
 import { type MoveInfo, UploadedMoves } from "./uploaded-moves";
 
 // Shipped with Venus for everyone; your own model comes from Core instead.
 // AvatarSample_A by pixiv Inc.; conditions in public/models/CREDITS.md.
 const TEMPLATE_URL = "/models/avatar-sample-a.vrm";
 const OWN_MODEL_URL = "/api/character/model";
+const OWN_PLACE_URL = "/api/character/place";
 
-// Where the camera starts: a little above her chest, looking at it.
-const DEFAULT_VIEW = { position: [0, 1.3, 2.4], target: [0, 1.15, 0] };
-const VIEW_KEY = "venus.camera";
+// Where the camera starts: far enough back to see all of her, aimed a little
+// below her middle so she sits high, above the chat box.
+const DEFAULT_VIEW = { position: [0, 1.15, 4.6], target: [0, 0.72, 0] };
+// A new name when the default view changes, so an old saved view doesn't hide it.
+const VIEW_KEY = "venus.camera.3";
 
 type View = typeof DEFAULT_VIEW;
 
@@ -82,8 +86,28 @@ async function loadModel(loader: GLTFLoader, own: boolean) {
   return loader.loadAsync(TEMPLATE_URL);
 }
 
-export default function VenusCharacter({ own, moves }: { own: boolean; moves: MoveInfo[] }) {
+// Your own place if one is in use (Settings), else the built-in temple.
+async function loadPlace(loader: GLTFLoader, own: boolean): Promise<Place> {
+  if (own) {
+    const response = await fetch(OWN_PLACE_URL).catch(() => null);
+    const file = response?.ok ? await response.arrayBuffer().catch(() => null) : null;
+    const gltf = file ? await loader.parseAsync(file, "").catch(() => null) : null;
+    if (gltf) return { group: gltf.scene, update: () => {} };
+  }
+  return createTemple();
+}
+
+type VenusCharacterProps = {
+  own: boolean;
+  // The uploaded place in use: its id, null for the temple, undefined while unknown.
+  place: number | null | undefined;
+  moves: MoveInfo[];
+};
+
+export default function VenusCharacter({ own, place, moves }: VenusCharacterProps) {
   const holder = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const placeRef = useRef<Place | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const [ready, setReady] = useState(false);
@@ -101,7 +125,9 @@ export default function VenusCharacter({ own, moves }: { own: boolean; moves: Mo
     element.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+    sceneRef.current = scene;
+    // Far enough to see the sky around the place.
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
     const view = loadView();
     camera.position.fromArray(view.position);
     camera.lookAt(new THREE.Vector3().fromArray(view.target));
@@ -109,6 +135,8 @@ export default function VenusCharacter({ own, moves }: { own: boolean; moves: Mo
     const light = new THREE.DirectionalLight(0xffffff, Math.PI);
     light.position.set(1, 1.5, 2);
     scene.add(light);
+    // Soft light from all around, so the place isn't black on its shady side.
+    scene.add(new THREE.HemisphereLight("#cbbcff", "#4a3b5c", 0.8));
 
     const fit = () => {
       const { clientWidth: width, clientHeight: height } = element;
@@ -153,6 +181,7 @@ export default function VenusCharacter({ own, moves }: { own: boolean; moves: Mo
       last = now;
       controlsRef.current?.update(delta);
       if (parts) animate(parts, camera, now / 1000, delta, state);
+      placeRef.current?.update(now / 1000, delta);
       renderer.render(scene, camera);
     });
 
@@ -161,6 +190,7 @@ export default function VenusCharacter({ own, moves }: { own: boolean; moves: Mo
       renderer.setAnimationLoop(null);
       resize.disconnect();
       cameraRef.current = null;
+      sceneRef.current = null;
       movesRef.current = null;
       parts?.moves.dispose();
       if (parts) VRMUtils.deepDispose(parts.vrm.scene);
@@ -170,6 +200,33 @@ export default function VenusCharacter({ own, moves }: { own: boolean; moves: Mo
       renderer.domElement.remove();
     };
   }, [own]);
+
+  // The place she stands in; switching it in Settings doesn't reload her.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || place === undefined) return;
+    let stopped = false;
+    let shown: Place | null = null;
+    const loader = new GLTFLoader();
+    void loadPlace(loader, place !== null).then((loaded) => {
+      if (stopped) {
+        disposePlace(loaded.group);
+        return;
+      }
+      shown = loaded;
+      placeRef.current = loaded;
+      scene.add(loaded.group);
+      // Haze only in the temple; an uploaded place keeps its own look.
+      scene.fog = place === null ? templeFog() : null;
+    });
+    return () => {
+      stopped = true;
+      if (!shown) return;
+      scene.remove(shown.group);
+      disposePlace(shown.group);
+      if (placeRef.current === shown) placeRef.current = null;
+    };
+  }, [own, place]);
 
   // Your uploaded .vrma moves, loaded again when the list changes in Settings.
   useEffect(() => {
@@ -191,15 +248,22 @@ export default function VenusCharacter({ own, moves }: { own: boolean; moves: Mo
     controls.enableDamping = true;
     controls.minDistance = 0.4;
     controls.maxDistance = 6;
+    // Not below the floor: a little under level at most.
+    controls.maxPolarAngle = Math.PI * 0.55;
     controls.update();
     controlsRef.current = controls;
 
     const remember = () =>
       saveView({ position: camera.position.toArray(), target: controls.target.toArray() });
     const reset = () => {
+      // Without damping, one update uses up any leftover spin from a drag,
+      // so the camera doesn't keep drifting after the jump.
+      controls.enableDamping = false;
+      controls.update();
       camera.position.fromArray(DEFAULT_VIEW.position);
       controls.target.fromArray(DEFAULT_VIEW.target);
       controls.update();
+      controls.enableDamping = true;
       saveView(null);
     };
     controls.addEventListener("end", remember);

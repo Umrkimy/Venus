@@ -5,12 +5,17 @@ from pydantic import BaseModel
 
 from api.body_limit import read_body
 from features.auth.dependencies import require_owner
-from features.character.dependencies import get_animation_repository, get_character_repository
+from features.character.dependencies import (
+    get_animation_repository,
+    get_character_repository,
+    get_place_repository,
+)
 from features.character.repository import (
     AnimationInfo,
     AnimationRepository,
     CharacterInfo,
     CharacterRepository,
+    is_glb,
     is_vrm,
     is_vrma,
 )
@@ -129,6 +134,70 @@ def delete_model(
             detail="Switch to another model before deleting this one",
         )
     character.delete(model_id)
+
+
+# Places: a .glb room or scene she stands in. Same rules as models, except
+# none in use means the built-in temple, and the one in use can go (back to it).
+
+
+@router.get("/places")
+def list_places(
+    places: Annotated[CharacterRepository, Depends(get_place_repository)],
+):
+    return [model_body(info) for info in places.list_info()]
+
+
+@router.get("/place")
+def get_place(
+    request: Request,
+    places: Annotated[CharacterRepository, Depends(get_place_repository)],
+):
+    info = places.get_info()
+    if info is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No own place; use the temple")
+    headers = {"ETag": etag(info), "Cache-Control": "private, no-cache"}
+    if request.headers.get("if-none-match") == headers["ETag"]:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    return Response(places.get_data(), media_type="model/gltf-binary", headers=headers)
+
+
+@router.post("/places", status_code=status.HTTP_201_CREATED)
+async def post_place(
+    request: Request,
+    places: Annotated[CharacterRepository, Depends(get_place_repository)],
+    name: Annotated[str, Query(min_length=1, max_length=200)],
+):
+    data = await read_body(request, MAX_MODEL_BYTES, "Place is over 100 MB")
+    if not is_glb(data):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That isn't a .glb file",
+        )
+    if is_vrm(data):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That's a character; add it under Model instead",
+        )
+    return model_body(places.add(name, data))
+
+
+@router.put("/place/active")
+def put_active_place(
+    choice: ActiveModel,
+    places: Annotated[CharacterRepository, Depends(get_place_repository)],
+):
+    if not places.activate(choice.id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such place")
+    return [model_body(info) for info in places.list_info()]
+
+
+@router.delete("/places/{place_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_place(
+    place_id: int,
+    places: Annotated[CharacterRepository, Depends(get_place_repository)],
+):
+    if not places.delete(place_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such place")
 
 
 def animation_body(info: AnimationInfo) -> dict:

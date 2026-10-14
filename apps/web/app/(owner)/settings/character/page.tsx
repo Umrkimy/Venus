@@ -1,4 +1,4 @@
-import CharacterModel from "@/features/settings/character-model";
+import CharacterModel, { CharacterPlace } from "@/features/settings/character-model";
 import CharacterMoves from "@/features/settings/character-moves";
 import CharacterSwitch from "@/features/settings/character-switch";
 import SettingsSection from "@/features/settings/settings-section";
@@ -14,6 +14,12 @@ export default function CharacterSettingsPage() {
         description="Which Venus you see, on every device. Switching keeps the others."
       >
         <CharacterModel />
+      </SettingsSection>
+      <SettingsSection
+        title="Place"
+        description="Where she stands, on every device. Switching keeps the others."
+      >
+        <CharacterPlace />
       </SettingsSection>
       <SettingsSection
         title="Moves"

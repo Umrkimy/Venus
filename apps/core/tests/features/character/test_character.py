@@ -8,8 +8,13 @@ from fastapi.testclient import TestClient
 from config import CoreSettings, get_settings
 from features.auth.dependencies import get_auth_repository
 from features.auth.repository import AuthRepository
-from features.character.dependencies import get_animation_repository, get_character_repository
-from features.character.repository import AnimationRepository, CharacterRepository, is_vrm, is_vrma
+from features.character.dependencies import (
+    get_animation_repository,
+    get_character_repository,
+    get_place_repository,
+)
+from features.character.models.character_model import CharacterPlace
+from features.character.repository import AnimationRepository, CharacterRepository, is_glb, is_vrm, is_vrma
 from main import app
 from tests.database import make_test_engine
 
@@ -251,3 +256,81 @@ def test_animations_need_the_owner(animations):
     response = client.post("/character/animations?name=a.vrma", content=VRMA, headers=node)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+PLACE = glb({}, b"temple mesh")
+
+
+@pytest.fixture
+def places(character):
+    engine = make_test_engine()
+    repository = CharacterRepository(engine, CharacterPlace)
+    app.dependency_overrides[get_place_repository] = lambda: repository
+    yield repository
+    engine.dispose()
+
+
+def upload_place(name: str, data: bytes = PLACE) -> dict:
+    response = client.post(f"/character/places?name={name}", content=data, headers=OWNER_HEADERS)
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
+def test_is_glb_takes_any_gltf_binary_but_not_other_files():
+    assert is_glb(PLACE)
+    assert is_glb(VRM1)
+    assert not is_glb(b"\x89PNG\r\n\x1a\n" + b"\0" * 40)
+    assert not is_glb(b"glTF" + b"\0" * 16)
+
+
+def test_no_place_means_the_temple(places):
+    assert client.get("/character/places", headers=OWNER_HEADERS).json() == []
+    assert client.get("/character/place", headers=OWNER_HEADERS).status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_upload_place_puts_it_in_use_and_download_gives_the_same_file(places):
+    added = upload_place("garden.glb")
+
+    assert (added["name"], added["size"], added["active"]) == ("garden.glb", len(PLACE), True)
+    got = client.get("/character/place", headers=OWNER_HEADERS)
+    assert got.content == PLACE
+    again = client.get("/character/place", headers={**OWNER_HEADERS, "If-None-Match": got.headers["etag"]})
+    assert again.status_code == status.HTTP_304_NOT_MODIFIED
+
+
+def test_places_are_kept_apart_from_models(places):
+    upload_place("garden.glb")
+
+    assert client.get("/character/models", headers=OWNER_HEADERS).json() == []
+    assert client.get("/character", headers=OWNER_HEADERS).json() == {"custom": False}
+
+
+def test_place_upload_refuses_other_files_and_characters(places):
+    not_glb = client.post("/character/places?name=sky.png", content=b"not a place", headers=OWNER_HEADERS)
+    character_file = client.post("/character/places?name=fdl.vrm", content=VRM1, headers=OWNER_HEADERS)
+
+    assert not_glb.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert character_file.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert places.list_info() == []
+
+
+def test_back_to_the_temple_keeps_the_place(places):
+    added = upload_place("garden.glb")
+
+    response = client.put("/character/place/active", json={"id": None}, headers=OWNER_HEADERS)
+
+    assert [(item["id"], item["active"]) for item in response.json()] == [(added["id"], False)]
+    assert client.get("/character/place", headers=OWNER_HEADERS).status_code == status.HTTP_404_NOT_FOUND
+    missing = client.put("/character/place/active", json={"id": 999}, headers=OWNER_HEADERS)
+    assert missing.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_the_place_in_use_can_be_deleted_back_to_the_temple(places):
+    added = upload_place("garden.glb")
+
+    response = client.delete(f"/character/places/{added['id']}", headers=OWNER_HEADERS)
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert client.get("/character/place", headers=OWNER_HEADERS).status_code == status.HTTP_404_NOT_FOUND
+    again = client.delete(f"/character/places/{added['id']}", headers=OWNER_HEADERS)
+    assert again.status_code == status.HTTP_404_NOT_FOUND

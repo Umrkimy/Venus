@@ -47,9 +47,11 @@ type VoiceOrbProps = {
   onStopLocal: () => void;
 };
 
-// Venus's orb, always in the middle above the chat box, like ChatGPT's voice
-// mode: calm between turns, moving while you and Luna talk (the 3D Venus
-// joins it later). Luna's line floats above it while she speaks on the PC.
+// Venus's orb in the middle above the chat box, like ChatGPT's voice mode.
+// Only there while something happens (hands-free on, or a turn listening,
+// thinking or speaking), so it doesn't sit over Venus the rest of the time;
+// the mic button still turns hands-free on. Luna's line floats above it
+// while she speaks on the PC.
 // Click it while she thinks or talks to stop her; otherwise it turns
 // hands-free listening on or off (same as the mic button).
 export default function VoiceOrb({ local, onStopLocal }: VoiceOrbProps) {
@@ -67,6 +69,7 @@ export default function VoiceOrb({ local, onStopLocal }: VoiceOrbProps) {
   const quiet = !listenOn && pcState === "idle";
 
   const busy = localBusy || pcBusy;
+  const shown = listenOn || state !== "idle";
 
   function click() {
     if (!busy) {
@@ -100,22 +103,34 @@ export default function VoiceOrb({ local, onStopLocal }: VoiceOrbProps) {
           </motion.p>
         )}
       </AnimatePresence>
-      <button
-        type="button"
-        onClick={click}
-        aria-label={label}
-        title={label}
-        className="group pointer-events-auto relative grid place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:transition-transform motion-safe:active:scale-95"
-      >
-        <Orb state={state} quiet={quiet} size={96} />
-        {busy && (
-          // Shows on hover: a click here stops her.
-          <Square
-            aria-hidden="true"
-            className="absolute size-5 fill-white text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-90 group-focus-visible:opacity-90"
-          />
+      <AnimatePresence>
+        {shown && (
+          <motion.div
+            key="orb"
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.6 }}
+            transition={springSoft}
+          >
+            <button
+              type="button"
+              onClick={click}
+              aria-label={label}
+              title={label}
+              className="group pointer-events-auto relative grid place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:transition-transform motion-safe:active:scale-95"
+            >
+              <Orb state={state} quiet={quiet} size={96} />
+              {busy && (
+                // Shows on hover: a click here stops her.
+                <Square
+                  aria-hidden="true"
+                  className="absolute size-5 fill-white text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-90 group-focus-visible:opacity-90"
+                />
+              )}
+            </button>
+          </motion.div>
         )}
-      </button>
+      </AnimatePresence>
     </div>
   );
 }

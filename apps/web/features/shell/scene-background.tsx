@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 
 import { useCharacterOn } from "@/features/scene/character-store";
-import { useCharacterInfo, useCharacterMoves } from "@/features/scene/use-character-info";
+import { useCharacterInfo, useCharacterMoves, useCharacterPlaces } from "@/features/scene/use-character-info";
 import type { MoveInfo } from "@/features/scene/uploaded-moves";
 
 // Loaded only when she's on: with her off, the 3D code is never downloaded.
@@ -20,6 +20,10 @@ export default function SceneBackground() {
   const info = useCharacterInfo();
   const own = info.data?.custom ? info.data : null;
   const moves = useCharacterMoves();
+  const places = useCharacterPlaces();
+  // Unknown until Core answers (so the temple isn't drawn just to be swapped);
+  // signed out or no answer = the temple.
+  const place = places.isPending ? undefined : (places.data?.find((item) => item.active)?.id ?? null);
 
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -27,7 +31,12 @@ export default function SceneBackground() {
       {/* Wait for Core's answer, so the template isn't loaded just to be swapped.
           Another model in use changes the key, which loads her again. */}
       {characterOn && !info.isPending && (
-        <VenusCharacter key={own?.id ?? "template"} own={own !== null} moves={moves.data ?? NO_MOVES} />
+        <VenusCharacter
+          key={own?.id ?? "template"}
+          own={own !== null}
+          place={place}
+          moves={moves.data ?? NO_MOVES}
+        />
       )}
     </div>
   );
