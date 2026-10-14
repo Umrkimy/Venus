@@ -21,9 +21,9 @@ const OWN_PLACE_URL = "/api/character/place";
 
 // Where the camera starts: far enough back to see all of her, aimed a little
 // below her middle so she sits high, above the chat box.
-const DEFAULT_VIEW = { position: [0, 1.05, 4.6], target: [0, 0.55, 0] };
+const DEFAULT_VIEW = { position: [0, 1.15, 4.6], target: [0, 0.72, 0] };
 // A new name when the default view changes, so an old saved view doesn't hide it.
-const VIEW_KEY = "venus.camera.2";
+const VIEW_KEY = "venus.camera.3";
 
 type View = typeof DEFAULT_VIEW;
 
