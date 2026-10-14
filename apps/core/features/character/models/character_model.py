@@ -6,14 +6,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from storage.base import Base
 
 
-class CharacterModel(Base):
-    """A 3D Venus the owner uploaded (.vrm file), kept out of git like the personality.
+class KeptFile:
+    """An uploaded 3D file kept in a list where at most one is in use.
 
-    Several can be kept; at most one is in use. None in use = the web shows the
-    template model shipped with Venus.
+    Shared by the models and the places, which work the same way.
     """
-
-    __tablename__ = "character_model"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # The uploaded file's name, shown in Settings.
@@ -31,3 +28,22 @@ class CharacterModel(Base):
         self.uploaded_at = uploaded_at
         self.data = data
         self.active = active
+
+
+class CharacterModel(KeptFile, Base):
+    """A 3D Venus the owner uploaded (.vrm file), kept out of git like the personality.
+
+    Several can be kept; at most one is in use. None in use = the web shows the
+    template model shipped with Venus.
+    """
+
+    __tablename__ = "character_model"
+
+
+class CharacterPlace(KeptFile, Base):
+    """A 3D place for Venus to stand in (.glb file), kept like the models.
+
+    None in use = the web draws the built-in temple.
+    """
+
+    __tablename__ = "character_place"

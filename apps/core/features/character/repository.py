@@ -8,7 +8,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, load_only
 
 from features.character.models.character_animation import CharacterAnimation
-from features.character.models.character_model import CharacterModel
+from features.character.models.character_model import CharacterModel, KeptFile
 
 @dataclass
 class CharacterInfo:
@@ -52,29 +52,45 @@ def is_vrm(data: bytes) -> bool:
     return "VRMC_vrm" in extensions or "VRM" in extensions
 
 
+def is_glb(data: bytes) -> bool:
+    """Any glTF binary with a readable JSON part (a place, a prop, a model)."""
+    if len(data) < 20 or data[:4] != b"glTF":
+        return False
+    length, kind = struct.unpack_from("<I4s", data, 12)
+    if kind != b"JSON":
+        return False
+    try:
+        return isinstance(json.loads(data[20 : 20 + length]), dict)
+    except ValueError:
+        return False
+
+
 def is_vrma(data: bytes) -> bool:
     """A VRM animation is a glTF binary naming the VRMC_vrm_animation extension."""
     return "VRMC_vrm_animation" in gltf_extensions(data)
 
 
 class CharacterRepository:
-    def __init__(self, engine: Engine) -> None:
+    """Uploaded models; with table=CharacterPlace, uploaded places (same rules)."""
+
+    def __init__(self, engine: Engine, table: type[KeptFile] = CharacterModel) -> None:
         self.engine = engine
+        self.table = table
 
     def list_info(self) -> list[CharacterInfo]:
         with Session(self.engine) as session:
             # Leaves the files themselves (megabytes each) in the database.
             rows = session.scalars(
-                select(CharacterModel)
+                select(self.table)
                 .options(
                     load_only(
-                        CharacterModel.name,
-                        CharacterModel.size,
-                        CharacterModel.uploaded_at,
-                        CharacterModel.active,
+                        self.table.name,
+                        self.table.size,
+                        self.table.uploaded_at,
+                        self.table.active,
                     )
                 )
-                .order_by(CharacterModel.id)
+                .order_by(self.table.id)
             )
             return [model_info(row) for row in rows]
 
@@ -84,13 +100,13 @@ class CharacterRepository:
 
     def get_data(self) -> bytes | None:
         with Session(self.engine) as session:
-            return session.scalar(select(CharacterModel.data).where(CharacterModel.active.is_(True)))
+            return session.scalar(select(self.table.data).where(self.table.active.is_(True)))
 
     def add(self, name: str, data: bytes) -> CharacterInfo:
         """Keeps the upload and puts it in use."""
-        row = CharacterModel(name, len(data), datetime.now(timezone.utc), data, active=True)
+        row = self.table(name, len(data), datetime.now(timezone.utc), data, active=True)
         with Session(self.engine) as session:
-            session.execute(update(CharacterModel).values(active=False))
+            session.execute(update(self.table).values(active=False))
             session.add(row)
             session.commit()
             return model_info(row)
@@ -98,15 +114,15 @@ class CharacterRepository:
     def activate(self, model_id: int | None) -> bool:
         """Puts one model in use (None = the template). False if there's no such model."""
         with Session(self.engine) as session:
-            if model_id is not None and session.get(CharacterModel, model_id) is None:
+            if model_id is not None and session.get(self.table, model_id) is None:
                 return False
-            session.execute(update(CharacterModel).values(active=CharacterModel.id == model_id))
+            session.execute(update(self.table).values(active=self.table.id == model_id))
             session.commit()
             return True
 
     def delete(self, model_id: int) -> bool:
         with Session(self.engine) as session:
-            row = session.get(CharacterModel, model_id)
+            row = session.get(self.table, model_id)
             if row is None:
                 return False
             session.delete(row)
@@ -114,7 +130,7 @@ class CharacterRepository:
             return True
 
 
-def model_info(row: CharacterModel) -> CharacterInfo:
+def model_info(row: KeptFile) -> CharacterInfo:
     return CharacterInfo(row.id, row.name, row.size, row.uploaded_at, row.active)
 
 

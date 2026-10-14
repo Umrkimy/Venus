@@ -22,7 +22,7 @@ from features.settings.models.voice import VoiceSetting
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.usage.models.llm_usage import LlmUsage
 from features.character.models.character_animation import CharacterAnimation
-from features.character.models.character_model import CharacterModel
+from features.character.models.character_model import CharacterModel, CharacterPlace
 from features.home.models.home_device import HomeDevice
 from features.home.models.home_assistant import HomeAssistantSetting
 from features.calendar.models.calendar_account import CalendarAccount
