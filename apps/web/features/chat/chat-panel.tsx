@@ -90,6 +90,7 @@ type ChatPanelProps = {
   // A new chat started here is created inside this project.
   projectId?: string;
   emptyState?: ReactNode;
+  corner?: ReactNode;
 };
 
 export default function ChatPanel({
@@ -97,6 +98,7 @@ export default function ChatPanel({
   initialMessages,
   projectId,
   emptyState,
+  corner,
 }: ChatPanelProps) {
   const queryClient = useQueryClient();
   const [conversationId, setConversationId] = useState(startId);
@@ -257,6 +259,7 @@ export default function ChatPanel({
         onSend={chat}
         speaker={speaker}
         emptyState={emptyState}
+        corner={corner}
         thinking={sending || thinkingElsewhere}
         listening={(voiceHere && voice.state === "listening") || handsFree.phase === "recording"}
         liveWords={handsFree.words}
