@@ -21,7 +21,7 @@ CACHE_SECONDS = 300
 DAYS_AHEAD = 7
 # Luna's instructions get at most this many events, so a busy week stays cheap.
 MAX_EVENTS = 25
-SIGNED_OUT = "{label} signed Venus out. Go to Settings, Calendar and press Reconnect."
+SIGNED_OUT = "{label} signed Venus out. Press Reconnect to sign in again."
 
 
 @dataclass
@@ -33,6 +33,8 @@ class PendingSignIn:
     # Started from Settings, Email: also ask for mail, and the name to send as.
     mail: bool = False
     name: str = ""
+    # Reconnect pressed on a page (email, calendar, home): go back there after.
+    back: str = ""
 
 
 class SignIns:
@@ -46,12 +48,14 @@ class SignIns:
     def __init__(self) -> None:
         self._pending: dict[str, PendingSignIn] = {}
 
-    def start(self, provider: str, verifier: str, redirect_uri: str, mail: bool = False, name: str = "") -> str:
+    def start(
+        self, provider: str, verifier: str, redirect_uri: str, mail: bool = False, name: str = "", back: str = "",
+    ) -> str:
         now = time.monotonic()
         self._pending = {key: value for key, value in self._pending.items() if value.expires > now}
         state = secrets.token_urlsafe(24)
         self._pending[state] = PendingSignIn(
-            provider, verifier, redirect_uri, now + STATE_LIFETIME.total_seconds(), mail, name,
+            provider, verifier, redirect_uri, now + STATE_LIFETIME.total_seconds(), mail, name, back,
         )
         return state
 

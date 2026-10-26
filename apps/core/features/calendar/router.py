@@ -13,7 +13,7 @@ from features.calendar.dependencies import get_calendar_repository, get_calendar
 from features.calendar.ics import MAX_BYTES, check_ics, fetch_ics, ics_events
 from features.calendar.providers import PROVIDERS, CalendarError, Event, EventDraft, pkce_pair, sign_in_problem
 from features.calendar.repository import CalendarRepository, DuplicateNameError
-from features.calendar.service import CalendarService, SignIns, due_soon
+from features.calendar.service import CalendarService, PendingSignIn, SignIns, due_soon
 from features.email.dependencies import get_email_repository
 from features.email.repository import DuplicateAccountError, EmailRepository
 from features.settings.router import encrypt_key
@@ -114,6 +114,18 @@ def back_to_email(**query: str) -> RedirectResponse:
     return RedirectResponse(f"/settings/email?{urlencode(query)}", status_code=status.HTTP_303_SEE_OTHER)
 
 
+# Pages with their own Reconnect button. A fixed list, so the link can't send you to another site.
+BACK_PAGES = {"email": "/email", "calendar": "/calendar", "home": "/"}
+BackPage = Literal["email", "calendar", "home"]
+
+
+def going_back(pending: PendingSignIn, otherwise):
+    page = BACK_PAGES.get(pending.back)
+    if page is None:
+        return otherwise
+    return lambda **query: RedirectResponse(f"{page}?{urlencode(query)}", status_code=status.HTTP_303_SEE_OTHER)
+
+
 def signed_out(account) -> str | None:
     moment = account.signed_out_at if account else None
     if moment is None:
@@ -158,7 +170,9 @@ async def events(
         if start.tzinfo is None or end.tzinfo is None or not start < end <= start + MAX_RANGE:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Pick a start and end with a time zone, at most 400 days apart")
         found, errors = await service.between(start, end)
-    return {"events": [event_json(event) for event in found], "errors": errors}
+    # Which sign-ins ended, so the page can show a Reconnect button for each.
+    ended = [account.provider for account in service.repository.list_all() if account.signed_out_at]
+    return {"events": [event_json(event) for event in found], "errors": errors, "signed_out": ended}
 
 
 @router.get("/writable", dependencies=[Depends(require_owner)])
@@ -285,6 +299,7 @@ def connect(
     service: Annotated[CalendarService, Depends(get_calendar_service)],
     mail: bool = False,
     name: Annotated[str, Query(max_length=100)] = "",
+    back: BackPage | None = None,
 ):
     """Off to Google or Microsoft. mail=true (from Settings, Email) also asks for mail."""
     account = repository.get(provider)
@@ -296,7 +311,7 @@ def connect(
     uri = redirect_uri(request, provider)
     # Reconnecting the calendar never takes mail away again.
     with_mail = mail or bool(account.mail)
-    state = sign_ins.start(provider, verifier, uri, mail=with_mail, name=" ".join(name.split()))
+    state = sign_ins.start(provider, verifier, uri, mail=with_mail, name=" ".join(name.split()), back=back or "")
     url = service.provider(provider).auth_url(account.client_id, uri, state, challenge, mail=with_mail)
     return RedirectResponse(url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
@@ -319,12 +334,12 @@ async def callback(
         return back_to_settings(error="That sign-in expired or wasn't started here. Try Connect again.")
     if error or not code:
         label = PROVIDERS[provider].label
-        back = back_to_email if pending.mail else back_to_settings
+        back = going_back(pending, back_to_email if pending.mail else back_to_settings)
         return back(error=sign_in_problem(label, error) if error else f"{label} didn't send a sign-in code. Try again.")
     account = repository.get(provider)
     if account is None:
         return back_to_settings(error="Save the client id and secret first")
-    back = back_to_email if pending.mail and not account.mail else back_to_settings
+    back = going_back(pending, back_to_email if pending.mail and not account.mail else back_to_settings)
     try:
         tokens = await service.provider(provider).exchange(
             code,

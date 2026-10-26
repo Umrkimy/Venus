@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import type { CalendarEvent } from "@/features/calendar/event-dialog";
+import ReconnectButton, { SignInNotice, isSignInProvider, type SignInProvider } from "@/features/calendar/reconnect-button";
 import { useEmailAccounts } from "@/features/email/email-accounts";
 import { inboxQuery } from "@/features/email/email-page";
 import { getJson } from "@/lib/get-json";
@@ -50,7 +51,7 @@ export default function TodayCard() {
   const week = useQuery({
     queryKey: ["calendar-week"],
     queryFn: () =>
-      getJson<{ events: CalendarEvent[]; errors: string[] }>(
+      getJson<{ events: CalendarEvent[]; errors: string[]; signed_out?: SignInProvider[] }>(
         "/api/calendar/events",
       ),
     staleTime: 5 * 60_000,
@@ -65,7 +66,8 @@ export default function TodayCard() {
 
   const events = todaysEvents(week.data?.events ?? [], now);
   const hasMail = (accounts.data?.length ?? 0) > 0;
-  if (!hasMail && events.length === 0) return null;
+  const calendarSignedOut = week.data?.signed_out ?? [];
+  if (!hasMail && events.length === 0 && calendarSignedOut.length === 0) return null;
 
   const fresh = inboxes.reduce(
     (sum, inbox) =>
@@ -75,6 +77,12 @@ export default function TodayCard() {
     0,
   );
   const failed = inboxes.filter((inbox) => inbox.isError).length;
+  // Signed out by Google or Microsoft: one button each, right here.
+  const signedOut = new Set<SignInProvider>(calendarSignedOut);
+  inboxes.forEach((inbox, index) => {
+    const kind = accounts.data?.[index]?.kind;
+    if (inbox.isError && isSignInProvider(kind) && /signed Venus out/.test(inbox.error.message)) signedOut.add(kind);
+  });
   const loading = inboxes.some((inbox) => inbox.isPending);
 
   return (
@@ -167,6 +175,19 @@ export default function TodayCard() {
             )}
           </Link>
         )}
+      </div>
+      {signedOut.size > 0 && (
+        <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+          <p className="text-xs text-muted-foreground">Signed out, so some events or mail are missing.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[...signedOut].map((provider) => (
+              <ReconnectButton key={provider} provider={provider} back="home" size="xs" />
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="mt-2 empty:hidden">
+        <SignInNotice />
       </div>
     </section>
   );

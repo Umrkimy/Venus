@@ -13,9 +13,10 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import EventDialog, { type CalendarEvent, type DialogState, type EventDraft } from "@/features/calendar/event-dialog";
+import ReconnectButton, { SignInNotice, type SignInProvider } from "@/features/calendar/reconnect-button";
 import { getJson } from "@/lib/get-json";
 
-type EventsResponse = { events: CalendarEvent[]; errors: string[] };
+type EventsResponse = { events: CalendarEvent[]; errors: string[]; signed_out?: SignInProvider[] };
 type Range = { start: string; end: string };
 
 const DOT: Record<string, string> = {
@@ -155,11 +156,13 @@ export default function CalendarPage() {
   }
 
   const problems = [...(events.data?.errors ?? []), ...(notice ? [notice] : [])];
+  const signedOut = events.data?.signed_out ?? [];
   const sources = ["Venus", ...new Set((events.data?.events ?? []).map((event) => (SOURCE_CLASS[event.source] ? event.source : "Timetables")))]
     .filter((source, index, all) => all.indexOf(source) === index);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
+      <SignInNotice />
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-semibold tracking-tight">Calendar</h1>
         <ul className="hidden items-center gap-3 text-xs text-muted-foreground sm:flex" aria-label="Colours">
@@ -199,9 +202,17 @@ export default function CalendarPage() {
               <li key={problem}>{problem}</li>
             ))}
           </ul>
-          <Link href="/settings/calendar" className="shrink-0 font-medium underline underline-offset-2">
-            Fix in settings
-          </Link>
+          {signedOut.length > 0 ? (
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {signedOut.map((provider) => (
+                <ReconnectButton key={provider} provider={provider} back="calendar" />
+              ))}
+            </div>
+          ) : (
+            <Link href="/settings/calendar" className="shrink-0 font-medium underline underline-offset-2">
+              Fix in settings
+            </Link>
+          )}
         </div>
       )}
       <div className="venus-calendar min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-card p-2 sm:p-3">

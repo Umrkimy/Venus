@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import ReconnectButton, { SignInNotice, isSignInProvider } from "@/features/calendar/reconnect-button";
 import Composer, { type Draft } from "@/features/email/composer";
 import { useEmailAccounts } from "@/features/email/email-accounts";
 import InboxOverview, { type Overview } from "@/features/email/inbox-overview";
@@ -230,6 +231,7 @@ export default function EmailPage() {
         </Button>
       </header>
 
+      <SignInNotice />
       {error && (
         <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
@@ -258,9 +260,13 @@ export default function EmailPage() {
           {inbox.isError && (
             <div role="alert" className="space-y-2 p-3 text-sm">
               <p className="text-destructive">{inbox.error.message}</p>
-              <Button asChild size="sm" variant="outline">
-                <Link href={account?.kind === "imap" ? "/settings/email" : "/settings/calendar"}>Fix in settings</Link>
-              </Button>
+              {isSignInProvider(account?.kind) && /signed Venus out|isn't connected/.test(inbox.error.message) ? (
+                <ReconnectButton provider={account.kind} back="email" />
+              ) : (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={account?.kind === "imap" ? "/settings/email" : "/settings/calendar"}>Fix in settings</Link>
+                </Button>
+              )}
             </div>
           )}
           {inbox.data && (
