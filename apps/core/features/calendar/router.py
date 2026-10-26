@@ -114,6 +114,14 @@ def back_to_email(**query: str) -> RedirectResponse:
     return RedirectResponse(f"/settings/email?{urlencode(query)}", status_code=status.HTTP_303_SEE_OTHER)
 
 
+def signed_out(account) -> str | None:
+    moment = account.signed_out_at if account else None
+    if moment is None:
+        return None
+    # SQLite (tests) drops the zone; it was saved in UTC.
+    return (moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)).isoformat()
+
+
 @router.get("", dependencies=[Depends(require_owner)])
 def list_calendars(
     request: Request,
@@ -126,7 +134,8 @@ def list_calendars(
             "label": provider.label,
             "client_id": saved[name].client_id if name in saved else None,
             "configured": name in saved,
-            "connected": bool(name in saved and saved[name].refresh_token_encrypted),
+            "connected": bool(name in saved and saved[name].refresh_token_encrypted and not saved[name].signed_out_at),
+            "signed_out_at": signed_out(saved.get(name)),
             "email": saved[name].account_email if name in saved else None,
             "mail": bool(name in saved and saved[name].mail),
             "redirect_uri": redirect_uri(request, name),

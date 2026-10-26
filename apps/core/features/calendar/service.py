@@ -21,6 +21,7 @@ CACHE_SECONDS = 300
 DAYS_AHEAD = 7
 # Luna's instructions get at most this many events, so a busy week stays cheap.
 MAX_EVENTS = 25
+SIGNED_OUT = "{label} signed Venus out. Go to Settings, Calendar and press Reconnect."
 
 
 @dataclass
@@ -113,9 +114,19 @@ class CalendarService:
         except InvalidToken as exc:
             label = PROVIDERS[provider_name].label
             raise CalendarError(f"{label}: the saved sign-in can't be read. Connect it again in Settings, Calendar.") from exc
-        tokens = await self.provider(provider_name).refresh(
-            refresh_token, account.client_id, client_secret, mail=bool(account.mail),
-        )
+        label = PROVIDERS[provider_name].label
+        if account.signed_out_at is not None:
+            raise CalendarError(SIGNED_OUT.format(label=label), "invalid_grant")
+        try:
+            tokens = await self.provider(provider_name).refresh(
+                refresh_token, account.client_id, client_secret, mail=bool(account.mail),
+            )
+        except CalendarError as exc:
+            if exc.code != "invalid_grant":
+                raise
+            # Remembered, so Settings can say so and Venus stops asking.
+            self.repository.mark_signed_out(provider_name, datetime.now(timezone.utc))
+            raise CalendarError(SIGNED_OUT.format(label=label), exc.code) from exc
         if tokens.refresh_token:
             self.repository.save_refresh_token(provider_name, encrypt_text(tokens.refresh_token, self.secret_key))
         return tokens.access_token

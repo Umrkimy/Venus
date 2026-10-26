@@ -19,6 +19,11 @@ import httpx2
 class CalendarError(Exception):
     """Google or Microsoft said no; the message is safe to show."""
 
+    def __init__(self, message: str, code: str = "") -> None:
+        super().__init__(message)
+        # The provider's own error code, e.g. invalid_grant (signed out).
+        self.code = code
+
 
 @dataclass(frozen=True)
 class Event:
@@ -105,7 +110,8 @@ class Provider:
             response = await client.post(self.token_endpoint, data=form)
         body = response.json() if response.content else {}
         if response.status_code != 200:
-            raise CalendarError(sign_in_problem(self.label, str(body.get("error") or ""), response.status_code))
+            code = str(body.get("error") or "")
+            raise CalendarError(sign_in_problem(self.label, code, response.status_code), code)
         return body
 
     async def exchange(

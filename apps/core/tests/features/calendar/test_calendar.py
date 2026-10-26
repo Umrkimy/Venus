@@ -133,7 +133,37 @@ def test_one_broken_calendar_doesnt_hide_the_other(repository, fake):
     events, errors = asyncio.run(service.events(NOW))
 
     assert [e.title for e in events] == ["Lecturer meeting"]
-    assert errors == ["The Google sign-in expired or was removed. Connect again."]
+    assert errors == ["Google signed Venus out. Go to Settings, Calendar and press Reconnect."]
+
+
+def test_signed_out_is_remembered_and_google_isnt_asked_again(repository, fake):
+    connect_both(repository)
+    fake.fail_google = True
+    service = CalendarService(repository, SECRET, httpx2.MockTransport(fake), Cached())
+
+    asyncio.run(service.between(NOW, NOW + timedelta(days=1)))
+    asked = len([r for r in fake.requests if "oauth2.googleapis.com" in str(r.url)])
+    _, errors = asyncio.run(service.between(NOW, NOW + timedelta(days=1)))
+
+    assert repository.get("google").signed_out_at is not None
+    assert repository.get("microsoft").signed_out_at is None
+    assert len([r for r in fake.requests if "oauth2.googleapis.com" in str(r.url)]) == asked == 1
+    assert errors == ["Google signed Venus out. Go to Settings, Calendar and press Reconnect."]
+
+
+def test_settings_shows_signed_out_and_signing_in_again_clears_it(client, repository, fake):
+    client.put("/calendar/google", json={"client_id": "g-client", "client_secret": "s3cret"}, headers=OWNER)
+    repository.connect("google", encrypt_text("old", SECRET), "me@gmail.com", NOW)
+    repository.mark_signed_out("google", NOW)
+
+    listed = next(c for c in client.get("/calendar", headers=OWNER).json() if c["provider"] == "google")
+    start = client.get("/calendar/google/connect", headers=OWNER, follow_redirects=False)
+    state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
+    client.get(f"/calendar/google/callback?state={state}&code=c0de", headers=OWNER, follow_redirects=False)
+    again = next(c for c in client.get("/calendar", headers=OWNER).json() if c["provider"] == "google")
+
+    assert (listed["connected"], listed["signed_out_at"]) == (False, NOW.isoformat())
+    assert (again["connected"], again["signed_out_at"]) == (True, None)
 
 
 def test_events_are_cached_for_a_few_minutes(repository, fake):

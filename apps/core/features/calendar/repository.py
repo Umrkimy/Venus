@@ -56,7 +56,15 @@ class CalendarRepository:
             account.account_email = email
             account.connected_at = now
             account.mail = mail
+            account.signed_out_at = None
             session.commit()
+
+    def mark_signed_out(self, provider: str, now: datetime) -> None:
+        with Session(self.engine) as session:
+            account = session.get(CalendarAccount, provider)
+            if account is not None and account.signed_out_at is None:
+                account.signed_out_at = now
+                session.commit()
 
     def save_refresh_token(self, provider: str, refresh_token_encrypted: str) -> None:
         # Microsoft hands out a new refresh token with each refresh.
