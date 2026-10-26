@@ -52,6 +52,7 @@ class MailSummary:
     subject: str
     date: datetime | None
     unread: bool
+    category: str = "primary"
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,25 @@ class Outgoing:
     in_reply_to: str = ""
     references: str = ""
     thread_id: str = ""
+
+
+# --- Sorting the inbox --------------------------------------------------------
+
+# Gmail's own tabs that mean "sent to a list", not to you.
+LIST_LABELS = {"CATEGORY_SOCIAL", "CATEGORY_FORUMS"}
+
+
+def categorize(unsubscribe: bool, labels=(), focused: bool = True) -> str:
+    """primary, newsletters or promotions, from what the provider already knows. No AI.
+
+    A List-Unsubscribe header means bulk mail sent to a list. Gmail's
+    Promotions tab and Outlook's "Other" (not Focused) count as promotions.
+    """
+    if "CATEGORY_PROMOTIONS" in labels:
+        return "promotions"
+    if unsubscribe or LIST_LABELS & set(labels):
+        return "newsletters"
+    return "primary" if focused else "promotions"
 
 
 # --- HTML mail as plain text ------------------------------------------------
@@ -213,7 +233,7 @@ def inbox(settings: MailSettings, limit: int = 30, connect=open_imap) -> list[Ma
         if not uids:
             return []
         status, data = imap.uid(
-            "FETCH", b",".join(uids).decode(), "(UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])",
+            "FETCH", b",".join(uids).decode(), "(UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE LIST-UNSUBSCRIBE)])",
         )
         if status != "OK":
             raise MailError("The inbox couldn't be read.")
@@ -231,6 +251,7 @@ def inbox(settings: MailSettings, limit: int = 30, connect=open_imap) -> list[Ma
         found[uid] = MailSummary(
             uid, name, address, decoded(message.get("Subject")) or "(no subject)",
             date_of(message) or arrived(flags), "\\Seen" not in flags,
+            categorize(bool(message.get("List-Unsubscribe"))),
         )
 
     for part in data:

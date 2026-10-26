@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import ReconnectButton, { SignInNotice, isSignInProvider } from "@/features/calendar/reconnect-button";
 import Composer, { type Draft } from "@/features/email/composer";
 import { useEmailAccounts } from "@/features/email/email-accounts";
 import InboxOverview, { type Overview } from "@/features/email/inbox-overview";
@@ -21,7 +22,16 @@ import MailBody from "@/features/email/mail-body";
 import TonePicker, { SenderAvatar, type Tone } from "@/features/email/tone-picker";
 import { cn } from "@/lib/utils";
 
-type Summary = { uid: string; sender: string; sender_address: string; subject: string; date: string | null; unread: boolean };
+export type Category = "primary" | "newsletters" | "promotions";
+export type Summary = {
+  uid: string;
+  sender: string;
+  sender_address: string;
+  subject: string;
+  date: string | null;
+  unread: boolean;
+  category: Category;
+};
 type Message = Summary & { to: string[]; cc: string[]; body: string; html: string; attachments: string[] };
 
 export function errorText(data: { detail?: unknown }, fallback: string) {
@@ -35,6 +45,22 @@ async function load<T>(path: string): Promise<T> {
   if (!response.ok) throw new Error(errorText(data, "Couldn't load that."));
   return data as T;
 }
+
+// The same list for the Email page and the home Today card, so they share one copy.
+export function inboxQuery(accountId: string | null) {
+  return {
+    queryKey: ["email-inbox", accountId],
+    queryFn: () => load<Summary[]>(`/api/email/accounts/${accountId}/messages`),
+    enabled: accountId !== null,
+    retry: false,
+  };
+}
+
+const TABS: { id: Category; label: string }[] = [
+  { id: "primary", label: "Primary" },
+  { id: "newsletters", label: "Newsletters" },
+  { id: "promotions", label: "Promotions" },
+];
 
 function when(date: string | null) {
   if (!date) return "";
@@ -61,13 +87,9 @@ export default function EmailPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [tone, setTone] = useState<Tone>("professional");
   const [wish, setWish] = useState("");
+  const [tab, setTab] = useState<Category>("primary");
 
-  const inbox = useQuery({
-    queryKey: ["email-inbox", accountId],
-    queryFn: () => load<Summary[]>(`/api/email/accounts/${accountId}/messages`),
-    enabled: accountId !== null,
-    retry: false,
-  });
+  const inbox = useQuery(inboxQuery(accountId));
   const message = useQuery({
     queryKey: ["email-message", accountId, open],
     queryFn: () => load<Message>(`/api/email/accounts/${accountId}/messages/${open}`),
@@ -143,7 +165,10 @@ export default function EmailPage() {
   }
 
   const reader = open !== null;
-  const unread = inbox.data?.filter((item) => item.unread).length ?? 0;
+  const shown = inbox.data?.filter((item) => item.category === tab);
+  const unreadIn = (category: Category) =>
+    inbox.data?.filter((item) => item.unread && item.category === category).length ?? 0;
+  const unread = unreadIn(tab);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
@@ -206,6 +231,7 @@ export default function EmailPage() {
         </Button>
       </header>
 
+      <SignInNotice />
       {error && (
         <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
@@ -232,13 +258,47 @@ export default function EmailPage() {
             </div>
           )}
           {inbox.isError && (
-            <p role="alert" className="p-3 text-sm text-destructive">
-              {inbox.error.message}
-            </p>
+            <div role="alert" className="space-y-2 p-3 text-sm">
+              <p className="text-destructive">{inbox.error.message}</p>
+              {isSignInProvider(account?.kind) && /signed Venus out|isn't connected/.test(inbox.error.message) ? (
+                <ReconnectButton provider={account.kind} back="email" />
+              ) : (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={account?.kind === "imap" ? "/settings/email" : "/settings/calendar"}>Fix in settings</Link>
+                </Button>
+              )}
+            </div>
+          )}
+          {inbox.data && (
+            <div role="tablist" aria-label="Kind of mail" className="mb-1.5 flex gap-1 rounded-lg bg-muted p-[3px]">
+              {TABS.map((item) => {
+                const count = unreadIn(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === item.id}
+                    onClick={() => setTab(item.id)}
+                    className={cn(
+                      "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                      tab === item.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {item.label}
+                    {count > 0 && <span className="text-primary">{count}</span>}
+                  </button>
+                );
+              })}
+            </div>
           )}
           {inbox.data?.length === 0 && <p className="p-3 text-sm text-muted-foreground">Your inbox is empty.</p>}
+          {inbox.data && inbox.data.length > 0 && shown?.length === 0 && (
+            <p className="p-3 text-sm text-muted-foreground">Nothing here in your newest mail.</p>
+          )}
           <ul className="space-y-0.5">
-            {inbox.data?.map((item) => {
+            {shown?.map((item) => {
               const active = open === item.uid;
               return (
                 <li key={item.uid}>

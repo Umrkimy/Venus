@@ -109,6 +109,7 @@ def summary_json(item: MailSummary) -> dict:
         "subject": item.subject,
         "date": item.date.isoformat() if item.date else None,
         "unread": item.unread,
+        "category": item.category,
     }
 
 

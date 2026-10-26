@@ -57,6 +57,8 @@ type ChatBoxProps = {
   speaker: Speaker;
   // Shown on the stage before the first message (a project's chat list).
   emptyState?: ReactNode;
+  // A small card in the stage's top-left before the first message; Venus stays in view.
+  corner?: ReactNode;
   // Luna is working on a reply (asked here or by voice on the PC).
   thinking?: boolean;
   // You're talking to Venus right now; your words land here next.
@@ -180,6 +182,7 @@ export default function ChatBox({
   onSend,
   speaker,
   emptyState,
+  corner,
   thinking = false,
   listening = false,
   liveWords = "",
@@ -259,6 +262,11 @@ export default function ChatBox({
           )}
           <ChatLog messages={messages} speaker={speaker} />
         </div>
+        {empty && corner && !listOnStage && (
+          <div ref={keepFromCamera} className="absolute top-12 left-4 z-10 max-w-[calc(100%-2rem)] sm:top-0 sm:max-w-xs">
+            {corner}
+          </div>
+        )}
         {listOnStage && (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-3xl px-4 pt-12 pb-8">{emptyState}</div>

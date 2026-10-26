@@ -21,6 +21,7 @@ CACHE_SECONDS = 300
 DAYS_AHEAD = 7
 # Luna's instructions get at most this many events, so a busy week stays cheap.
 MAX_EVENTS = 25
+SIGNED_OUT = "{label} signed Venus out. Press Reconnect to sign in again."
 
 
 @dataclass
@@ -32,6 +33,8 @@ class PendingSignIn:
     # Started from Settings, Email: also ask for mail, and the name to send as.
     mail: bool = False
     name: str = ""
+    # Reconnect pressed on a page (email, calendar, home): go back there after.
+    back: str = ""
 
 
 class SignIns:
@@ -45,12 +48,14 @@ class SignIns:
     def __init__(self) -> None:
         self._pending: dict[str, PendingSignIn] = {}
 
-    def start(self, provider: str, verifier: str, redirect_uri: str, mail: bool = False, name: str = "") -> str:
+    def start(
+        self, provider: str, verifier: str, redirect_uri: str, mail: bool = False, name: str = "", back: str = "",
+    ) -> str:
         now = time.monotonic()
         self._pending = {key: value for key, value in self._pending.items() if value.expires > now}
         state = secrets.token_urlsafe(24)
         self._pending[state] = PendingSignIn(
-            provider, verifier, redirect_uri, now + STATE_LIFETIME.total_seconds(), mail, name,
+            provider, verifier, redirect_uri, now + STATE_LIFETIME.total_seconds(), mail, name, back,
         )
         return state
 
@@ -113,9 +118,19 @@ class CalendarService:
         except InvalidToken as exc:
             label = PROVIDERS[provider_name].label
             raise CalendarError(f"{label}: the saved sign-in can't be read. Connect it again in Settings, Calendar.") from exc
-        tokens = await self.provider(provider_name).refresh(
-            refresh_token, account.client_id, client_secret, mail=bool(account.mail),
-        )
+        label = PROVIDERS[provider_name].label
+        if account.signed_out_at is not None:
+            raise CalendarError(SIGNED_OUT.format(label=label), "invalid_grant")
+        try:
+            tokens = await self.provider(provider_name).refresh(
+                refresh_token, account.client_id, client_secret, mail=bool(account.mail),
+            )
+        except CalendarError as exc:
+            if exc.code != "invalid_grant":
+                raise
+            # Remembered, so Settings can say so and Venus stops asking.
+            self.repository.mark_signed_out(provider_name, datetime.now(timezone.utc))
+            raise CalendarError(SIGNED_OUT.format(label=label), exc.code) from exc
         if tokens.refresh_token:
             self.repository.save_refresh_token(provider_name, encrypt_text(tokens.refresh_token, self.secret_key))
         return tokens.access_token

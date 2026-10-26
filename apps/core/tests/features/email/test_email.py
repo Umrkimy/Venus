@@ -33,7 +33,7 @@ LECTURER = (
     b"Hi Umar, can you submit Assignment 2 by Friday 5pm?\r\n"
 )
 NEWSLETTER = (
-    b"From: Shop <news@shop.test>\r\nSubject: Sale\r\nMIME-Version: 1.0\r\n"
+    b"From: Shop <news@shop.test>\r\nSubject: Sale\r\nList-Unsubscribe: <https://shop.test/stop>\r\nMIME-Version: 1.0\r\n"
     b"Content-Type: text/html; charset=utf-8\r\n\r\n"
     b"<html><head><style>p{color:red}</style></head><body><p>Big <b>sale</b></p>"
     b"<script>steal()</script><img src='http://track.example/x.gif'></body></html>\r\n"
@@ -195,11 +195,26 @@ def test_inbox_newest_first_with_unread_and_dates(flags_after_header):
 
     messages = client.get(f"/email/accounts/{account}/messages", headers=OWNER).json()
 
-    assert [(m["uid"], m["sender"], m["subject"], m["unread"]) for m in messages] == [
-        ("8", "Shop", "Sale", True),
-        ("7", "Dr. Aina", "Assignment 2 deadline", False),
+    assert [(m["uid"], m["sender"], m["subject"], m["unread"], m["category"]) for m in messages] == [
+        ("8", "Shop", "Sale", True, "newsletters"),
+        ("7", "Dr. Aina", "Assignment 2 deadline", False, "primary"),
     ]
     assert messages[1]["date"] == "2026-10-13T09:00:00+08:00"
+
+
+@pytest.mark.parametrize(
+    ("unsubscribe", "labels", "focused", "category"),
+    [
+        (False, ["INBOX", "CATEGORY_PERSONAL"], True, "primary"),
+        (True, ["INBOX"], True, "newsletters"),
+        (False, ["INBOX", "CATEGORY_FORUMS"], True, "newsletters"),
+        (True, ["INBOX", "CATEGORY_PROMOTIONS"], True, "promotions"),
+        (False, [], False, "promotions"),
+        (True, [], False, "newsletters"),
+    ],
+)
+def test_categorize_uses_provider_labels_and_unsubscribe_header(unsubscribe, labels, focused, category):
+    assert mailbox.categorize(unsubscribe, labels, focused) == category
 
 
 def test_opening_a_message_marks_it_read_and_html_becomes_plain_text():

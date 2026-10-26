@@ -22,6 +22,8 @@ class CalendarAccount(Base):
     connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # The sign-in also allows mail (Settings, Email): reading, marking read, sending.
     mail: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # When Google or Microsoft ended the sign-in (refresh refused); cleared by signing in again.
+    signed_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def __init__(self, provider: str, client_id: str, client_secret_encrypted: str) -> None:
         self.provider = provider
@@ -31,3 +33,4 @@ class CalendarAccount(Base):
         self.account_email = None
         self.connected_at = None
         self.mail = False
+        self.signed_out_at = None

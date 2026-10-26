@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, Copy } from "lucide-react";
+import { Check, ChevronDown, Copy, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -20,9 +20,25 @@ type CalendarAccount = {
   client_id: string | null;
   configured: boolean;
   connected: boolean;
+  // When Google or Microsoft ended the sign-in; Reconnect clears it.
+  signed_out_at: string | null;
   mail: boolean;
   email: string | null;
   redirect_uri: string;
+};
+
+// Why a sign-in ends by itself, and how to stop it happening again.
+const SIGNED_OUT_WHY: Record<Provider, { text: string; url: string; link: string }> = {
+  google: {
+    text: "Google ends the sign-in every 7 days while your Google app is in Testing. To stop that, open Audience in the Google Auth Platform and press Publish app. Google then shows an \"unverified app\" warning once when you sign in: click Advanced, then Go to your app.",
+    url: "https://console.cloud.google.com/auth/audience",
+    link: "Open Audience",
+  },
+  microsoft: {
+    text: "Microsoft ends a sign-in after about 90 days without use, or when your password changes or your uni removes the access.",
+    url: "https://myaccount.microsoft.com/",
+    link: "Your Microsoft account",
+  },
 };
 
 const CONSOLE: Record<Provider, { name: string; url: string; where: string }> = {
@@ -41,7 +57,7 @@ const CONSOLE: Record<Provider, { name: string; url: string; where: string }> = 
 function ProviderCard({ account, onChange }: { account: CalendarAccount; onChange: () => Promise<unknown> }) {
   const [clientId, setClientId] = useState(account.client_id ?? "");
   const [secret, setSecret] = useState("");
-  const [setup, setSetup] = useState(!account.connected);
+  const [setup, setSetup] = useState(!account.connected && account.signed_out_at === null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -91,8 +107,12 @@ function ProviderCard({ account, onChange }: { account: CalendarAccount; onChang
     }
   }
 
+  const signedOut = account.configured && account.signed_out_at !== null;
+  const why = SIGNED_OUT_WHY[account.provider];
   const status = account.connected ? (
     <StatusBadge tone="on">Connected</StatusBadge>
+  ) : signedOut ? (
+    <StatusBadge tone="warn">Signed out</StatusBadge>
   ) : account.configured ? (
     <StatusBadge tone="warn">Not signed in</StatusBadge>
   ) : (
@@ -123,7 +143,9 @@ function ProviderCard({ account, onChange }: { account: CalendarAccount; onChang
         </div>
         {account.configured && (
           <Button asChild size="sm" variant={account.connected ? "outline" : "default"} disabled={busy}>
-            <a href={`/api/calendar/${account.provider}/connect`}>{account.connected ? "Reconnect" : "Sign in"}</a>
+            <a href={`/api/calendar/${account.provider}/connect`}>
+              {account.connected || signedOut ? "Reconnect" : "Sign in"}
+            </a>
           </Button>
         )}
         {account.configured && (
@@ -133,10 +155,29 @@ function ProviderCard({ account, onChange }: { account: CalendarAccount; onChang
             disabled={busy}
             onClick={() => send(`/api/calendar/${account.provider}`, { method: "DELETE" }, "Couldn't remove it.")}
           >
-            {account.connected ? "Disconnect" : "Remove"}
+            {account.connected || signedOut ? "Disconnect" : "Remove"}
           </Button>
         )}
       </div>
+
+      {signedOut && (
+        <div className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <div className="min-w-0 space-y-1.5">
+            <p className="font-medium">
+              {account.label} signed Venus out on{" "}
+              {new Date(account.signed_out_at!).toLocaleDateString(undefined, { day: "numeric", month: "long" })}.
+              Press Reconnect and sign in again{account.mail ? " (calendar and mail)" : ""}. Nothing else needs setting up.
+            </p>
+            <p className="text-muted-foreground">
+              {why.text}{" "}
+              <a href={why.url} target="_blank" rel="noreferrer" className="font-medium text-foreground underline underline-offset-2">
+                {why.link}
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="border-t border-border">
         <button
