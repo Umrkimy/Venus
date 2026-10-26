@@ -56,7 +56,7 @@ class FakeCloud:
         if url.startswith(f"{gmail}/18f1a?format=metadata") or url.startswith(f"{gmail}/18f1b?format=metadata"):
             message_id = url.split("/")[-1].split("?")[0]
             return httpx2.Response(200, json={
-                "id": message_id, "labelIds": ["INBOX"] + (["UNREAD"] if message_id == "18f1a" else []),
+                "id": message_id, "labelIds": ["INBOX"] + (["UNREAD"] if message_id == "18f1a" else ["CATEGORY_PROMOTIONS"]),
                 "internalDate": "1792368000000",
                 "payload": {"headers": [{"name": "From", "value": "Dr. Aina <aina@uni.edu.my>"}, {"name": "Subject", "value": f"Mail {message_id}"}]},
             })
@@ -67,8 +67,16 @@ class FakeCloud:
             return httpx2.Response(200, json={"id": "sent-1"})
         graph = "https://graph.microsoft.com/v1.0/me"
         if url.startswith(f"{graph}/mailFolders/inbox/messages"):
-            return httpx2.Response(200, json={"value": [{"id": "AAMk-1=", "subject": "Viva slot", "isRead": False,
-                "receivedDateTime": "2026-10-14T00:00:00Z", "from": {"emailAddress": {"name": "Dr. Aina", "address": "aina@uni.edu.my"}}}]})
+            return httpx2.Response(200, json={"value": [
+                {"id": "AAMk-1=", "subject": "Viva slot", "isRead": False, "inferenceClassification": "focused",
+                 "receivedDateTime": "2026-10-14T00:00:00Z", "from": {"emailAddress": {"name": "Dr. Aina", "address": "aina@uni.edu.my"}},
+                 "internetMessageHeaders": [{"name": "Received", "value": "uni"}]},
+                {"id": "AAMk-2=", "subject": "Club weekly", "isRead": True, "inferenceClassification": "other",
+                 "receivedDateTime": "2026-10-13T00:00:00Z", "from": {"emailAddress": {"name": "Club", "address": "club@uni.edu.my"}},
+                 "internetMessageHeaders": [{"name": "List-Unsubscribe", "value": "<mailto:stop@uni.edu.my>"}]},
+                {"id": "AAMk-3=", "subject": "50% off", "isRead": True, "inferenceClassification": "other",
+                 "receivedDateTime": "2026-10-12T00:00:00Z", "from": {"emailAddress": {"name": "Shop", "address": "deals@shop.test"}}},
+            ]})
         if url == f"{graph}/messages/AAMk-1=/$value":
             return httpx2.Response(200, content=RAW)
         if url == f"{graph}/messages/AAMk-1=" and request.method == "PATCH":
@@ -191,7 +199,9 @@ def test_gmail_inbox_read_and_reply_in_thread(setup, cloud: FakeCloud):
         "to": ["aina@uni.edu.my"], "subject": "Re: Viva slot", "body": "Thursday 10am works.", "reply_to": "18f1a",
     }, headers=OWNER)
 
-    assert [(m["uid"], m["unread"]) for m in inbox] == [("18f1a", True), ("18f1b", False)]
+    assert [(m["uid"], m["unread"], m["category"]) for m in inbox] == [("18f1a", True, "primary"), ("18f1b", False, "promotions")]
+    listing = next(r for r in cloud.requests if "format=metadata" in str(r.url))
+    assert "List-Unsubscribe" in listing.url.params.get_list("metadataHeaders")
     assert opened["body"] == "Can you do Thursday 10am?"
     assert sent.json() == {"sent": True}
     marked = next(r for r in cloud.requests if str(r.url).endswith("/18f1a/modify"))
@@ -217,8 +227,9 @@ def test_outlook_inbox_read_and_send(setup, cloud: FakeCloud):
         "to": ["aina@uni.edu.my"], "subject": "Re: Viva slot", "body": "Yes, Thursday works.", "reply_to": "AAMk-1=",
     }, headers=OWNER)
 
-    assert inbox == [{"uid": "AAMk-1=", "sender": "Dr. Aina", "sender_address": "aina@uni.edu.my",
-                      "subject": "Viva slot", "date": "2026-10-14T00:00:00+00:00", "unread": True}]
+    assert inbox[0] == {"uid": "AAMk-1=", "sender": "Dr. Aina", "sender_address": "aina@uni.edu.my",
+                        "subject": "Viva slot", "date": "2026-10-14T00:00:00+00:00", "unread": True, "category": "primary"}
+    assert [m["category"] for m in inbox[1:]] == ["newsletters", "promotions"]
     assert opened["sender_address"] == "aina@uni.edu.my"
     assert sent.json() == {"sent": True}
     send = next(r for r in cloud.requests if str(r.url).endswith("/sendMail"))

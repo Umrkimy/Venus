@@ -74,14 +74,16 @@ class GmailBackend(_HttpBackend):
         async def one(message_id: str) -> MailSummary:
             item = (await self.call(
                 "GET", f"{self.api}/messages/{message_id}",
-                params=[("format", "metadata"), ("metadataHeaders", "From"), ("metadataHeaders", "Subject")],
+                params=[("format", "metadata"), ("metadataHeaders", "From"), ("metadataHeaders", "Subject"),
+                        ("metadataHeaders", "List-Unsubscribe")],
             )).json()
             headers = {h["name"].lower(): h["value"] for h in item.get("payload", {}).get("headers", [])}
             name, address = mailbox.parseaddr(mailbox.decoded(headers.get("from")))
             received = datetime.fromtimestamp(int(item.get("internalDate", "0")) / 1000, tz=timezone.utc)
+            labels = item.get("labelIds", [])
             return MailSummary(
                 message_id, name or address, address, mailbox.decoded(headers.get("subject")) or "(no subject)",
-                received, "UNREAD" in item.get("labelIds", []),
+                received, "UNREAD" in labels, mailbox.categorize("list-unsubscribe" in headers, labels),
             )
 
         return list(await asyncio.gather(*(one(message_id) for message_id in ids)))
@@ -106,13 +108,14 @@ class GraphBackend(_HttpBackend):
     async def inbox(self, limit: int) -> list[MailSummary]:
         listing = (await self.call("GET", f"{self.api}/mailFolders/inbox/messages", params={
             "$top": str(limit),
-            "$select": "id,subject,from,receivedDateTime,isRead",
+            "$select": "id,subject,from,receivedDateTime,isRead,inferenceClassification,internetMessageHeaders",
             "$orderby": "receivedDateTime desc",
         })).json()
         found = []
         for item in listing.get("value", []):
             sender = (item.get("from") or {}).get("emailAddress") or {}
             received = item.get("receivedDateTime")
+            headers = {(h.get("name") or "").lower() for h in item.get("internetMessageHeaders") or []}
             found.append(MailSummary(
                 item["id"],
                 sender.get("name") or sender.get("address") or "",
@@ -120,6 +123,7 @@ class GraphBackend(_HttpBackend):
                 item.get("subject") or "(no subject)",
                 datetime.fromisoformat(received.replace("Z", "+00:00")) if received else None,
                 not item.get("isRead", True),
+                mailbox.categorize("list-unsubscribe" in headers, focused=item.get("inferenceClassification") != "other"),
             ))
         return found
 
