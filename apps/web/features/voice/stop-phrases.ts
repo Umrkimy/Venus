@@ -22,6 +22,9 @@ export function endingOf(text: string): Ending | null {
   // Thanks with her name closes it; plain "thank you" keeps talking.
   const joined = said.join(" ");
   if (joined === "thank you venus" || joined === "thanks venus") return "bye";
+  // The whole sentence first, like the PC: "see you later" has "you" in it.
+  if (STOP.has(joined)) return "stop";
+  if (BYE.has(joined)) return "bye";
   const rest = said.filter((word) => !FILLER.has(word));
   const phrase = rest.join(" ");
   if (STOP.has(phrase)) return "stop";

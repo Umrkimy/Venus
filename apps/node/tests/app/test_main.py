@@ -40,3 +40,13 @@ def test_first_hidden_start_logs_fixes_autostart_then_runs(monkeypatch):
     app_main.main()
 
     assert events == ["log", "approve", "run"]
+
+
+def test_clicking_the_icon_again_opens_venus(monkeypatch):
+    events = fake_start(monkeypatch, claimed=False)
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(app_main, "open_running_venus", lambda: events.append("open") or True)
+
+    app_main.main()
+
+    assert events == ["open"]

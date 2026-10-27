@@ -5,8 +5,6 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from venus_node.app.autostart_windows import background_python
-
 NODE_DIRECTORY = Path(__file__).resolve().parent.parent.parent
 ROSE_DARK = (159, 18, 57, 255)  # Tailwind rose-800
 ROSE = (225, 29, 72, 255)  # rose-600, the web theme's crimson (D-44)
@@ -71,6 +69,9 @@ def create_shortcuts(node_directory: Path = NODE_DIRECTORY) -> None:
     if sys.platform != "win32":
         print("Shortcuts are made on Windows only. On Linux use start-venus.sh.")
         return
+    # Windows only (it reads the registry), so imported here: the icon works everywhere.
+    from venus_node.app.autostart_windows import background_python
+
     icon = write_icon(node_directory / "data" / "venus.ico")
     # Paths go in as environment variables, so spaces and quotes can't break the script.
     env = {
