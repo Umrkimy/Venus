@@ -6,9 +6,21 @@ from venus_node.app import autostart
 from venus_node.app.tray import GREY, CRIMSON, Tray, status_text
 
 
+# pystray names each icon's window class after id(icon) and only frees it when
+# the icon runs and stops. Kept alive, a test icon's id is never handed to the
+# next one, which on Windows failed with "Class already exists" now and then.
+ALIVE: list[Tray] = []
+
+
+def new_tray(*args, **kwargs) -> Tray:
+    tray = Tray(*args, **kwargs)
+    ALIVE.append(tray)
+    return tray
+
+
 def make_tray(run_key, events=None):
     events = events if events is not None else []
-    tray = Tray(
+    tray = new_tray(
         Event(),
         open_venus=lambda: events.append("open"),
         autostart_command='"pythonw.exe" "venus.pyw"',
@@ -109,7 +121,7 @@ def test_open_venus_and_quit_call_back(run_key):
 
 def test_stop_talking_calls_back(run_key):
     stopped = []
-    tray = Tray(
+    tray = new_tray(
         Event(), open_venus=lambda: None, autostart_command="x", quit=lambda: None,
         autostart_key=run_key, stop_talking=lambda: stopped.append(True),
     )
@@ -117,3 +129,25 @@ def test_stop_talking_calls_back(run_key):
     item(tray, "Stop talking")(tray.icon)
 
     assert stopped == [True]
+
+
+def test_status_text_shows_the_server_start_first():
+    assert status_text(connected=False, muted=False, server="starting") == "Starting Venus..."
+    assert status_text(connected=False, muted=False, server="problem", detail="Docker didn't start.") == "Docker didn't start."
+    assert status_text(connected=True, muted=False, server="ready") == "Connected"
+
+
+def test_main_pc_menu_has_restart_and_server_status(run_key):
+    state = {"now": ("starting", ""), "restarts": 0}
+    tray = new_tray(
+        Event(), open_venus=lambda: None, autostart_command="x", quit=lambda: None, autostart_key=run_key,
+        server=lambda: state["now"], restart=lambda: state.update(restarts=state["restarts"] + 1),
+    )
+
+    assert [i.text for i in items(tray)][:3] == ["Starting Venus...", "Open Venus", "Restart Venus"]
+    item(tray, "Restart Venus")(tray.icon)
+    assert state["restarts"] == 1
+
+    state["now"] = ("ready", "")
+    tray.set_connected(True)
+    assert items(tray)[0].text == "Connected"
