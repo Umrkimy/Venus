@@ -2,7 +2,7 @@
 
 import { CalendarDays, Folder, LogOut, Mail, Plus, Settings } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import {
@@ -28,6 +28,7 @@ import {
 } from "@/features/projects/use-projects";
 import { useChatActions, useConversations } from "@/features/shell/chat-actions";
 import ChatMenu from "@/features/shell/chat-menu";
+import { usePagePath } from "@/lib/use-page-path";
 
 type AppSidebarProps = {
   username: string;
@@ -35,7 +36,7 @@ type AppSidebarProps = {
 };
 
 export default function AppSidebar({ username, onLogout }: AppSidebarProps) {
-  const pathname = usePathname();
+  const pathname = usePagePath();
   const router = useRouter();
   const { startNewChat } = useNewChat();
   const actions = useChatActions();

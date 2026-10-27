@@ -79,7 +79,7 @@ export default function ActionCard({ actions, startOpen }: ActionCardProps) {
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted-foreground select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
         <Wrench className="size-4" aria-hidden="true" />
         <span>
-          Used {count} {count === 1 ? "tool" : "tools"}
+          {count} {count === 1 ? "action" : "actions"}
         </span>
         <ChevronRight
           className="ml-auto size-4 transition-transform group-open:rotate-90"

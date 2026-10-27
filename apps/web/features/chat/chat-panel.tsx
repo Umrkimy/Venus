@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { isFinal, useCommandStatus, type ChatAction } from "./action-card";
 import ChatBox, { type ChatMessage } from "./chat-box";
 import PcPicker, { usePcTarget } from "./pc-picker";
@@ -114,6 +115,7 @@ export default function ChatPanel({
   const speaker = useSpeaker();
   // A voice turn on the PC that goes into this chat.
   const front = useFrontTab();
+  const isMobile = useIsMobile();
   const voice = useVoiceState(front);
   // Stop pressed (or said) while Luna's answer was on its way: don't speak it.
   const dropReplyRef = useRef(false);
@@ -252,7 +254,10 @@ export default function ChatPanel({
         disabled={busy || inFlight || !deviceId}
         placeholder={
           deviceId
-            ? "Ask Venus anything, e.g. open spotify"
+            ? // One line on a phone; the example only fits on a wider screen.
+              isMobile
+              ? "Message Venus"
+              : "Ask Venus anything, e.g. open spotify"
             : "Your PC is offline. Start Venus on your PC to chat."
         }
         messages={messages}
@@ -262,7 +267,8 @@ export default function ChatPanel({
         corner={corner}
         thinking={sending || thinkingElsewhere}
         listening={(voiceHere && voice.state === "listening") || handsFree.phase === "recording"}
-        liveWords={handsFree.words}
+        // Your words as you say them: from this browser, or from "Hey Venus" on the PC.
+        liveWords={handsFree.words || (voice?.state === "listening" ? voice.subtitle : "")}
         localVoice={localVoice}
         onStopVoice={stopVoice}
         pcPicker={<PcPicker {...pc} />}

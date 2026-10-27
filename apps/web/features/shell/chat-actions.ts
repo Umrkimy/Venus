@@ -1,12 +1,13 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useNewChat } from "@/features/chat/new-chat";
 import { getJson } from "@/lib/get-json";
 import { POLL_MS } from "@/lib/poll";
+import { usePagePath } from "@/lib/use-page-path";
 
 export type ConversationSummary = {
   id: string;
@@ -29,7 +30,7 @@ export function useConversations() {
 // Archive, unarchive, move and delete for chat rows.
 export function useChatActions() {
   const queryClient = useQueryClient();
-  const pathname = usePathname();
+  const pathname = usePagePath();
   const router = useRouter();
   const { startNewChat } = useNewChat();
   const [error, setError] = useState<string | null>(null);

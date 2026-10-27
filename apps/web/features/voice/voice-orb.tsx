@@ -2,10 +2,11 @@
 
 import { Square } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { springSoft } from "@/lib/motion";
+import { usePagePath } from "@/lib/use-page-path";
 
 import { setListenOn, useListenOn } from "./listen-store";
 import Orb from "./orb";
@@ -23,7 +24,7 @@ const SAY: Record<string, string> = {
 // Once per turn: if you click away mid-turn, it doesn't pull you back.
 function useFollowVoiceChat(state: string | undefined, conversationId: string | null) {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePagePath();
   const followed = useRef<string | null>(null);
   const active = state !== undefined && state !== "idle";
 
