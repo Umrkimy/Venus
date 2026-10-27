@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
+from threading import Event
 from urllib.error import URLError
 
 from venus_node.app import reminders
-from venus_node.app.reminders import Reminders, reminder_text
+from venus_node.app.reminders import Reminders, reminder_text, spoken_text, voice_sayer
+from venus_node.voice.status import IDLE, SPEAKING, THINKING, Status
 
 NOW = datetime(2026, 10, 14, 1, 0, tzinfo=timezone.utc)
 
@@ -86,3 +88,62 @@ def test_mac_uses_notification_center(monkeypatch):
     reminders.desktop_notifier(lambda text, title: calls.append("tray"))("Class in 5 min")
 
     assert calls == [("Venus reminder", "Class in 5 min")]
+
+
+def test_spoken_text_is_a_sentence():
+    assert spoken_text(event(), NOW) == "Heads up, Database class starts in 8 minutes, in Room 3."
+    assert spoken_text(event(minutes=1, location=""), NOW) == "Heads up, Database class starts in 1 minute."
+    assert spoken_text(event(minutes=0, location=""), NOW) == "Heads up, Database class is starting now."
+
+
+def test_venus_says_each_reminder_once_with_the_popup():
+    shown, said = [], []
+    checker = Reminders(fetch=lambda: [event()], notify=shown.append, clock=lambda: NOW, say=said.append)
+
+    checker.check()
+    checker.check()
+
+    assert shown == ["Database class in 8 min (Room 3)"]
+    assert said == ["Heads up, Database class starts in 8 minutes, in Room 3."]
+
+
+def fake_voice(monkeypatch):
+    played = []
+    from venus_node.voice import core_client, player
+
+    monkeypatch.setattr(core_client, "speak_stream", lambda settings, text: (24000, iter([b"\0\0"])))
+
+    def play(pieces, rate, on_start=None, **options):
+        if on_start:
+            on_start()
+        played.append(list(pieces))
+
+    monkeypatch.setattr(player, "play_pcm", play)
+    return played
+
+
+def test_sayer_speaks_when_idle_and_goes_back_to_idle(monkeypatch):
+    played = fake_voice(monkeypatch)
+    status, seen = Status(), []
+    original = status.set
+    monkeypatch.setattr(status, "set", lambda state, subtitle="": (seen.append(state), original(state, subtitle)))
+
+    voice_sayer(object(), status, Event())("Heads up, Gym starts in 10 minutes.")
+
+    assert len(played) == 1
+    assert seen == [SPEAKING, IDLE]
+    assert status.report()[0] == IDLE
+
+
+def test_sayer_stays_quiet_when_muted_or_busy(monkeypatch):
+    played = fake_voice(monkeypatch)
+    muted = Event()
+    muted.set()
+    voice_sayer(object(), Status(), muted)("Heads up.")
+
+    busy = Status()
+    busy.set(THINKING)
+    voice_sayer(object(), busy, Event())("Heads up.")
+
+    assert played == []
+    assert busy.report()[0] == THINKING
