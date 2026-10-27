@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Inbox, Paperclip, PenLine, RefreshCw, Reply, Sparkles } from "lucide-react";
+import { Inbox, PenLine, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -13,59 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import ReconnectButton, { SignInNotice, isSignInProvider } from "@/features/calendar/reconnect-button";
+import { SignInNotice } from "@/features/calendar/reconnect-button";
 import Composer, { type Draft } from "@/features/email/composer";
 import { useEmailAccounts } from "@/features/email/email-accounts";
 import InboxOverview, { type Overview } from "@/features/email/inbox-overview";
-import MailBody from "@/features/email/mail-body";
-import TonePicker, { SenderAvatar, type Tone } from "@/features/email/tone-picker";
-import { errorText } from "@/lib/error-text";
+import { inboxQuery, load, post, type Category, type Message, type Summary } from "@/features/email/mail-api";
+import MessageList from "@/features/email/message-list";
+import MessageReader from "@/features/email/message-reader";
+import type { Tone } from "@/features/email/tone-picker";
 import { cn } from "@/lib/utils";
-
-export type Category = "primary" | "newsletters" | "promotions";
-export type Summary = {
-  uid: string;
-  sender: string;
-  sender_address: string;
-  subject: string;
-  date: string | null;
-  unread: boolean;
-  category: Category;
-};
-type Message = Summary & { to: string[]; cc: string[]; body: string; html: string; attachments: string[] };
-
-async function load<T>(path: string): Promise<T> {
-  const response = await fetch(path);
-  const data = await response.json();
-  if (!response.ok) throw new Error(errorText(data, "Couldn't load that."));
-  return data as T;
-}
-
-// The same list for the Email page and the home Today card, so they share one copy.
-export function inboxQuery(accountId: string | null) {
-  return {
-    queryKey: ["email-inbox", accountId],
-    queryFn: () => load<Summary[]>(`/api/email/accounts/${accountId}/messages`),
-    enabled: accountId !== null,
-    retry: false,
-  };
-}
-
-const TABS: { id: Category; label: string }[] = [
-  { id: "primary", label: "Primary" },
-  { id: "newsletters", label: "Newsletters" },
-  { id: "promotions", label: "Promotions" },
-];
-
-function when(date: string | null) {
-  if (!date) return "";
-  const moment = new Date(date);
-  const today = new Date();
-  return moment.toDateString() === today.toDateString()
-    ? moment.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-    : moment.toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
 
 // The Email page: inbox on the left, the open message and Luna's help on the right.
 export default function EmailPage() {
@@ -98,17 +54,6 @@ export default function EmailPage() {
   useEffect(() => {
     if (openedUid) queryClient.invalidateQueries({ queryKey: ["email-inbox", accountId] });
   }, [openedUid, accountId, queryClient]);
-
-  async function post<T>(path: string, body?: unknown): Promise<T> {
-    const response = await fetch(path, {
-      method: "POST",
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(errorText(data, "That didn't work."));
-    return data as T;
-  }
 
   async function run(what: string, job: () => Promise<void>) {
     setBusy(what);
@@ -161,10 +106,7 @@ export default function EmailPage() {
   }
 
   const reader = open !== null;
-  const shown = inbox.data?.filter((item) => item.category === tab);
-  const unreadIn = (category: Category) =>
-    inbox.data?.filter((item) => item.unread && item.category === category).length ?? 0;
-  const unread = unreadIn(tab);
+  const unread = inbox.data?.filter((item) => item.unread && item.category === tab).length ?? 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
@@ -241,97 +183,15 @@ export default function EmailPage() {
       {overview && <InboxOverview overview={overview} onOpen={choose} onClose={() => setOverview(null)} />}
 
       <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(18rem,24rem)_1fr]">
-        <section
-          aria-label="Messages"
-          className={cn("min-h-0 overflow-auto rounded-xl border border-border bg-card p-1.5", (reader || draft) && "hidden md:block")}
-        >
-          {inbox.isPending && (
-            <div className="space-y-1.5 p-1" role="status">
-              <span className="sr-only">Loading your inbox</span>
-              {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} className="h-14 rounded-lg bg-foreground/10 motion-safe:animate-pulse" />
-              ))}
-            </div>
-          )}
-          {inbox.isError && (
-            <div role="alert" className="space-y-2 p-3 text-sm">
-              <p className="text-destructive">{inbox.error.message}</p>
-              {isSignInProvider(account?.kind) && /signed Venus out|isn't connected/.test(inbox.error.message) ? (
-                <ReconnectButton provider={account.kind} back="email" />
-              ) : (
-                <Button asChild size="sm" variant="outline">
-                  <Link href={account?.kind === "imap" ? "/settings/email" : "/settings/calendar"}>Fix in settings</Link>
-                </Button>
-              )}
-            </div>
-          )}
-          {inbox.data && (
-            <div role="tablist" aria-label="Kind of mail" className="mb-1.5 flex gap-1 rounded-lg bg-muted p-[3px]">
-              {TABS.map((item) => {
-                const count = unreadIn(item.id);
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === item.id}
-                    onClick={() => setTab(item.id)}
-                    className={cn(
-                      "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
-                      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                      tab === item.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {item.label}
-                    {count > 0 && <span className="text-primary">{count}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {inbox.data?.length === 0 && <p className="p-3 text-sm text-muted-foreground">Your inbox is empty.</p>}
-          {inbox.data && inbox.data.length > 0 && shown?.length === 0 && (
-            <p className="p-3 text-sm text-muted-foreground">Nothing here in your newest mail.</p>
-          )}
-          <ul className="space-y-0.5">
-            {shown?.map((item) => {
-              const active = open === item.uid;
-              return (
-                <li key={item.uid}>
-                  <button
-                    type="button"
-                    onClick={() => choose(item.uid)}
-                    aria-current={active ? "true" : undefined}
-                    className={cn(
-                      "group relative flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors",
-                      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                      active ? "bg-primary/10" : "hover:bg-muted",
-                    )}
-                  >
-                    {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary" aria-hidden="true" />}
-                    <SenderAvatar name={item.sender || item.sender_address} />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline gap-2">
-                        <span className={cn("min-w-0 flex-1 truncate text-sm", item.unread ? "font-semibold" : "font-medium")}>
-                          {item.sender || item.sender_address}
-                        </span>
-                        <span className={cn("shrink-0 text-xs", item.unread ? "font-medium text-primary" : "text-muted-foreground")}>
-                          {when(item.date)}
-                        </span>
-                      </span>
-                      <span className="mt-0.5 flex items-center gap-2">
-                        <span className={cn("min-w-0 flex-1 truncate text-sm", item.unread ? "text-foreground" : "text-muted-foreground")}>
-                          {item.subject}
-                        </span>
-                        {item.unread && <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="Unread" />}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        <MessageList
+          inbox={inbox}
+          account={account}
+          tab={tab}
+          onTab={setTab}
+          open={open}
+          onChoose={choose}
+          hidden={reader || draft !== null}
+        />
 
         <section aria-label="Message" className={cn("min-h-0 overflow-auto", !reader && !draft && "hidden md:block")}>
           {draft ? (
@@ -348,125 +208,36 @@ export default function EmailPage() {
               }}
             />
           ) : reader ? (
-            <article className="rounded-xl border border-border bg-card">
-              <div className="space-y-4 p-4 sm:p-5">
-                <Button variant="ghost" size="sm" className="-ml-2 md:hidden" onClick={() => setOpen(null)}>
-                  <ArrowLeft />
-                  Inbox
-                </Button>
-                {message.isPending && (
-                  <div className="space-y-3" role="status">
-                    <span className="sr-only">Opening</span>
-                    <div className="h-6 w-2/3 rounded bg-foreground/10 motion-safe:animate-pulse" />
-                    <div className="h-4 w-1/2 rounded bg-foreground/10 motion-safe:animate-pulse" />
-                    <div className="h-32 rounded bg-foreground/10 motion-safe:animate-pulse" />
-                  </div>
-                )}
-                {message.isError && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {message.error.message}
-                  </p>
-                )}
-                {message.data && (
-                  <>
-                    <h2 className="text-xl font-semibold leading-snug tracking-tight">{message.data.subject}</h2>
-                    <div className="flex items-center gap-3">
-                      <SenderAvatar name={message.data.sender || message.data.sender_address} className="size-10" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{message.data.sender}</p>
-                        <p className="truncate text-xs text-muted-foreground">{message.data.sender_address}</p>
-                      </div>
-                      {message.data.date && (
-                        <time className="shrink-0 text-xs text-muted-foreground" dateTime={message.data.date}>
-                          {new Date(message.data.date).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-                        </time>
-                      )}
-                    </div>
-                    {message.data.attachments.length > 0 && (
-                      <ul className="flex flex-wrap gap-1.5">
-                        {message.data.attachments.map((name, index) => (
-                          <li key={index} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
-                            <Paperclip className="size-3" aria-hidden="true" />
-                            {name}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {summary && (
-                      <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm">
-                        <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-primary">
-                          <Sparkles className="size-3.5" aria-hidden="true" /> Luna&apos;s summary
-                        </p>
-                        <p className="whitespace-pre-wrap leading-relaxed">{summary}</p>
-                      </div>
-                    )}
-                    <MailBody key={message.data.uid} html={message.data.html} text={message.data.body} />
-                  </>
-                )}
-              </div>
-
-              {message.data && (
-                <div className="space-y-3 border-t border-border bg-muted/30 p-4 sm:p-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="mr-auto flex items-center gap-1.5 text-sm font-semibold">
-                      <Sparkles className="size-4 text-primary" aria-hidden="true" />
-                      Reply with Luna
-                    </p>
-                    <TonePicker value={tone} onChange={setTone} />
-                  </div>
-                  <Textarea
-                    value={wish}
-                    onChange={(e) => setWish(e.target.value)}
-                    maxLength={1000}
-                    rows={2}
-                    placeholder="What should it say? e.g. yes, I'll submit by Friday (optional)"
-                    aria-label="What the reply should say"
-                    className="resize-none bg-background"
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      disabled={busy !== null}
-                      onClick={() =>
-                        run("draft", async () => {
-                          compose(await post<Draft>(`/api/email/accounts/${accountId}/messages/${open}/draft`, { tone, wish }));
-                        })
-                      }
-                    >
-                      <Reply />
-                      {busy === "draft" ? "Writing..." : "Write reply"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={busy !== null}
-                      onClick={() =>
-                        run("summary", async () => {
-                          const data = await post<{ summary: string }>(`/api/email/accounts/${accountId}/messages/${open}/summary`);
-                          setSummary(data.summary);
-                        })
-                      }
-                    >
-                      <Sparkles />
-                      {busy === "summary" ? "Reading..." : "Sum up"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="ml-auto"
-                      onClick={() =>
-                        compose({
-                          to: [message.data!.sender_address],
-                          cc: [],
-                          subject: /^re:/i.test(message.data!.subject) ? message.data!.subject : `Re: ${message.data!.subject}`,
-                          body: "",
-                          reply_to: open,
-                        })
-                      }
-                    >
-                      Reply myself
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </article>
+            <MessageReader
+              message={message}
+              summary={summary}
+              tone={tone}
+              onTone={setTone}
+              wish={wish}
+              onWish={setWish}
+              busy={busy}
+              onBack={() => setOpen(null)}
+              onWriteReply={() =>
+                run("draft", async () => {
+                  compose(await post<Draft>(`/api/email/accounts/${accountId}/messages/${open}/draft`, { tone, wish }));
+                })
+              }
+              onSumUp={() =>
+                run("summary", async () => {
+                  const data = await post<{ summary: string }>(`/api/email/accounts/${accountId}/messages/${open}/summary`);
+                  setSummary(data.summary);
+                })
+              }
+              onReplyMyself={(item) =>
+                compose({
+                  to: [item.sender_address],
+                  cc: [],
+                  subject: /^re:/i.test(item.subject) ? item.subject : `Re: ${item.subject}`,
+                  body: "",
+                  reply_to: open,
+                })
+              }
+            />
           ) : (
             <div className="hidden h-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-center md:flex">
               <Inbox className="size-8 text-muted-foreground/60" aria-hidden="true" />

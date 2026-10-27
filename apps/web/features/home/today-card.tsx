@@ -8,7 +8,7 @@ import { useState } from "react";
 import type { CalendarEvent } from "@/features/calendar/event-dialog";
 import ReconnectButton, { SignInNotice, isSignInProvider, type SignInProvider } from "@/features/calendar/reconnect-button";
 import { useEmailAccounts } from "@/features/email/email-accounts";
-import { inboxQuery } from "@/features/email/email-page";
+import { inboxQuery } from "@/features/email/mail-api";
 import { getJson } from "@/lib/get-json";
 import { cn } from "@/lib/utils";
 
