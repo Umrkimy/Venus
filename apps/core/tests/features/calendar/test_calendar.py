@@ -349,11 +349,13 @@ class FakeConversations:
 
 
 def test_luna_gets_the_week_and_a_morning_summary_only_on_the_first_message():
-    from features.nodes.router import calendar_context
+    from features.nodes.router import calendar_context, first_message_today
 
     soon = event("Database class", datetime.now(timezone.utc) + timedelta(hours=1))
-    first = asyncio.run(calendar_context(FakeCalendar([soon]), FakeTime(), FakeConversations(1)))
-    later = asyncio.run(calendar_context(FakeCalendar([soon]), FakeTime(), FakeConversations(3)))
+    assert first_message_today(FakeTime(), FakeConversations(1)) is True
+    assert first_message_today(FakeTime(), FakeConversations(3)) is False
+    first = asyncio.run(calendar_context(FakeCalendar([soon]), FakeTime(), True))
+    later = asyncio.run(calendar_context(FakeCalendar([soon]), FakeTime(), False))
 
     assert "Database class" in first and "first message today" in first
     assert "Database class" in later and "first message today" not in later

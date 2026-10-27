@@ -36,6 +36,11 @@ from features.conversations.repository import ConversationRepository
 from features.calendar.dependencies import get_calendar_service
 from features.calendar.providers import CalendarError, EventDraft
 from features.calendar.service import CalendarService, calendar_lines, first_today_line
+from features.email.briefing import asks_about_mail, mail_context
+from features.email.dependencies import backend_for, get_email_repository, get_mail_connectors
+from features.email.mailbox import MailError, MailSummary
+from features.email.models.email_account import EmailAccount
+from features.email.repository import EmailRepository
 from features.home.commands import home_command, intent_from_payload, intent_payload, without_secrets
 from features.home.dependencies import get_home_device_repository
 from features.home.repository import HomeDeviceRepository
@@ -569,6 +574,8 @@ async def chat(
     home_devices: Annotated[HomeDeviceRepository, Depends(get_home_device_repository)],
     settings: Annotated[CoreSettings, Depends(get_settings)],
     calendar: Annotated[CalendarService, Depends(get_calendar_service)],
+    email_accounts: Annotated[EmailRepository, Depends(get_email_repository)],
+    mail_connectors: Annotated[tuple, Depends(get_mail_connectors)],
 ):
     if request.conversation_id is not None and not conversations.exists(
         request.conversation_id,
@@ -607,7 +614,10 @@ async def chat(
     full_mode = settings_repository.get_mode() == "full"
 
     home = home_devices.list_all()
-    calendar_text = await calendar_context(calendar, settings_repository, conversations)
+    first_today = first_message_today(settings_repository, conversations)
+    calendar_text = await calendar_context(calendar, settings_repository, first_today)
+    # Read only when Luna answers (not for plain "open spotify"): mailboxes take a second.
+    mail_text = None
 
     def instructions() -> str:
         return chat_instructions(
@@ -619,6 +629,7 @@ async def chat(
             local_now(settings_repository),
             [f"{device.name} ({device.kind})" for device in home],
             calendar_text,
+            mail_text,
         )
 
     # Rules answer first; the brain only gets what they don't understand.
@@ -642,6 +653,14 @@ async def chat(
         try:
             to_open.extend(understood(request.message))
         except NotUnderstoodError:
+            if first_today or asks_about_mail(request.message):
+                mail_text = await mail_context(
+                    [
+                        (account.address, newest_mail(account, settings.secret_key, mail_connectors, calendar))
+                        for account in email_accounts.list_all()
+                    ],
+                    first_today,
+                )
             brain = await provider.reply(request.message, history, instructions())
             facts = [memories.create(fact).text for fact in brain.memories]
             for wanted in brain.events:
@@ -728,6 +747,7 @@ def chat_instructions(
     now: str | None = None,
     home: list[str] | None = None,
     calendar: str | None = None,
+    mail: str | None = None,
 ) -> str:
     # Looked up on every message, so a chat moved into a project
     # follows that project's instructions from its next message.
@@ -746,6 +766,7 @@ def chat_instructions(
         now=now,
         home=home,
         calendar=calendar,
+        mail=mail,
     )
 
 
@@ -754,10 +775,29 @@ def owner_zone(settings_repository: SettingsRepository) -> ZoneInfo:
     return ZoneInfo(saved.time_zone) if saved is not None and saved.time_zone else ZoneInfo("UTC")
 
 
+def newest_mail(account: EmailAccount, secret_key: str, connectors: tuple, calendar: CalendarService):
+    """How to read one mailbox's newest mail; a mailbox that can't be opened says why."""
+
+    async def read() -> list[MailSummary]:
+        try:
+            backend = backend_for(account, secret_key, connectors, calendar)
+        except (HTTPException, ValueError) as exc:
+            raise MailError(str(getattr(exc, "detail", "the saved password can't be read"))) from exc
+        return await backend.inbox(15)
+
+    return read
+
+
+def first_message_today(settings_repository: SettingsRepository, conversations: ConversationRepository) -> bool:
+    midnight = datetime.now(owner_zone(settings_repository)).replace(hour=0, minute=0, second=0, microsecond=0)
+    # This message is already saved, so 1 means it's the first one today.
+    return conversations.user_messages_since(midnight.astimezone(timezone.utc)) <= 1
+
+
 async def calendar_context(
     calendar: CalendarService,
     settings_repository: SettingsRepository,
-    conversations: ConversationRepository,
+    first_today: bool,
 ) -> str | None:
     """The coming week for Luna, and a good-morning summary on the day's first message."""
     if not calendar.connected():
@@ -766,9 +806,7 @@ async def calendar_context(
     zone = owner_zone(settings_repository)
     found, errors = await calendar.events(now)
     text = calendar_lines(found, now, zone, errors)
-    midnight = now.astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0)
-    # This message is already saved, so 1 means it's the first one today.
-    if conversations.user_messages_since(midnight.astimezone(timezone.utc)) <= 1:
+    if first_today:
         text += "\n" + first_today_line(found, now, zone)
     return text
 
