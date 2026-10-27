@@ -8,7 +8,7 @@ from pathlib import Path
 
 from venus_node.app.autostart import approve_missing, background_python, launch_command
 from venus_node.app.domain import start_domain
-from venus_node.app.reminders import Reminders, desktop_notifier, fetch_upcoming, start_reminders
+from venus_node.app.reminders import Reminders, desktop_notifier, fetch_upcoming, start_reminders, voice_sayer
 from venus_node.app.server import STARTING, Server, runs_here
 from venus_node.app.single import (
     CONNECTION,
@@ -120,6 +120,7 @@ def run_app(node_directory: Path) -> None:
             fetch=lambda: fetch_upcoming(settings),
             notify=desktop_notifier(lambda text, title: tray.icon.notify(text, title)),
             clock=lambda: datetime.now().astimezone(),
+            say=voice_sayer(settings, status, muted) if settings.voice and settings.speak_reminders else None,
         ),
         reminders_stop,
     )

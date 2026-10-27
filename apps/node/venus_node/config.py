@@ -22,6 +22,8 @@ class NodeSettings:
     voice: bool = True
     # The tray starts Docker and the Venus server when they're on this PC.
     start_server: bool = True
+    # Venus says calendar reminders out loud (with voice on), not just a pop-up.
+    speak_reminders: bool = True
 
 
 def load_settings(env_file: Path) -> NodeSettings:
@@ -43,6 +45,7 @@ def load_settings(env_file: Path) -> NodeSettings:
     mic = (values.get("VENUS_NODE_MIC") or "").strip()
     raw_voice = (values.get("VENUS_NODE_VOICE") or "true").strip().lower()
     raw_start_server = (values.get("VENUS_NODE_START_SERVER") or "true").strip().lower()
+    raw_speak_reminders = (values.get("VENUS_NODE_SPEAK_REMINDERS") or "true").strip().lower()
 
     if not device_id.strip():
         raise ValueError("VENUS_NODE_DEVICE_ID is required")
@@ -64,6 +67,9 @@ def load_settings(env_file: Path) -> NodeSettings:
     if raw_start_server not in ("true", "false"):
         raise ValueError("VENUS_NODE_START_SERVER must be true or false")
 
+    if raw_speak_reminders not in ("true", "false"):
+        raise ValueError("VENUS_NODE_SPEAK_REMINDERS must be true or false")
+
     if projects_root is not None and not projects_root.is_dir():
         raise ValueError("VENUS_NODE_PROJECTS_ROOT must be an existing folder")
 
@@ -79,4 +85,5 @@ def load_settings(env_file: Path) -> NodeSettings:
         mic=mic,
         voice=raw_voice == "true",
         start_server=raw_start_server == "true",
+        speak_reminders=raw_speak_reminders == "true",
     )

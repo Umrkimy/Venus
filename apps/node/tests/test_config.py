@@ -212,3 +212,16 @@ def test_load_settings_start_server_defaults_to_on_and_reads_off(tmp_path: Path)
     env_file.write_text(NODE_VALUES + "VENUS_NODE_START_SERVER=maybe\n")
     with pytest.raises(ValueError, match="VENUS_NODE_START_SERVER must be true or false"):
         load_settings(env_file)
+
+
+def test_load_settings_speak_reminders_defaults_to_on_and_reads_off(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(NODE_VALUES)
+    assert load_settings(env_file).speak_reminders is True
+
+    env_file.write_text(NODE_VALUES + "VENUS_NODE_SPEAK_REMINDERS=false\n")
+    assert load_settings(env_file).speak_reminders is False
+
+    env_file.write_text(NODE_VALUES + "VENUS_NODE_SPEAK_REMINDERS=loud\n")
+    with pytest.raises(ValueError, match="VENUS_NODE_SPEAK_REMINDERS must be true or false"):
+        load_settings(env_file)
