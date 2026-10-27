@@ -86,7 +86,8 @@ the same Venus.
    projects folder, wake words and mic.
    [Which files to change, and which never to touch.](guide/install.md#5-check-your-settings-files)
 
-After that, start Venus with `start-venus-use.cmd`. The
+After that, start Venus with the **Venus** icon on your desktop or Start
+menu (or `start-venus-use.cmd`). The
 [full install guide](guide/install.md) explains every step slowly.
 
 ## Guides
