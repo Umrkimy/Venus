@@ -19,7 +19,7 @@ function localDay(date: Date) {
 }
 
 // All-day events are whole dates (end is the day after); timed ones overlap today.
-export function todaysEvents(events: CalendarEvent[], now: Date) {
+function todaysEvents(events: CalendarEvent[], now: Date) {
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const end = new Date(
     start.getFullYear(),

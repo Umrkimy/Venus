@@ -6,7 +6,7 @@ import { getJson } from "@/lib/get-json";
 
 // Settings -> Voice: how long Venus waits after you stop talking (web and PC).
 export const END_PAUSE_KEY = ["listening"];
-export const DEFAULT_END_PAUSE_MS = 1500;
+const DEFAULT_END_PAUSE_MS = 1500;
 
 export type ListeningResponse = { end_pause_ms: number; mic: string };
 
