@@ -7,7 +7,7 @@ const CROUCHED = 0.8; // Hips below this share of their highest point = crouched
 const STANDING = 0.9; // Start once they're back above this share.
 
 // Seconds into the move where she first stands, from the hips height at each keyframe.
-function standingStart(times: ArrayLike<number>, heights: ArrayLike<number>): number {
+export function standingStart(times: ArrayLike<number>, heights: ArrayLike<number>): number {
   if (times.length === 0 || heights.length !== times.length) return 0;
   let highest = -Infinity;
   for (let i = 0; i < heights.length; i++) highest = Math.max(highest, heights[i]);
