@@ -48,6 +48,8 @@ from features.shortcuts.dependencies import get_shortcut_repository
 from features.shortcuts.models.site_shortcut import SiteShortcut
 from features.shortcuts.repository import ShortcutRepository
 from features.voice.live import LiveVoice, get_live_voice
+from features.email.dependencies import get_email_repository
+from features.email.repository import EmailRepository
 
 from venus_protocol.schemas.commands import (
     CommandResult,
@@ -164,6 +166,8 @@ def command_records():
     app.dependency_overrides[get_home_device_repository] = lambda: home_repository
     calendar_repository = CalendarRepository(engine)
     app.dependency_overrides[get_calendar_repository] = lambda: calendar_repository
+    email_repository = EmailRepository(engine)
+    app.dependency_overrides[get_email_repository] = lambda: email_repository
     yield CommandRecordRepository(engine)
     engine.dispose()
 
