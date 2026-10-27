@@ -16,8 +16,13 @@ def icon_image(color: tuple[int, int, int, int]) -> Image.Image:
     return image
 
 
-def status_text(connected: bool, muted: bool) -> str:
-    text = "Connected" if connected else "Core offline"
+def status_text(connected: bool, muted: bool, server: str = "ready", detail: str = "") -> str:
+    # server: what the tray's own start of Venus is doing (see server.py).
+    if server == "starting":
+        return "Starting Venus..."
+    if server == "problem":
+        return detail or "Venus didn't start"
+    text = "Connected" if connected else "Offline"
     return f"{text}, mic muted" if muted else text
 
 
@@ -36,6 +41,8 @@ class Tray:
         quit: Callable[[], None],
         autostart_key: str = autostart.DEFAULT_KEY,
         stop_talking: Callable[[], None] = lambda: None,
+        server: Callable[[], tuple[str, str]] | None = None,
+        restart: Callable[[], None] | None = None,
     ) -> None:
         self._lock = Lock()
         self._connected = False
@@ -44,6 +51,9 @@ class Tray:
         self.autostart_command = autostart_command
         self._quit = quit
         self._stop_talking = stop_talking
+        # Only on the PC that runs the Venus server: its state and how to restart it.
+        self._server = server
+        self._restart = restart
         self.autostart_key = autostart_key
         self.icon = pystray.Icon("Venus", icon_image(GREY), "Venus", self.menu())
 
@@ -57,13 +67,19 @@ class Tray:
             self._connected = connected
         self.refresh()
 
+    def status(self) -> str:
+        server, detail = self._server() if self._server else ("ready", "")
+        return status_text(self.connected, self.muted.is_set(), server, detail)
+
     def menu(self) -> pystray.Menu:
+        restart = [pystray.MenuItem("Restart Venus", self.restart)] if self._restart else []
         return pystray.Menu(
             # Grey line at the top: is Venus alive?
-            pystray.MenuItem(lambda item: status_text(self.connected, self.muted.is_set()), None, enabled=False),
+            pystray.MenuItem(lambda item: self.status(), None, enabled=False),
             pystray.Menu.SEPARATOR,
             # default=True: a left click on the icon does this too.
             pystray.MenuItem("Open Venus", self.open_venus, default=True),
+            *restart,
             pystray.MenuItem("Stop talking", self.stop_talking),
             pystray.MenuItem("Mute mic", self.toggle_mute, checked=lambda item: self.muted.is_set()),
             pystray.MenuItem(
@@ -79,12 +95,16 @@ class Tray:
         # Crimson only when Venus can actually hear you and answer.
         live = self.connected and not self.muted.is_set()
         self.icon.icon = icon_image(CRIMSON if live else GREY)
-        self.icon.title = f"Venus: {status_text(self.connected, self.muted.is_set())}"
+        self.icon.title = f"Venus: {self.status()}"
         # pystray builds the menu text once; rebuild it so the status line is current.
         self.icon.update_menu()
 
     def open_venus(self) -> None:
         self._open_venus()
+
+    def restart(self) -> None:
+        if self._restart:
+            self._restart()
 
     def stop_talking(self) -> None:
         # Luna stops mid-sentence, or drops an answer that hasn't started.

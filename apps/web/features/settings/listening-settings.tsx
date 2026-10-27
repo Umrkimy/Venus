@@ -16,6 +16,7 @@ import {
 } from "@/features/voice/use-end-pause";
 import { getJson } from "@/lib/get-json";
 
+import BrowserMicPicker from "./browser-mic-picker";
 import { LABEL_CLASS, SELECT_TRIGGER_CLASS } from "./field-styles";
 
 // Saved this long after you stop dragging, not on every step.
@@ -66,6 +67,7 @@ export default function ListeningSettings() {
     <div className="space-y-5">
       <PauseSlider saved={listening.data.end_pause_ms} />
       <MicPicker saved={listening.data.mic} />
+      <BrowserMicPicker />
     </div>
   );
 }

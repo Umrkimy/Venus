@@ -231,6 +231,10 @@ if (Test-Path (Join-Path $modelsDir $voskName)) {
 Write-Step "Starting Venus (first build takes a few minutes)"
 & (Join-Path $root "start-venus.ps1") -Use
 
+# A Venus icon on the desktop and in the Start menu: one click starts everything.
+& $venvPython -m venus_node.app.shortcut
+if ($LASTEXITCODE -ne 0) { Write-Host "Could not add the Venus icon; start-venus-use.cmd still works." }
+
 # --- 6. Your account -------------------------------------------------------
 Write-Step "Your account"
 $owners = docker compose --project-directory $root exec -T postgres `
@@ -261,4 +265,4 @@ Write-Host "Venus is ready." -ForegroundColor Green
 Write-Host "- Open http://localhost:3000 and sign in."
 Write-Host "- Settings: add an OpenAI key for chat and a Fish Audio key for her voice."
 Write-Host "  Without a key Venus still opens apps and sites from typed commands."
-Write-Host "- Everyday start: start-venus-use.cmd (tray icon menu: Start with Windows)."
+Write-Host "- Everyday start: the Venus icon on your desktop (tray icon menu: Start with Windows)."

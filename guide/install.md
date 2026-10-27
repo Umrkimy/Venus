@@ -123,7 +123,7 @@ upload your `.env` files: they hold your passwords.
 
 | | Windows | Mac and Linux |
 | --- | --- | --- |
-| Start Venus | double-click `start-venus-use.cmd` | `./start-venus.sh --use` |
+| Start Venus | the **Venus** icon (desktop or Start menu) | `./start-venus.sh --use` |
 | Start with the PC | tray menu, Start with Windows | tray menu, Start at login |
 | Quit the PC part | tray menu, Quit | tray menu, Quit |
 
@@ -137,9 +137,13 @@ macOS asks a few things; say yes, or Venus can't do that part:
   password after screen saver begins or display is turned off" is on
   (System Settings, Lock Screen).
 
-The server parts restart by themselves if they crash and come back after a
-reboot once Docker is running. The tray icon is the PC part: right-click it
-for Open Venus, Mute mic, Stop talking, start at login and Quit. Grey dot =
+The Venus icon starts Docker Desktop if it's closed, then the server, and
+says "Venus is ready" when you can use it (clicking it again opens Venus). Lost
+the icon? In `apps\node`, run `.venv\Scripts\python.exe -m venus_node.app.shortcut`.
+The server parts restart by themselves if they crash. The tray icon is the PC
+part: right-click it for Open Venus, Restart Venus, Mute mic, Stop talking,
+start at login and Quit. On an extra PC (Core somewhere else) it only connects;
+`VENUS_NODE_START_SERVER=false` in `apps/node/.env` turns the starting off. Grey dot =
 not connected or muted, red = listening for "Hey Venus".
 
 **Updating:** with Git, `git pull`, then run the start command again (it

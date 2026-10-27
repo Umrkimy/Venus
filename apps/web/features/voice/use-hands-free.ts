@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { openBrowserMic } from "./browser-mic";
 import {
   joinResults,
   makeBrowserSpeech,
@@ -103,13 +104,7 @@ export function useHandsFree({ enabled, busy, onHeard, onStop }: Options) {
       if (stream) return true;
       try {
         // The browser's echo cancelling keeps most of Luna's voice out of the mic.
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
+        stream = await openBrowserMic();
       } catch {
         setError(MIC_BLOCKED);
         return false;

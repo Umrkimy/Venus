@@ -32,14 +32,14 @@ def colour(tray):
 
 def test_status_text_covers_connection_and_mute():
     assert status_text(connected=True, muted=False) == "Connected"
-    assert status_text(connected=False, muted=False) == "Core offline"
+    assert status_text(connected=False, muted=False) == "Offline"
     assert status_text(connected=True, muted=True) == "Connected, mic muted"
 
 
 def test_menu_has_status_open_stop_mute_autostart_quit(run_key):
     tray, _ = make_tray(run_key)
 
-    assert [i.text for i in items(tray)] == ["Core offline", "Open Venus", "Stop talking", "Mute mic", autostart.LABEL, "Quit"]
+    assert [i.text for i in items(tray)] == ["Offline", "Open Venus", "Stop talking", "Mute mic", autostart.LABEL, "Quit"]
     assert items(tray)[0].enabled is False  # Status line is only information.
 
 
