@@ -9,6 +9,7 @@ from pathlib import Path
 from venus_node.app.autostart import approve_missing, background_python, launch_command
 from venus_node.app.domain import start_domain
 from venus_node.app.reminders import Reminders, desktop_notifier, fetch_upcoming, start_reminders
+from venus_node.app.server import STARTING, Server, runs_here
 from venus_node.app.single import (
     CONNECTION,
     LISTENER,
@@ -74,12 +75,23 @@ def run_app(node_directory: Path) -> None:
     signal = quit_signal()
     threading.Thread(target=lambda: (wait_for_quit(signal), quit()), daemon=True).start()
 
+    # The main PC starts the Venus server itself, so the Venus icon is all you click.
+    server = None
+    if settings.start_server and runs_here(settings.core_url, REPO_ROOT, shutil.which):
+        server = Server(REPO_ROOT, settings.core_url, on_change=lambda: tray.refresh())
+
+    def restart() -> None:
+        if server.state != STARTING:
+            threading.Thread(target=server.restart, daemon=True).start()
+
     tray = Tray(
         muted,
         open_venus=lambda: webbrowser.open(settings.web_url),
         autostart_command=launch_command(background_python(), node_directory / "venus.pyw"),
         quit=quit,
         stop_talking=status.request_stop,
+        server=(lambda: (server.state, server.detail)) if server else None,
+        restart=restart if server else None,
     )
 
     def connected(hello: NodeHello) -> None:
@@ -114,6 +126,13 @@ def run_app(node_directory: Path) -> None:
 
     # setup runs once the icon is up: a toast, or a new icon is easy to miss under "^".
     tray.icon.run_detached(setup=announce)
+    if server is not None:
+
+        def start_server() -> None:
+            if server.start():
+                tray.icon.notify("Venus is ready.", "Venus")
+
+        threading.Thread(target=start_server, daemon=True).start()
     try:
         from venus_node.voice.window import orb_window
 
@@ -137,11 +156,22 @@ def announce(icon) -> None:
         pass  # Some Linux tray backends can't show toasts; the icon is enough.
 
 
+def open_running_venus() -> bool:
+    try:
+        settings = load_settings(NODE_DIRECTORY / ".env")
+    except ValueError:
+        return False
+    return webbrowser.open(settings.web_url)
+
+
 def main() -> None:
     # pythonw (Windows) has no stdout; Linux autostart and start-venus.sh pass --hidden.
     hidden = sys.stdout is None or "--hidden" in sys.argv
     # Claim first: a second start must not wipe the running app's log.
     if not claim(CONNECTION) or not claim(LISTENER):
+        # Clicking the Venus icon again opens Venus instead of a popup.
+        if hidden and open_running_venus():
+            return
         message = already_running_message("Venus") + " Look for the dot by the clock."
         if hidden:
             show_message(message)

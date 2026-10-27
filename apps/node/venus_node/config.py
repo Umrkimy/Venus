@@ -20,6 +20,8 @@ class NodeSettings:
     mic: str = ""
     # False on extra PCs: no "Hey Venus" (and no speech model in RAM).
     voice: bool = True
+    # The tray starts Docker and the Venus server when they're on this PC.
+    start_server: bool = True
 
 
 def load_settings(env_file: Path) -> NodeSettings:
@@ -40,6 +42,7 @@ def load_settings(env_file: Path) -> NodeSettings:
     # Part of the mic's name, e.g. "Realtek"; empty = the default mic.
     mic = (values.get("VENUS_NODE_MIC") or "").strip()
     raw_voice = (values.get("VENUS_NODE_VOICE") or "true").strip().lower()
+    raw_start_server = (values.get("VENUS_NODE_START_SERVER") or "true").strip().lower()
 
     if not device_id.strip():
         raise ValueError("VENUS_NODE_DEVICE_ID is required")
@@ -58,6 +61,9 @@ def load_settings(env_file: Path) -> NodeSettings:
     if raw_voice not in ("true", "false"):
         raise ValueError("VENUS_NODE_VOICE must be true or false")
 
+    if raw_start_server not in ("true", "false"):
+        raise ValueError("VENUS_NODE_START_SERVER must be true or false")
+
     if projects_root is not None and not projects_root.is_dir():
         raise ValueError("VENUS_NODE_PROJECTS_ROOT must be an existing folder")
 
@@ -72,4 +78,5 @@ def load_settings(env_file: Path) -> NodeSettings:
         web_url=web_url,
         mic=mic,
         voice=raw_voice == "true",
+        start_server=raw_start_server == "true",
     )

@@ -10,6 +10,7 @@ def fake_start(monkeypatch, claimed: bool):
     monkeypatch.setattr(app_main, "show_message", lambda text: events.append(f"popup {text}"))
     monkeypatch.setattr(app_main, "approve_missing", lambda: events.append("approve"))
     monkeypatch.setattr(app_main, "run_app", lambda directory: events.append("run"))
+    monkeypatch.setattr(app_main, "open_running_venus", lambda: False)
     return events
 
 
