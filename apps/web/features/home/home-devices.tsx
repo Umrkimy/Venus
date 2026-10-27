@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FIELD_HOVER, LABEL_CLASS, SELECT_TRIGGER_CLASS } from "@/features/settings/field-styles";
+import { errorText } from "@/lib/error-text";
 import { getJson } from "@/lib/get-json";
 
 type Kind = "light" | "plug" | "tv" | "pc";
@@ -89,9 +90,7 @@ export default function HomeDevices() {
       });
       const data = await response.json();
       if (!response.ok) {
-        // Core's own messages are strings; field errors come as a list.
-        const first = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
-        setError(typeof first === "string" ? first.replace(/^Value error, /, "") : "Check the fields.");
+        setError(errorText(data, "Check the fields."));
         return;
       }
       setName("");

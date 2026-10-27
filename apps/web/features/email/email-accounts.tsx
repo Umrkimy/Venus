@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FIELD_HOVER, LABEL_CLASS } from "@/features/settings/field-styles";
 import StatusBadge from "@/features/settings/status-badge";
+import { errorText } from "@/lib/error-text";
 import { getJson } from "@/lib/get-json";
 
 export type EmailAccount = {
@@ -21,11 +22,6 @@ export type EmailAccount = {
   imap_host: string;
   smtp_host: string;
 };
-
-function message(data: { detail?: unknown }, fallback: string) {
-  const first = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
-  return typeof first === "string" ? first.replace(/^Value error, /, "") : fallback;
-}
 
 export function useEmailAccounts() {
   return useQuery({ queryKey: ["email-accounts"], queryFn: () => getJson<EmailAccount[]>("/api/email/accounts") });
@@ -79,7 +75,7 @@ export default function EmailAccounts() {
       });
       const data = await response.json();
       if (!response.ok) {
-        const text = message(data, "Couldn't add that account.");
+        const text = errorText(data, "Couldn't add that account.");
         setError(text);
         if (text.includes("servers")) setAdvanced(true);
         return;

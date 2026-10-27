@@ -20,6 +20,7 @@ import { useEmailAccounts } from "@/features/email/email-accounts";
 import InboxOverview, { type Overview } from "@/features/email/inbox-overview";
 import MailBody from "@/features/email/mail-body";
 import TonePicker, { SenderAvatar, type Tone } from "@/features/email/tone-picker";
+import { errorText } from "@/lib/error-text";
 import { cn } from "@/lib/utils";
 
 export type Category = "primary" | "newsletters" | "promotions";
@@ -33,11 +34,6 @@ export type Summary = {
   category: Category;
 };
 type Message = Summary & { to: string[]; cc: string[]; body: string; html: string; attachments: string[] };
-
-export function errorText(data: { detail?: unknown }, fallback: string) {
-  const first = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
-  return typeof first === "string" ? first.replace(/^Value error, /, "") : fallback;
-}
 
 async function load<T>(path: string): Promise<T> {
   const response = await fetch(path);
