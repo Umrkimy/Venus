@@ -16,8 +16,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
+import { usePagePath } from "@/lib/use-page-path";
 import { cn } from "@/lib/utils";
 
 const PAGES = [
@@ -38,12 +39,19 @@ const PAGES = [
 
 // A row along the top on a phone, a column on the left on a computer.
 export default function SettingsNav() {
-  const pathname = usePathname();
+  const pathname = usePagePath();
+  const activeRef = useRef<HTMLAnchorElement>(null);
+
+  // On a phone the row scrolls: bring the open page's tab into view.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [pathname]);
 
   return (
     <nav
       aria-label="Settings"
-      className="flex shrink-0 gap-1 overflow-x-auto md:w-48 md:flex-col"
+      // No scrollbar under the row (it looked like a selected tab); the fading edge says there's more.
+      className="flex shrink-0 gap-1 overflow-x-auto [scrollbar-width:none] [mask-image:linear-gradient(to_right,black_85%,transparent)] md:w-48 md:flex-col md:[mask-image:none]"
     >
       {PAGES.map((page) => {
         // A capital letter lets JSX draw the icon stored in the variable.
@@ -52,6 +60,7 @@ export default function SettingsNav() {
         return (
           <Link
             key={page.href}
+            ref={active ? activeRef : undefined}
             href={page.href}
             aria-current={active ? "page" : undefined}
             className={cn(
