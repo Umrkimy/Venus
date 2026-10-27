@@ -10,7 +10,7 @@ export type Turn = [number, number, number];
 export type Pose = Partial<Record<VRMHumanBoneName, Turn>>;
 
 // Standing easy: arms down by her sides, elbows a little soft.
-export const RELAXED: Pose = {
+const RELAXED: Pose = {
   leftShoulder: [0, 0, -0.05],
   rightShoulder: [0, 0, 0.05],
   leftUpperArm: [0, -0.1, -1.3],

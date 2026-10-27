@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import TonePicker, { type Tone } from "@/features/email/tone-picker";
+import { errorText } from "@/lib/error-text";
 
 export type Draft = { to: string[]; cc: string[]; subject: string; body: string; reply_to: string | null };
 
@@ -24,11 +25,6 @@ const split = (text: string) =>
     .split(/[,;\s]+/)
     .map((part) => part.trim())
     .filter(Boolean);
-
-function errorText(data: { detail?: unknown }, fallback: string) {
-  const first = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
-  return typeof first === "string" ? first.replace(/^Value error, /, "") : fallback;
-}
 
 // One "To: ____" line, like a mail app: the label sits inside the row.
 function FieldRow({ label, children, id }: { label: string; children: React.ReactNode; id: string }) {

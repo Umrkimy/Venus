@@ -108,9 +108,6 @@ class SettingsRepository:
                 return ListeningSetting(id=LISTENING_ROW_ID, end_pause_ms=DEFAULT_END_PAUSE_MS)
             return setting
 
-    def get_end_pause_ms(self) -> int:
-        return self.get_listening().end_pause_ms
-
     def set_listening(self, end_pause_ms: int | None = None, mic: str | None = None) -> None:
         """None keeps the saved value, so the slider and the mic list save on their own."""
         saved = self.get_listening()

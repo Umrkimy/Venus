@@ -5,7 +5,7 @@ import { CalendarClock, Info, Megaphone, Reply, Sparkles, X } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type OverviewItem = { uid: string; sender: string; subject: string; unread: boolean; note: string };
+type OverviewItem = { uid: string; sender: string; subject: string; unread: boolean; note: string };
 export type Overview = { groups: { kind: "reply" | "deadline" | "update" | "promo"; items: OverviewItem[] }[]; summary?: string };
 
 const KINDS = {

@@ -1,30 +1,21 @@
 "use client";
 
-import { ArrowUp, Focus, ScrollText } from "lucide-react";
+import { ArrowUp, Focus } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import { type Mood, setMood } from "@/features/scene/scene-mood";
 import { setStage, useResetView } from "@/features/scene/stage-store";
 import MuteButton from "@/features/voice/mute-button";
 import type { VoiceStateName } from "@/features/voice/use-voice-state";
 import VoiceOrb from "@/features/voice/voice-orb";
 import { fadeUp, springSoft } from "@/lib/motion";
-import ActionCard, { type ChatAction } from "./action-card";
-import { useReadingSettings } from "./reading-settings";
-import ReplayButton from "./replay-button";
+import type { ChatAction } from "./action-card";
+import ChatLog from "./chat-log";
+import DialogBox, { Dots } from "./dialog-box";
 import SpeakerButton from "./speaker-button";
-import TypedText from "./typed-text";
-import type { Speaking, useSpeaker } from "./use-speaker";
+import type { useSpeaker } from "./use-speaker";
 
 export type ChatMessage = {
   from: "you" | "venus";
@@ -36,17 +27,7 @@ export type ChatMessage = {
   reveal?: "voice" | "type";
 };
 
-// How many letters of this message Luna has said; null when she isn't typing it.
-function lettersSaid(speaking: Speaking | null, id: number): number | null {
-  if (!speaking || speaking.id !== id || !speaking.typing) return null;
-  const before = speaking.lines.slice(0, speaking.line).join("").length;
-  return (
-    before +
-    Math.round(speaking.lines[speaking.line].length * speaking.fraction)
-  );
-}
-
-type Speaker = ReturnType<typeof useSpeaker>;
+export type Speaker = ReturnType<typeof useSpeaker>;
 
 type ChatBoxProps = {
   disabled: boolean;
@@ -73,97 +54,6 @@ type ChatBoxProps = {
   // Things to try, as buttons above the input (the portfolio demo).
   suggestions?: string[];
 };
-
-function Dots() {
-  return (
-    <span aria-hidden="true" className="flex gap-1">
-      {[0, 150, 300].map((delay) => (
-        <span
-          key={delay}
-          className="size-1.5 rounded-full bg-foreground/60 motion-safe:animate-bounce"
-          style={{ animationDelay: `${delay}ms` }}
-        />
-      ))}
-    </span>
-  );
-}
-
-// One message in the log, the chat-app way: your lines right, hers left.
-function LogLine({ message, index, speaker }: { message: ChatMessage; index: number; speaker: Speaker }) {
-  return (
-    <li
-      className={
-        message.from === "you"
-          ? "ml-auto w-fit max-w-[85%] rounded-2xl bg-foreground/10 px-4 py-2 break-words whitespace-pre-wrap"
-          : "group max-w-[85%] break-words whitespace-pre-wrap"
-      }
-    >
-      <span className="sr-only">{message.from === "you" ? "You: " : "Venus: "}</span>
-      {message.actions && message.actions.length > 0 && (
-        <ActionCard actions={message.actions} startOpen={false} />
-      )}
-      {message.text}
-      {message.from === "venus" && message.text && (
-        <ReplayButton
-          onReplay={() => speaker.replay(index, message.text)}
-          playing={speaker.speaking?.id === index}
-        />
-      )}
-    </li>
-  );
-}
-
-// Every line of this chat, in a panel from the right.
-function ChatLog({ messages, speaker }: { messages: ChatMessage[]; speaker: Speaker }) {
-  const endRef = useRef<HTMLLIElement>(null);
-
-  return (
-    <Sheet
-      onOpenChange={(open) => {
-        // Open at the newest line, once the panel is drawn.
-        if (open) setTimeout(() => endRef.current?.scrollIntoView({ block: "end" }));
-      }}
-    >
-      <SheetTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={messages.length === 0}
-          className="pointer-events-auto rounded-full bg-background/40 backdrop-blur-md"
-        >
-          <ScrollText />
-          Log
-        </Button>
-      </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Log</SheetTitle>
-          <SheetDescription>Everything said in this chat.</SheetDescription>
-        </SheetHeader>
-        <ul role="log" className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4">
-          {/* Messages are only ever added, so the position is a safe key. */}
-          {messages.map((message, index) => (
-            <LogLine key={index} message={message} index={index} speaker={speaker} />
-          ))}
-          <li ref={endRef} aria-hidden="true" />
-        </ul>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-// The visual-novel box: Venus's name tag over her newest line.
-function DialogBox({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative rounded-2xl border border-border/60 bg-background/55 px-5 pt-6 pb-4 shadow-lg backdrop-blur-md">
-      <span className="absolute -top-3 left-4 rounded-full bg-primary px-3 py-0.5 text-sm font-semibold text-primary-foreground shadow-sm">
-        Venus
-      </span>
-      {children}
-    </div>
-  );
-}
 
 // The camera listens for drags on the whole stage and grabs the pointer on
 // press, which swallowed clicks on the buttons there now and then. Its listener
@@ -193,7 +83,6 @@ export default function ChatBox({
 }: ChatBoxProps) {
   const [text, setText] = useState("");
   const lineRef = useRef<HTMLDivElement>(null);
-  const reading = useReadingSettings();
 
   // Her newest line, and yours if she hasn't answered it yet.
   const herIndex = messages.findLastIndex((message) => message.from === "venus");
@@ -299,47 +188,7 @@ export default function ChatBox({
           </motion.p>
         )}
 
-        <DialogBox>
-          <div
-            ref={lineRef}
-            aria-live="polite"
-            className="group max-h-[30svh] overflow-y-auto break-words whitespace-pre-wrap"
-          >
-            {thinking ? (
-              <p role="status" className="flex items-center gap-2 text-foreground/70">
-                <span>Thinking</span>
-                <Dots />
-              </p>
-            ) : her ? (
-              <motion.div key={herIndex} {...fadeUp} transition={springSoft}>
-                <span className="sr-only">Venus: </span>
-                {/* What Venus did comes first, then what she says about it. */}
-                {her.actions && her.actions.length > 0 && (
-                  <ActionCard actions={her.actions} startOpen={her.live ?? false} />
-                )}
-                {her.reveal ? (
-                  <TypedText
-                    text={her.text}
-                    reveal={her.reveal}
-                    said={lettersSaid(speaker.speaking, herIndex)}
-                    speed={reading.textSpeed}
-                    instant={reading.instantText}
-                  />
-                ) : (
-                  her.text
-                )}
-                {her.text && (
-                  <ReplayButton
-                    onReplay={() => speaker.replay(herIndex, her.text)}
-                    playing={speaker.speaking?.id === herIndex}
-                  />
-                )}
-              </motion.div>
-            ) : (
-              <p>What can I do for you?</p>
-            )}
-          </div>
-        </DialogBox>
+        <DialogBox her={her} herIndex={herIndex} thinking={thinking} speaker={speaker} lineRef={lineRef} />
       </div>
 
       <form onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl px-4 pt-3 pb-3">

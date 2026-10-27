@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import EventDialog, { type CalendarEvent, type DialogState, type EventDraft } from "@/features/calendar/event-dialog";
 import ReconnectButton, { SignInNotice, type SignInProvider } from "@/features/calendar/reconnect-button";
+import { errorText } from "@/lib/error-text";
 import { getJson } from "@/lib/get-json";
 
 type EventsResponse = { events: CalendarEvent[]; errors: string[]; signed_out?: SignInProvider[] };
@@ -32,11 +33,6 @@ const SOURCE_CLASS: Record<string, string> = {
   Google: "venus-event-google",
   Outlook: "venus-event-outlook",
 };
-
-function message(data: { detail?: unknown }, fallback: string) {
-  const first = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
-  return typeof first === "string" ? first.replace(/^Value error, /, "") : fallback;
-}
 
 function toInput(event: CalendarEvent): EventInput {
   return {
@@ -87,7 +83,7 @@ export default function CalendarPage() {
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = response.status === 204 ? {} : await response.json();
-    if (!response.ok) throw new Error(message(data, "Couldn't save that."));
+    if (!response.ok) throw new Error(errorText(data, "Couldn't save that."));
     return data;
   }
 

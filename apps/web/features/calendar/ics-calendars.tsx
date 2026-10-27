@@ -7,17 +7,13 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FIELD_HOVER, LABEL_CLASS } from "@/features/settings/field-styles";
+import { errorText } from "@/lib/error-text";
 import { getJson } from "@/lib/get-json";
 
 type IcsCalendar = { id: string; name: string; kind: "link" | "file" };
 
 // A whole semester's timetable is well under this; Venus refuses bigger.
 const MAX_BYTES = 2_000_000;
-
-function message(data: { detail?: unknown }, fallback: string) {
-  const first = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
-  return typeof first === "string" ? first.replace(/^Value error, /, "") : fallback;
-}
 
 // Settings, Calendar: timetables and other calendars from an .ics link or file.
 export default function IcsCalendars() {
@@ -52,7 +48,7 @@ export default function IcsCalendars() {
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(message(data, "Couldn't add that calendar."));
+        setError(errorText(data, "Couldn't add that calendar."));
         return;
       }
       setName("");

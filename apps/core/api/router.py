@@ -17,6 +17,7 @@ from features.character.router import router as character_router
 from features.home.router import router as home_router
 from features.calendar.router import router as calendar_router
 from features.email.router import router as email_router
+from features.email.luna_router import router as email_luna_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -36,3 +37,4 @@ api_router.include_router(character_router)
 api_router.include_router(home_router)
 api_router.include_router(calendar_router)
 api_router.include_router(email_router)
+api_router.include_router(email_luna_router)

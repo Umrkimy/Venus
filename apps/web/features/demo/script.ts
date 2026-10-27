@@ -15,7 +15,7 @@ export const DEMO_APPS: DemoApp[] = [
   { name: "OBS Studio", id: "obs" },
 ];
 
-export const DEMO_PROJECTS = ["venus", "portfolio", "uni-assignments"];
+const DEMO_PROJECTS = ["venus", "portfolio", "uni-assignments"];
 
 export const DEMO_SUGGESTIONS = [
   "open spotify",

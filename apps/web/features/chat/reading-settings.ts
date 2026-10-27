@@ -11,7 +11,7 @@ export type ReadingSettings = {
   instantText: boolean;
 };
 
-export const DEFAULT_READING: ReadingSettings = {
+const DEFAULT_READING: ReadingSettings = {
   textSpeed: 40,
   volume: 1,
   instantText: false,

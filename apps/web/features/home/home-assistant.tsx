@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FIELD_HOVER, LABEL_CLASS } from "@/features/settings/field-styles";
 import StatusBadge from "@/features/settings/status-badge";
+import { errorText } from "@/lib/error-text";
 import { getJson } from "@/lib/get-json";
 
 type Assistant = { url: string | null; connected: boolean };
@@ -35,12 +36,6 @@ const EXAMPLES: Record<Entity["kind"], (name: string) => string> = {
   scene: (name) => name,
 };
 
-function message(data: { detail?: unknown }, fallback: string) {
-  // Venus's own messages are strings; field errors come as a list.
-  const first = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
-  return typeof first === "string" ? first.replace(/^Value error, /, "") : fallback;
-}
-
 // Settings, Home: connect Home Assistant, then tick which of its devices Venus may control.
 export default function HomeAssistant() {
   const queryClient = useQueryClient();
@@ -61,7 +56,7 @@ export default function HomeAssistant() {
     queryFn: async () => {
       const response = await fetch("/api/home/assistant/entities");
       const data = await response.json();
-      if (!response.ok) throw new Error(message(data, "Couldn't get the devices."));
+      if (!response.ok) throw new Error(errorText(data, "Couldn't get the devices."));
       return data as Entity[];
     },
     enabled: false,
@@ -90,7 +85,7 @@ export default function HomeAssistant() {
         token: token.trim() || null,
       });
       if (!ok) {
-        setError(message(data, "Check the address and token."));
+        setError(errorText(data, "Check the address and token."));
         return;
       }
       setToken("");
@@ -148,7 +143,7 @@ export default function HomeAssistant() {
           ha_entity_id: entity.entity_id,
         });
         if (ok) added.push(EXAMPLES[entity.kind](data.name));
-        else failed.push(`${name || entity.friendly_name}: ${message(data, "not added")}`);
+        else failed.push(`${name || entity.friendly_name}: ${errorText(data, "not added")}`);
       }
       setPicked(new Map());
       if (added.length) setNotice(`Added. Try: ${added.slice(0, 3).join(", ")}`);
