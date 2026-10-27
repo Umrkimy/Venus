@@ -1,5 +1,8 @@
 import type { MetadataRoute } from "next";
 
+// Plain file in the portfolio demo too.
+export const dynamic = "force-static";
+
 // Lets the browser install Venus as its own app window (Install app / Add to Home Screen).
 export default function manifest(): MetadataRoute.Manifest {
   return {
