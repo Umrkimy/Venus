@@ -37,7 +37,7 @@ const SOURCE_CLASS: Record<string, string> = {
 function toInput(event: CalendarEvent): EventInput {
   return {
     id: event.id,
-    title: event.title,
+    title: event.reminder ? `Reminder: ${event.title}` : event.title,
     // All-day events are whole UTC days; plain dates keep them on the right day everywhere.
     start: event.all_day ? event.start.slice(0, 10) : event.start,
     end: event.all_day ? event.end.slice(0, 10) : event.end,

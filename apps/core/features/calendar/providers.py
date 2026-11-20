@@ -37,6 +37,7 @@ class Event:
     notes: str = ""
     # Can Venus change it? Its own, and Google/Outlook ones you may edit; .ics never.
     editable: bool = False
+    reminder: bool = False
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ class EventDraft:
     all_day: bool = False
     location: str = ""
     notes: str = ""
+    reminder: bool = False
 
 
 @dataclass(frozen=True)

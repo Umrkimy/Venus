@@ -131,6 +131,22 @@ TOOLS: list[dict] = [
     },
     {
         "type": "function",
+        "name": "set_reminder",
+        "description": (
+            "Set a reminder Venus says out loud at that exact time, when the owner "
+            "says \"remind me to ...\" (\"remind me to submit the report at 4\")."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "What to remind them of, e.g. Submit the report"},
+                "at": {"type": "string", "description": "When, in the owner's local time, YYYY-MM-DDTHH:MM"},
+            },
+            "required": ["title", "at"],
+        },
+    },
+    {
+        "type": "function",
         "name": "save_memory",
         "description": (
             "Remember a fact about the owner for future chats, when they "

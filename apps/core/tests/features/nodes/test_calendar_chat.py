@@ -88,3 +88,30 @@ def test_a_bad_time_from_luna_is_an_answer_not_a_crash():
     assert body["type"] == "reply"
     assert "couldn't add that to your calendar" in body["reply"]
     assert venus_events() == []
+
+
+def test_luna_sets_a_reminder_said_at_its_time():
+    app.dependency_overrides[get_chat_provider] = lambda: CalendarBrain(
+        [{"title": "Submit the report", "start": "2026-10-15T16:00", "reminder": True}], text="I'll remind you at 4.",
+    )
+
+    with connected_pc_umar():
+        body = chat("remind me to submit the report at 4")
+
+    assert body["actions"] == [{"kind": "event", "text": "Reminder: Submit the report, Thu 15 Oct, 16:00"}]
+    [event] = venus_events()
+    assert event.reminder is True
+    assert event.start.replace(tzinfo=timezone.utc) == datetime(2026, 10, 15, 8, 0, tzinfo=timezone.utc)
+    assert (event.end - event.start).total_seconds() == 300
+
+
+def test_a_reminder_needs_a_time():
+    app.dependency_overrides[get_chat_provider] = lambda: CalendarBrain(
+        [{"title": "Call mum", "start": "2026-10-15", "reminder": True}], text=None,
+    )
+
+    with connected_pc_umar():
+        body = chat("remind me to call mum tomorrow")
+
+    assert "couldn't add that to your calendar" in body["reply"]
+    assert venus_events() == []

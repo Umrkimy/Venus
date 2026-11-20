@@ -800,11 +800,12 @@ async def calendar_context(
     first_today: bool,
 ) -> str | None:
     """The coming week for Luna, and a good-morning summary on the day's first message."""
-    if not calendar.connected():
-        return None
     now = datetime.now(timezone.utc)
     zone = owner_zone(settings_repository)
     found, errors = await calendar.events(now)
+    # Venus's own calendar counts too; nothing anywhere keeps the prompt short.
+    if not calendar.connected() and not found:
+        return None
     text = calendar_lines(found, now, zone, errors)
     if first_today:
         text += "\n" + first_today_line(found, now, zone)
@@ -843,12 +844,21 @@ def chat_time(value: str, zone: ZoneInfo) -> tuple[datetime, bool]:
     return moment.astimezone(timezone.utc), False
 
 
+REMINDER_LENGTH = timedelta(minutes=5)
+
+
 async def add_chat_event(calendar: CalendarService, wanted: dict, zone: ZoneInfo) -> str:
     """Adds what Luna asked for to the Venus calendar; the line for the chat card."""
     title = str(wanted["title"]).strip()[:200]
     if not title:
         raise ValueError("no title")
     start, all_day = chat_time(str(wanted["start"]), zone)
+    if wanted.get("reminder"):
+        # A reminder needs a time to be said at; 5 minutes keeps end after start.
+        if all_day:
+            raise ValueError("a reminder needs a time")
+        await calendar.create("venus", EventDraft(title, start, start + REMINDER_LENGTH, reminder=True))
+        return f"Reminder: {title}, {start.astimezone(zone).strftime('%a %d %b, %H:%M')}"
     if wanted.get("end"):
         end, _ = chat_time(str(wanted["end"]), zone)
     else:

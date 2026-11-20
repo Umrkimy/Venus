@@ -32,6 +32,8 @@ export type CalendarEvent = {
   location: string;
   notes: string;
   editable: boolean;
+  // "Remind me to ...": Venus says it at the start time.
+  reminder?: boolean;
 };
 
 export type EventDraft = {

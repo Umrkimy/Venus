@@ -147,3 +147,28 @@ def test_sayer_stays_quiet_when_muted_or_busy(monkeypatch):
 
     assert played == []
     assert busy.report()[0] == THINKING
+
+
+def test_a_reminder_waits_and_goes_off_at_its_time():
+    shown, said, waits = [], [], []
+    upcoming = [dict(event(title="Submit the report", minutes=3, location=""), reminder=True)]
+    checker = Reminders(
+        fetch=lambda: upcoming, notify=shown.append, clock=lambda: NOW, say=said.append,
+        later=lambda seconds, action: waits.append((seconds, action)),
+    )
+
+    checker.check()
+    checker.check()
+
+    assert shown == [] and [seconds for seconds, _ in waits] == [180.0]
+    waits[0][1]()
+    assert shown == ["Reminder: Submit the report"]
+    assert said == ["Reminder: Submit the report."]
+
+
+def test_a_late_reminder_goes_off_right_away():
+    waits = []
+    upcoming = [dict(event(minutes=-1), reminder=True)]
+    Reminders(fetch=lambda: upcoming, notify=print, clock=lambda: NOW, later=lambda s, a: waits.append(s)).check()
+
+    assert waits == [0.0]

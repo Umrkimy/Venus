@@ -9,6 +9,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { voiceLevel, wantVoiceLevel } from "@/features/chat/use-speaker";
 import { type Body, createBody, moveBody } from "./body-motion";
 import { getMood } from "./scene-mood";
+import { isPcTalking, talkingWave } from "./talking-wave";
 import { setResetView, useStage } from "./stage-store";
 import { createTemple, disposePlace, type Place, templeFog } from "./temple";
 import { type MoveInfo, UploadedMoves } from "./uploaded-moves";
@@ -54,7 +55,9 @@ type Parts = { vrm: VRM; body: Body; moves: UploadedMoves };
 
 function animate({ vrm, body, moves }: Parts, camera: THREE.Camera, time: number, delta: number, state: FaceState) {
   // Eased toward the voice's loudness, so the mouth doesn't flicker.
-  state.mouth += (voiceLevel() - state.mouth) * Math.min(1, delta * 18);
+  const heard = voiceLevel();
+  const level = heard === 0 && isPcTalking() ? talkingWave(time) : heard;
+  state.mouth += (level - state.mouth) * Math.min(1, delta * 18);
   // Uploaded moves first; the coded ones blend over them where there's no file.
   const mood = getMood();
   moves.update(mood, delta);

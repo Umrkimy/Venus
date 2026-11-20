@@ -1,10 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
 
 import { useCharacterOn } from "@/features/scene/character-store";
+import { setPcTalking } from "@/features/scene/talking-wave";
 import { useCharacterInfo, useCharacterMoves, useCharacterPlaces } from "@/features/scene/use-character-info";
 import type { MoveInfo } from "@/features/scene/uploaded-moves";
+import { useFrontTab, useVoiceState } from "@/features/voice/use-voice-state";
 
 // Loaded only when she's on: with her off, the 3D code is never downloaded.
 const VenusCharacter = dynamic(() => import("@/features/scene/venus-character"), {
@@ -24,6 +27,9 @@ export default function SceneBackground() {
   // Unknown until Core answers (so the temple isn't drawn just to be swapped);
   // signed out or no answer = the temple.
   const place = places.isPending ? undefined : (places.data?.find((item) => item.active)?.id ?? null);
+  // Same poll as the orb's (shared query), so this costs no extra request.
+  const pcSpeaking = useVoiceState(useFrontTab())?.state === "speaking";
+  useEffect(() => setPcTalking(pcSpeaking), [pcSpeaking]);
 
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0">
