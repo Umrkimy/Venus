@@ -66,6 +66,7 @@ def event_json(event: Event) -> dict:
         "location": event.location,
         "notes": event.notes,
         "editable": event.editable,
+        "reminder": event.reminder,
     }
 
 
@@ -213,7 +214,10 @@ async def upcoming(
     service: Annotated[CalendarService, Depends(get_calendar_service)],
     minutes: Annotated[int, Query(ge=1, le=60)] = 10,
 ):
-    """For the PC's reminder pop-ups: timed events starting in the next few minutes."""
+    """For the PC's reminder pop-ups: timed events starting in the next few minutes.
+
+    Reminders come too, marked, so the PC waits and says them at their start time.
+    """
     found, _ = await service.events()
     return [event_json(event) for event in due_soon(found, datetime.now(timezone.utc), minutes)]
 

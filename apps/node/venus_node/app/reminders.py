@@ -1,5 +1,6 @@
 """Calendar reminders: a pop-up on the PC about 10 minutes before each event,
 and Venus says it out loud when her voice is on and she isn't busy.
+"Remind me to ..." reminders wait and go off at their exact start time.
 
 Core knows the calendar; the tray app asks it once a minute what starts
 soon and shows each event once. Nothing runs when no calendar is connected
@@ -53,6 +54,12 @@ def spoken_text(event: dict, now: datetime) -> str:
     return text + where + "."
 
 
+def run_later(seconds: float, action: Callable[[], None]) -> None:
+    timer = threading.Timer(seconds, action)
+    timer.daemon = True
+    timer.start()
+
+
 class Reminders:
     """Remembers what it already showed, so each event pops up once."""
 
@@ -62,12 +69,14 @@ class Reminders:
         notify: Callable[[str], None],
         clock: Callable[[], datetime],
         say: Callable[[str], None] | None = None,
+        later: Callable[[float, Callable[[], None]], None] = run_later,
     ) -> None:
         self.fetch = fetch
         self.notify = notify
         self.clock = clock
         # Venus's voice; None when it's off on this PC.
         self.say = say
+        self.later = later
         self.shown: set[str] = set()
 
     def check(self) -> None:
@@ -81,9 +90,19 @@ class Reminders:
             if key in self.shown:
                 continue
             self.shown.add(key)
+            if event.get("reminder"):
+                wait = (datetime.fromisoformat(event["start"]) - now).total_seconds()
+                self.later(max(0.0, wait), lambda title=event["title"]: self.remind(title))
+                continue
             self.notify(reminder_text(event, now))
             if self.say is not None:
                 self.say(spoken_text(event, now))
+
+
+    def remind(self, title: str) -> None:
+        self.notify(f"Reminder: {title}")
+        if self.say is not None:
+            self.say(f"Reminder: {title}.")
 
 
 def desktop_notifier(tray_notify: Callable[[str, str], None]) -> Callable[[str], None]:

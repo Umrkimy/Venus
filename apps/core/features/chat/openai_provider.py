@@ -54,6 +54,9 @@ class OpenAIProvider:
                     # Also Core's own job: added to the Venus calendar.
                     events.append({key: arguments[key] for key in ("title", "start", "end", "location") if key in arguments})
                     outputs.append((item.call_id, "Added to the calendar."))
+                elif item.name == "set_reminder":
+                    events.append({"title": arguments["title"], "start": arguments["at"], "reminder": True})
+                    outputs.append((item.call_id, "Reminder set."))
                 else:
                     commands.append(tool_to_command(item.name, arguments))
             except (ValueError, KeyError):

@@ -325,3 +325,18 @@ def test_google_calendar_ids_with_a_hash_are_encoded_and_one_bad_calendar_is_ski
     assert {e["title"] for e in body["events"]} == {"Dinner", "Deepavali"}
     assert body["errors"] == []
     assert any("en.malaysia%23holiday@group.v.calendar.google.com/events" in url for url in seen)
+
+
+def test_upcoming_marks_reminders(repository: CalendarRepository):
+    import asyncio
+
+    from features.calendar.providers import EventDraft
+
+    start = datetime.now(timezone.utc) + timedelta(minutes=3)
+    service = CalendarService(repository, SECRET, None, Cached())
+    asyncio.run(service.create("venus", EventDraft("Submit", start, start + timedelta(minutes=5), reminder=True)))
+    app.dependency_overrides[get_calendar_service] = lambda: service
+
+    [found] = client.get("/calendar/upcoming", headers=OWNER).json()
+
+    assert found["title"] == "Submit" and found["reminder"] is True

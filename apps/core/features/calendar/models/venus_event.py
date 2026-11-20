@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, String, Text, Uuid
+from sqlalchemy import Boolean, DateTime, String, Text, Uuid, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from storage.base import Base
@@ -20,6 +20,8 @@ class VenusEvent(Base):
     all_day: Mapped[bool] = mapped_column(Boolean, default=False)
     location: Mapped[str] = mapped_column(String(200), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
+    # "Remind me to ...": said at its start time, not 10 minutes before.
+    reminder: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     def __init__(
@@ -31,6 +33,7 @@ class VenusEvent(Base):
         all_day: bool = False,
         location: str = "",
         notes: str = "",
+        reminder: bool = False,
     ) -> None:
         self.id = uuid4()
         self.title = title
@@ -39,4 +42,5 @@ class VenusEvent(Base):
         self.all_day = all_day
         self.location = location
         self.notes = notes
+        self.reminder = reminder
         self.created_at = created_at

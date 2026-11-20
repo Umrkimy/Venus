@@ -316,3 +316,16 @@ def test_openai_provider_adds_a_calendar_event_and_answers():
     assert reply.events == [{"title": "Gym", "start": "2026-10-15T18:00", "location": "Uni gym"}]
     assert reply.commands == []
     assert client.responses.calls[1]["input"][0]["output"] == "Added to the calendar."
+
+
+def test_openai_provider_sets_a_reminder():
+    client = FakeClient(
+        output=[function_call("set_reminder", '{"title": "Submit the report", "at": "2026-10-15T16:00"}')],
+        output_text="",
+    )
+    provider = OpenAIProvider(client, "gpt-6-luna")
+
+    reply = asyncio.run(provider.reply("remind me to submit the report at 4", [], ""))
+
+    assert reply.events == [{"title": "Submit the report", "start": "2026-10-15T16:00", "reminder": True}]
+    assert client.responses.calls[1]["input"][0]["output"] == "Reminder set."

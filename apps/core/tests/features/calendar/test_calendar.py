@@ -390,3 +390,25 @@ def test_sign_in_errors_say_what_to_do(code, says):
     from features.calendar.providers import sign_in_problem
 
     assert says in sign_in_problem("Google", code)
+
+
+def test_venus_calendar_alone_reaches_luna_and_nothing_anywhere_adds_nothing():
+    from features.nodes.router import calendar_context
+
+    class OnlyVenus(FakeCalendar):
+        def connected(self):
+            return False
+
+    soon = event("Dentist", datetime.now(timezone.utc) + timedelta(hours=1))
+
+    assert "Dentist" in asyncio.run(calendar_context(OnlyVenus([soon]), FakeTime(), False))
+    assert asyncio.run(calendar_context(OnlyVenus([]), FakeTime(), False)) is None
+
+
+def test_reminders_are_marked_for_luna():
+    reminder = Event(
+        id="r", title="Submit", start=NOW + timedelta(hours=1), end=NOW + timedelta(hours=1, minutes=5),
+        all_day=False, source="Venus", reminder=True,
+    )
+
+    assert "Submit (reminder)" in calendar_lines([reminder], NOW, KL, [])

@@ -178,6 +178,7 @@ class CalendarService:
             event = self.repository.add_venus_event(VenusEvent(
                 draft.title, draft.start, draft.end, now or datetime.now(timezone.utc),
                 all_day=draft.all_day, location=draft.location, notes=draft.notes,
+                reminder=draft.reminder,
             ))
             new_id = f"venus:{event.id}"
         elif calendar in PROVIDERS:
@@ -230,10 +231,15 @@ def calendar_lines(events: list[Event], now: datetime, zone: ZoneInfo, errors: l
     parts = []
     if upcoming:
         rows = [
-            f"- {when(event, zone)}: {event.title}" + (f" @ {event.location}" if event.location else "")
+            f"- {when(event, zone)}: {event.title}"
+            + (" (reminder)" if event.reminder else "")
+            + (f" @ {event.location}" if event.location else "")
             for event in upcoming
         ]
-        parts.append("The owner's calendar for the next 7 days (their time):\n" + "\n".join(rows))
+        parts.append(
+            "The owner's calendar for the next 7 days (their time). If they ask whether they're "
+            "free, they're busy only when an event overlaps that time:\n" + "\n".join(rows)
+        )
     else:
         parts.append("The owner's calendar has nothing in the next 7 days.")
     if errors:
@@ -276,4 +282,5 @@ def venus_event(event: VenusEvent) -> Event:
         location=event.location,
         notes=event.notes,
         editable=True,
+        reminder=bool(event.reminder),
     )
